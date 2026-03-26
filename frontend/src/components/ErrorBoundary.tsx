@@ -2,6 +2,7 @@
 
 import { Component, ErrorInfo, ReactNode } from "react";
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -10,24 +11,50 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  errorId: string | null;
 }
 
 export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorId: null };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
+    return { hasError: true, error, errorId: null };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error("ErrorBoundary caught an error:", error, errorInfo);
+    
+    // Capture error with Sentry and get the event ID
+    const errorId = Sentry.captureException(error, {
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack,
+        },
+      },
+      tags: {
+        errorBoundary: true,
+        component: "ErrorBoundary",
+      },
+      extra: {
+        errorInfo: {
+          componentStack: errorInfo.componentStack,
+          errorBoundary: true,
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+          url: window.location.href,
+        },
+      },
+    });
+
+    // Store the error ID for user reference
+    this.setState({ errorId });
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, errorId: null });
   };
 
   render() {
@@ -79,6 +106,18 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
               <p className="text-slate-400">
                 An unexpected error occurred while rendering this page. Please try again or return to the dashboard.
               </p>
+              
+              {this.state.errorId && (
+                <div className="mt-4 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
+                  <p className="text-xs text-red-400 mb-2">Error Reference ID:</p>
+                  <code className="text-sm font-mono text-red-300 break-all">
+                    {this.state.errorId}
+                  </code>
+                  <p className="text-xs text-slate-500 mt-2">
+                    This error has been automatically reported to our development team.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">

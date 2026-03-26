@@ -36,11 +36,15 @@ cp .env.example .env
 ```
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+DATABASE_URL=your_supabase_transaction_pooler_uri
+REDIS_URL=redis://localhost:6379
 STELLAR_NETWORK=testnet
 # Optional overrides:
 STELLAR_HORIZON_URL=
 USDC_ISSUER=your_usdc_issuer
 PAYMENT_LINK_BASE=http://localhost:3000
+CREATE_PAYMENT_RATE_LIMIT_MAX=50
+CREATE_PAYMENT_RATE_LIMIT_WINDOW_MS=60000
 ```
 
 4. Apply schema in Supabase:
@@ -53,12 +57,17 @@ npm run dev
 
 API will be available at `http://localhost:4000`.
 
+Rate limiting uses Redis-backed shared state, so multiple API instances behind a load balancer enforce the same counters.
+
 ## API Endpoints
 
 - `GET /health`
 - `POST /api/create-payment`
+- `POST /api/sessions`
 - `GET /api/payment-status/:id`
 - `POST /api/verify-payment/:id`
+- `GET /api/merchant-branding`
+- `PUT /api/merchant-branding`
 
 ### Create Payment
 
@@ -69,9 +78,21 @@ API will be available at `http://localhost:4000`.
   "asset_issuer": "G...ISSUER",
   "recipient": "G...RECIPIENT",
   "description": "Digital product",
-  "webhook_url": "https://merchant.app/webhooks/stellar"
+  "webhook_url": "https://merchant.app/webhooks/stellar",
+  "branding_overrides": {
+    "primary_color": "#5ef2c0",
+    "secondary_color": "#b8ffe2",
+    "background_color": "#050608"
+  }
 }
 ```
+
+`POST /api/create-payment` and `POST /api/sessions` are rate-limited per API key. By default the backend allows 50 requests per 60 seconds and returns `429 Too Many Requests` with a `Retry-After` header when the limit is exceeded.
+
+Both endpoints return `branding_config` in the response. The config is resolved in this order:
+1) per-session `branding_overrides`
+2) merchant `branding_config`
+3) system defaults
 
 ### Verify Payment
 

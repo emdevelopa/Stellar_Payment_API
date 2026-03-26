@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import CopyButton from "./CopyButton";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import {
+  useHydrateMerchantStore,
+  useMerchantApiKey,
+  useMerchantHydrated,
+  useMerchantTrustedAddresses,
+} from "@/lib/merchant-store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -14,6 +20,17 @@ const USDC_ISSUER =
 
 /** Basic Stellar public-key format check (G + 55 base-32 chars = 56 total). */
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
+const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+const DEFAULT_BRANDING = {
+  primary_color: "#5ef2c0",
+  secondary_color: "#b8ffe2",
+  background_color: "#050608",
+};
+
+function normalizeHexInput(value: string) {
+  const trimmed = value.trim();
+  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+}
 
 interface CreatedPayment {
   payment_id: string;
@@ -29,15 +46,14 @@ export default function CreatePaymentForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedPayment | null>(null);
+  const [useSessionBranding, setUseSessionBranding] = useState(false);
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  const [selectedTrustedAddress, setSelectedTrustedAddress] = useState<string>("");
+  const apiKey = useMerchantApiKey();
+  const hydrated = useMerchantHydrated();
+  const trustedAddresses = useMerchantTrustedAddresses();
 
-  // Loaded from localStorage after hydration to avoid SSR mismatch
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setApiKey(localStorage.getItem("merchant_api_key"));
-    setHydrated(true);
-  }, []);
+  useHydrateMerchantStore();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -51,7 +67,7 @@ export default function CreatePaymentForm() {
     }
     if (!STELLAR_ADDRESS_RE.test(recipient.trim())) {
       setError(
-        "Recipient must be a valid Stellar public key (56 characters, starts with G)."
+        "Recipient must be a valid Stellar public key (56 characters, starts with G).",
       );
       return;
     }
@@ -65,6 +81,16 @@ export default function CreatePaymentForm() {
       };
       if (asset === "USDC") body.asset_issuer = USDC_ISSUER;
       if (description.trim()) body.description = description.trim();
+      if (useSessionBranding) {
+        for (const [key, color] of Object.entries(branding)) {
+          if (!HEX_COLOR_REGEX.test(color)) {
+            setError(`${key} must be a valid hex color`);
+            setLoading(false);
+            return;
+          }
+        }
+        body.branding_overrides = branding;
+      }
 
       const res = await fetch(`${API_URL}/api/create-payment`, {
         method: "POST",
@@ -76,7 +102,8 @@ export default function CreatePaymentForm() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to create payment link");
+      if (!res.ok)
+        throw new Error(data.error ?? "Failed to create payment link");
 
       setCreated(data);
       toast.success("Payment link created!");
@@ -96,7 +123,30 @@ export default function CreatePaymentForm() {
     setRecipient("");
     setDescription("");
     setAsset("XLM");
+    setUseSessionBranding(false);
+    setBranding(DEFAULT_BRANDING);
+    setSelectedTrustedAddress("");
     setError(null);
+  };
+
+  const handleTrustedAddressSelect = (addressId: string) => {
+    setSelectedTrustedAddress(addressId);
+    if (addressId) {
+      const selected = trustedAddresses.find((addr) => addr.id === addressId);
+      if (selected) {
+        setRecipient(selected.address);
+      }
+    }
+  };
+
+  const updateBrandingField = (
+    key: keyof typeof DEFAULT_BRANDING,
+    value: string,
+  ) => {
+    setBranding((current) => ({
+      ...current,
+      [key]: normalizeHexInput(value),
+    }));
   };
 
   // Avoid hydration mismatch — render nothing until localStorage is read
@@ -106,7 +156,9 @@ export default function CreatePaymentForm() {
   if (!apiKey) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-8 text-center">
-        <p className="text-base font-medium text-yellow-200">No API key found</p>
+        <p className="text-base font-medium text-yellow-200">
+          No API key found
+        </p>
         <p className="text-sm text-slate-400">
           Register a merchant account to get your API key and start creating
           payment links.
@@ -246,6 +298,31 @@ export default function CreatePaymentForm() {
           )}
         </div>
 
+        {/* Trusted Addresses Dropdown */}
+        {trustedAddresses.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="trusted-address"
+              className="text-xs font-medium uppercase tracking-wider text-slate-400"
+            >
+              Select from Trusted Addresses
+            </label>
+            <select
+              id="trusted-address"
+              value={selectedTrustedAddress}
+              onChange={(e) => handleTrustedAddressSelect(e.target.value)}
+              className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+            >
+              <option value="">-- Select a saved address --</option>
+              {trustedAddresses.map((addr) => (
+                <option key={addr.id} value={addr.id}>
+                  {addr.label} ({addr.address.slice(0, 8)}...{addr.address.slice(-6)})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Recipient */}
         <div className="flex flex-col gap-1.5">
           <label
@@ -284,6 +361,74 @@ export default function CreatePaymentForm() {
             className="rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
             placeholder="e.g. Invoice #42"
           />
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-300">
+                Session Branding Overrides
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Apply custom colors to this payment link only.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUseSessionBranding((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                useSessionBranding
+                  ? "bg-mint text-black"
+                  : "border border-white/20 text-slate-300"
+              }`}
+            >
+              {useSessionBranding ? "Enabled" : "Disabled"}
+            </button>
+          </div>
+
+          {useSessionBranding && (
+            <div className="mt-4 grid gap-3">
+              {([
+                ["primary_color", "Primary"],
+                ["secondary_color", "Secondary"],
+                ["background_color", "Background"],
+              ] as const).map(([field, label]) => (
+                <label key={field} className="flex flex-col gap-1.5">
+                  <span className="text-xs text-slate-400">{label}</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={branding[field]}
+                      onChange={(e) => updateBrandingField(field, e.target.value)}
+                      className="h-9 w-14 rounded border border-white/10 bg-transparent p-1"
+                    />
+                    <input
+                      type="text"
+                      value={branding[field]}
+                      onChange={(e) => updateBrandingField(field, e.target.value)}
+                      className="flex-1 rounded-lg border border-white/10 bg-black/40 p-2 font-mono text-xs text-white"
+                    />
+                  </div>
+                </label>
+              ))}
+
+              <div
+                className="rounded-lg border border-white/10 p-3"
+                style={{ background: branding.background_color }}
+              >
+                <p className="text-xs" style={{ color: branding.secondary_color }}>
+                  Checkout preview
+                </p>
+                <button
+                  type="button"
+                  className="mt-2 rounded-md px-3 py-1.5 text-xs font-semibold"
+                  style={{ background: branding.primary_color, color: "#000" }}
+                >
+                  Pay now
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

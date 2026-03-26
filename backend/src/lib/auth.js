@@ -1,3 +1,26 @@
+import bcrypt from "bcryptjs";
+
+const SALT_ROUNDS = 12;
+
+/**
+ * Hash a plain-text merchant password with bcrypt.
+ * @param {string} plaintext
+ * @returns {Promise<string>} bcrypt hash
+ */
+export async function hashPassword(plaintext) {
+  return bcrypt.hash(plaintext, SALT_ROUNDS);
+}
+
+/**
+ * Verify a plain-text password against a stored bcrypt hash.
+ * @param {string} plaintext
+ * @param {string} hash
+ * @returns {Promise<boolean>}
+ */
+export async function verifyPassword(plaintext, hash) {
+  return bcrypt.compare(plaintext, hash);
+}
+
 export function createApiKeyAuth({ supabaseClient = null } = {}) {
   return async function requireApiKeyAuth(req, res, next) {
     try {
@@ -11,7 +34,7 @@ export function createApiKeyAuth({ supabaseClient = null } = {}) {
 
       const { data: merchant, error } = await client
         .from("merchants")
-        .select("id, email, business_name, notification_email")
+        .select("id, email, business_name, notification_email, branding_config, webhook_secret, payment_limits")
         .eq("api_key", apiKey)
         .maybeSingle();
 

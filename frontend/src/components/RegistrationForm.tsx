@@ -4,14 +4,22 @@ import { useState } from "react";
 import { registerMerchant, type Merchant } from "../lib/auth";
 import CopyButton from "./CopyButton";
 import toast from "react-hot-toast";
+import {
+  useSetMerchantApiKey,
+  useSetMerchantMetadata,
+} from "@/lib/merchant-store";
 
 export default function RegistrationForm() {
+  const setApiKey = useSetMerchantApiKey();
+  const setMerchant = useSetMerchantMetadata();
   const [email, setEmail] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [notificationEmail, setNotificationEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [registeredMerchant, setRegisteredMerchant] = useState<Merchant | null>(null);
+  const [registeredMerchant, setRegisteredMerchant] = useState<Merchant | null>(
+    null,
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,12 +27,18 @@ export default function RegistrationForm() {
     setError(null);
 
     try {
-      const data = await registerMerchant(email, businessName, notificationEmail);
+      const data = await registerMerchant(
+        email,
+        businessName,
+        notificationEmail,
+      );
       setRegisteredMerchant(data.merchant);
-      localStorage.setItem("merchant_api_key", data.merchant.api_key);
+      setApiKey(data.merchant.api_key);
+      setMerchant(data.merchant);
       toast.success("Merchant registered successfully!");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to register merchant";
+      const message =
+        err instanceof Error ? err.message : "Failed to register merchant";
       setError(message);
       toast.error(message);
     } finally {
@@ -37,15 +51,22 @@ export default function RegistrationForm() {
       <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="rounded-2xl border border-mint/30 bg-mint/5 p-6 backdrop-blur">
           <div className="flex flex-col gap-2">
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-mint">Registration Success</p>
-            <h2 className="text-xl font-semibold text-white">Welcome, {registeredMerchant.business_name}!</h2>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-mint">
+              Registration Success
+            </p>
+            <h2 className="text-xl font-semibold text-white">
+              Welcome, {registeredMerchant.business_name}!
+            </h2>
             <p className="text-sm text-slate-400">
-              Your merchant account is ready. Save your API key below—you won&apos;t be able to see it again.
+              Your merchant account is ready. Save your API key below—you
+              won&apos;t be able to see it again.
             </p>
           </div>
 
           <div className="mt-6 flex flex-col gap-3">
-            <label className="text-xs font-medium text-slate-300">Your API Key</label>
+            <label className="text-xs font-medium text-slate-300">
+              Your API Key
+            </label>
             <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
               <code className="flex-1 truncate font-mono text-sm text-mint">
                 {registeredMerchant.api_key}
@@ -55,7 +76,9 @@ export default function RegistrationForm() {
           </div>
 
           <div className="mt-4 flex flex-col gap-3">
-            <label className="text-xs font-medium text-slate-300">Webhook Secret</label>
+            <label className="text-xs font-medium text-slate-300">
+              Webhook Secret
+            </label>
             <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
               <code className="flex-1 truncate font-mono text-sm text-mint">
                 {registeredMerchant.webhook_secret}
@@ -65,8 +88,8 @@ export default function RegistrationForm() {
           </div>
         </div>
 
-        <a 
-          href="/" 
+        <a
+          href="/"
           className="text-center text-sm font-medium text-slate-400 hover:text-white transition-colors underline underline-offset-4"
         >
           Go to Dashboard
@@ -85,7 +108,10 @@ export default function RegistrationForm() {
 
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="businessName" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+          <label
+            htmlFor="businessName"
+            className="text-xs font-medium text-slate-400 uppercase tracking-wider"
+          >
             Business Name
           </label>
           <input
@@ -100,7 +126,10 @@ export default function RegistrationForm() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+          <label
+            htmlFor="email"
+            className="text-xs font-medium text-slate-400 uppercase tracking-wider"
+          >
             Primary Email
           </label>
           <input
@@ -115,7 +144,10 @@ export default function RegistrationForm() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="notificationEmail" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+          <label
+            htmlFor="notificationEmail"
+            className="text-xs font-medium text-slate-400 uppercase tracking-wider"
+          >
             Notification Email
           </label>
           <input
@@ -136,13 +168,25 @@ export default function RegistrationForm() {
         className="group relative flex h-12 items-center justify-center rounded-xl bg-mint px-6 font-bold text-black transition-all hover:bg-glow disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? (
-            <span className="flex items-center gap-2">
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Processing...
-            </span>
+          <span className="flex items-center gap-2">
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            Processing...
+          </span>
         ) : (
           "Register Merchant"
         )}

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createApiKeyAuth } from "./auth.js";
+import { createApiKeyAuth, hashPassword, verifyPassword } from "./auth.js";
 
 function createResponse() {
   return {
@@ -15,6 +15,30 @@ function createRequest(headers = {}) {
     }
   };
 }
+
+describe("hashPassword / verifyPassword", () => {
+  it("produces a bcrypt hash distinct from the plaintext", async () => {
+    const hash = await hashPassword("s3cr3t!");
+    expect(hash).not.toBe("s3cr3t!");
+    expect(hash).toMatch(/^\$2[ab]\$/);
+  });
+
+  it("verifyPassword returns true for the correct password", async () => {
+    const hash = await hashPassword("correct-horse");
+    expect(await verifyPassword("correct-horse", hash)).toBe(true);
+  });
+
+  it("verifyPassword returns false for a wrong password", async () => {
+    const hash = await hashPassword("correct-horse");
+    expect(await verifyPassword("wrong-password", hash)).toBe(false);
+  });
+
+  it("two hashes of the same password differ (unique salts)", async () => {
+    const h1 = await hashPassword("same");
+    const h2 = await hashPassword("same");
+    expect(h1).not.toBe(h2);
+  });
+});
 
 describe("createApiKeyAuth", () => {
   let maybeSingle;
@@ -56,7 +80,9 @@ describe("createApiKeyAuth", () => {
     await middleware(req, res, next);
 
     expect(from).toHaveBeenCalledWith("merchants");
-    expect(select).toHaveBeenCalledWith("id, email, business_name, notification_email");
+    expect(select).toHaveBeenCalledWith(
+      "id, email, business_name, notification_email, branding_config",
+    );
     expect(eq).toHaveBeenCalledWith("api_key", "invalid-key");
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: "Invalid API key" });

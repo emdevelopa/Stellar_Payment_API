@@ -10,3 +10,9 @@ body {
   background: radial-gradient(1200px circle at 10% -10%, #15233b 0%, #0b0c10 45%, #050608 100%);
   color: #f3f5f7;
 }
+
+@media (max-width: 767px) {
+  body.dashboard-mobile-nav {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+}

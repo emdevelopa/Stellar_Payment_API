@@ -1,15 +1,15 @@
+import cors from "cors";
 import 'dotenv/config';
 import express from "express";
 import morgan from "morgan";
-import cors from "cors";
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
-import paymentsRouter from "./routes/payments.js";
-import merchantsRouter from "./routes/merchants.js";
 import { requireApiKeyAuth } from "./lib/auth.js";
-import { supabase } from "./lib/supabase.js";
-import { pool, closePool } from "./lib/db.js";
+import { closePool, pool } from "./lib/db.js";
 import { validateEnvironmentVariables } from "./lib/env-validation.js";
+import { supabase } from "./lib/supabase.js";
+import merchantsRouter from "./routes/merchants.js";
+import paymentsRouter from "./routes/payments.js";
 
 validateEnvironmentVariables();
 
@@ -76,6 +76,7 @@ app.get("/health", async (req, res) => {
 });
 
 app.use("/api/create-payment", requireApiKeyAuth());
+app.use("/api/payments", requireApiKeyAuth());
 app.use("/api/rotate-key", requireApiKeyAuth());
 app.use("/api", paymentsRouter);
 app.use("/api", merchantsRouter);

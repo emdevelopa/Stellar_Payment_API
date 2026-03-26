@@ -1,11 +1,11 @@
 import 'dotenv/config';
 import express from "express";
-import { randomUUID } from "node:crypto";
-import { supabase } from "../lib/supabase.js";
-import { findMatchingPayment } from "../lib/stellar.js";
-import { sendWebhook } from "../lib/webhooks.js";
 import rateLimit from "express-rate-limit";
+import { randomUUID } from "node:crypto";
+import { findMatchingPayment } from "../lib/stellar.js";
+import { supabase } from "../lib/supabase.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
+import { sendWebhook } from "../lib/webhooks.js";
 
 const router = express.Router();
 
@@ -311,6 +311,103 @@ router.post("/verify-payment/:id", verifyPaymentRateLimit, validateUuidParam(), 
       tx_id: match.transaction_hash,
       ledger_url: `https://stellar.expert/explorer/testnet/tx/${match.transaction_hash}`,
       webhook: webhookResult
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @swagger
+ * /api/payments:
+ *   get:
+ *     summary: Get paginated list of payments for the authenticated merchant
+ *     tags: [Payments]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (1-indexed)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of results per page (max 100)
+ *     responses:
+ *       200:
+ *         description: Paginated payments
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 payments:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 total_count:
+ *                   type: integer
+ *                 total_pages:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *       401:
+ *         description: Missing or invalid API key
+ */
+router.get("/payments", async (req, res, next) => {
+  try {
+    // Parse and validate pagination parameters
+    let page = parseInt(req.query.page, 10) || 1;
+    let limit = parseInt(req.query.limit, 10) || 10;
+
+    // Validate ranges
+    if (page < 1) page = 1;
+    if (limit < 1) limit = 1;
+    if (limit > 100) limit = 100; // Cap limit at 100
+
+    const offset = (page - 1) * limit;
+
+    // Count total payments for this merchant
+    const { count: totalCount, error: countError } = await supabase
+      .from("payments")
+      .select("*", { count: "exact", head: true })
+      .eq("merchant_id", req.merchant.id);
+
+    if (countError) {
+      countError.status = 500;
+      throw countError;
+    }
+
+    // Fetch paginated payments
+    const { data: payments, error: dataError } = await supabase
+      .from("payments")
+      .select(
+        "id, amount, asset, asset_issuer, recipient, description, status, tx_id, created_at"
+      )
+      .eq("merchant_id", req.merchant.id)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (dataError) {
+      dataError.status = 500;
+      throw dataError;
+    }
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    res.json({
+      payments: payments || [],
+      total_count: totalCount,
+      total_pages: totalPages,
+      page,
+      limit
     });
   } catch (err) {
     next(err);

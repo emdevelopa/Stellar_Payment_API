@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { supabase } from "../lib/supabase.js";
 import { findMatchingPayment } from "../lib/stellar.js";
 import { sendWebhook } from "../lib/webhooks.js";
+import { getPayloadForVersion } from "../webhooks/versions/index.js";
 import rateLimit from "express-rate-limit";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 
@@ -245,7 +246,7 @@ router.post("/verify-payment/:id", verifyPaymentRateLimit, validateUuidParam(), 
     const { data, error } = await supabase
       .from("payments")
       .select(
-        "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret)"
+        "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version)"
       )
       .eq("id", req.params.id)
       .maybeSingle();
@@ -291,8 +292,9 @@ router.post("/verify-payment/:id", verifyPaymentRateLimit, validateUuidParam(), 
     }
 
     const merchantSecret = data.merchants?.webhook_secret;
+    const merchantVersion = data.merchants?.webhook_version || "v1";
 
-    const webhookResult = await sendWebhook(data.webhook_url, {
+    const internalEventData = {
       event: "payment.confirmed",
       payment_id: data.id,
       amount: data.amount,
@@ -300,7 +302,11 @@ router.post("/verify-payment/:id", verifyPaymentRateLimit, validateUuidParam(), 
       asset_issuer: data.asset_issuer,
       recipient: data.recipient,
       tx_id: match.transaction_hash
-    }, merchantSecret);
+    };
+
+    const payload = getPayloadForVersion(merchantVersion, internalEventData);
+
+    const webhookResult = await sendWebhook(data.webhook_url, payload, merchantSecret);
 
     if (!webhookResult.ok && !webhookResult.skipped) {
       console.warn("Webhook failed", webhookResult);

@@ -4,12 +4,14 @@ import morgan from "morgan";
 import cors from "cors";
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
+import { ZodError } from "zod";
 import paymentsRouter from "./routes/payments.js";
 import merchantsRouter from "./routes/merchants.js";
 import { requireApiKeyAuth } from "./lib/auth.js";
 import { supabase } from "./lib/supabase.js";
 import { pool, closePool } from "./lib/db.js";
 import { validateEnvironmentVariables } from "./lib/env-validation.js";
+import { formatZodError } from "./lib/request-schemas.js";
 
 validateEnvironmentVariables();
 
@@ -81,6 +83,12 @@ app.use("/api", paymentsRouter);
 app.use("/api", merchantsRouter);
 
 app.use((err, req, res, next) => {
+  if (err instanceof ZodError) {
+    return res.status(400).json({
+      error: formatZodError(err)
+    });
+  }
+
   const status = err.status || 500;
   res.status(status).json({
     error: err.message || "Internal Server Error"

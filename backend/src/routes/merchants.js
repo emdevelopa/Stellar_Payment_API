@@ -1,29 +1,9 @@
 import express from "express";
 import { randomBytes } from "crypto";
 import { supabase } from "../lib/supabase.js";
+import { registerMerchantZodSchema } from "../lib/request-schemas.js";
 
 const router = express.Router();
-
-const REQUIRED_FIELDS = ["email"];
-
-function validateRegisterMerchant(body) {
-  for (const field of REQUIRED_FIELDS) {
-    if (!body[field]) {
-      return `Missing field: ${field}`;
-    }
-  }
-
-  // Basic email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(body.email)) {
-    return "Invalid email format";
-  }
-  if (body.notification_email && !emailRegex.test(body.notification_email)) {
-    return "Invalid notification_email format";
-  }
-
-  return null;
-}
 
 /**
  * @swagger
@@ -66,14 +46,11 @@ function validateRegisterMerchant(body) {
  */
 router.post("/register-merchant", async (req, res, next) => {
   try {
-    const error = validateRegisterMerchant(req.body || {});
-    if (error) {
-      return res.status(400).json({ error });
-    }
+    const body = registerMerchantZodSchema.parse(req.body || {});
 
-    const { email } = req.body;
-    const business_name = req.body.business_name || email.split("@")[0];
-    const notification_email = req.body.notification_email || email;
+    const { email } = body;
+    const business_name = body.business_name || email.split("@")[0];
+    const notification_email = body.notification_email || email;
 
     // Check if merchant already exists
     const { data: existing } = await supabase

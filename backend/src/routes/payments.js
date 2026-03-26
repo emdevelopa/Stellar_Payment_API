@@ -6,6 +6,7 @@ import { findMatchingPayment } from "../lib/stellar.js";
 import { sendWebhook } from "../lib/webhooks.js";
 import rateLimit from "express-rate-limit";
 import { validateUuidParam } from "../lib/validate-uuid.js";
+import { paymentZodSchema } from "../lib/request-schemas.js";
 
 const router = express.Router();
 
@@ -16,42 +17,6 @@ const verifyPaymentRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-const REQUIRED_FIELDS = ["amount", "asset", "recipient"];
-
-const VALID_MEMO_TYPES = ["text", "id", "hash", "return"];
-
-function validateCreatePayment(body) {
-  for (const field of REQUIRED_FIELDS) {
-    if (!body[field]) {
-      return `Missing field: ${field}`;
-    }
-  }
-
-  if (Number.isNaN(Number(body.amount)) || Number(body.amount) <= 0) {
-    return "Amount must be a positive number";
-  }
-
-  const asset = String(body.asset || "").toUpperCase();
-  if (asset !== "XLM" && !body.asset_issuer) {
-    return "asset_issuer is required for non-native assets";
-  }
-
-  if (body.memo && !body.memo_type) {
-    return "memo_type is required when memo is provided";
-  }
-  if (body.memo_type && !body.memo) {
-    return "memo is required when memo_type is provided";
-  }
-  if (
-    body.memo_type &&
-    !VALID_MEMO_TYPES.includes(body.memo_type.toLowerCase())
-  ) {
-    return `Invalid memo_type. Must be one of: ${VALID_MEMO_TYPES.join(", ")}`;
-  }
-
-  return null;
-}
 
 /**
  * @swagger
@@ -109,33 +74,27 @@ function validateCreatePayment(body) {
  */
 router.post("/create-payment", async (req, res, next) => {
   try {
-    const error = validateCreatePayment(req.body || {});
-    if (error) {
-      return res.status(400).json({ error });
-    }
+    const body = paymentZodSchema.parse(req.body || {});
 
     const paymentId = randomUUID();
     const now = new Date().toISOString();
     const paymentLinkBase = process.env.PAYMENT_LINK_BASE || "http://localhost:3000";
     const paymentLink = `${paymentLinkBase}/pay/${paymentId}`;
 
-    const asset = String(req.body.asset || "").toUpperCase();
-    const assetIssuer = req.body.asset_issuer || null;
-
     const payload = {
       id: paymentId,
       merchant_id: req.merchant.id,
-      amount: Number(req.body.amount),
-      asset,
-      asset_issuer: assetIssuer,
-      recipient: req.body.recipient,
-      description: req.body.description || null,
-      memo: req.body.memo || null,
-      memo_type: req.body.memo_type ? req.body.memo_type.toLowerCase() : null,
-      webhook_url: req.body.webhook_url || null,
+      amount: body.amount,
+      asset: body.asset,
+      asset_issuer: body.asset_issuer || null,
+      recipient: body.recipient,
+      description: body.description || null,
+      memo: body.memo || null,
+      memo_type: body.memo_type || null,
+      webhook_url: body.webhook_url || null,
       status: "pending",
       tx_id: null,
-      metadata: req.body.metadata || null,
+      metadata: body.metadata || null,
       created_at: now
     };
 

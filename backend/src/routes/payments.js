@@ -26,6 +26,42 @@ const defaultVerifyPaymentRateLimit = rateLimit({
   legacyHeaders: false,
 });
 
+function emitPaymentStatus(io, payment) {
+  if (!io || !payment?.id) {
+    return;
+  }
+
+  const payload = {
+    id: payment.id,
+    merchant_id: payment.merchant_id ?? null,
+    amount: payment.amount,
+    asset: payment.asset,
+    asset_issuer: payment.asset_issuer ?? null,
+    recipient: payment.recipient,
+    status: payment.status,
+    tx_id: payment.tx_id ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  io.to(`payment:${payment.id}`).emit("payment:status", payload);
+
+  if (payment.merchant_id) {
+    io.to(`merchant:${payment.merchant_id}`).emit("payment:status", payload);
+
+    if (payment.status === "confirmed") {
+      io.to(`merchant:${payment.merchant_id}`).emit("payment:confirmed", {
+        id: payment.id,
+        amount: payment.amount,
+        asset: payment.asset,
+        asset_issuer: payment.asset_issuer ?? null,
+        recipient: payment.recipient,
+        tx_id: payment.tx_id ?? null,
+        confirmed_at: payload.updated_at,
+      });
+    }
+  }
+}
+
 function createPaymentsRouter({
   verifyPaymentRateLimit = defaultVerifyPaymentRateLimit,
 } = {}) {
@@ -363,19 +399,11 @@ function createPaymentsRouter({
           throw updateError;
         }
 
-        // Emit real-time event to the merchant's private room (issue #229)
-        const io = req.app.locals.io;
-        if (io && data.merchant_id) {
-          io.to(`merchant:${data.merchant_id}`).emit("payment:confirmed", {
-            id: data.id,
-            amount: data.amount,
-            asset: data.asset,
-            asset_issuer: data.asset_issuer,
-            recipient: data.recipient,
-            tx_id: match.transaction_hash,
-            confirmed_at: new Date().toISOString(),
-          });
-        }
+        emitPaymentStatus(req.app.locals.io, {
+          ...data,
+          status: "confirmed",
+          tx_id: match.transaction_hash,
+        });
 
         const merchantSecret = data.merchants?.webhook_secret;
 

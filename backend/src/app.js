@@ -42,6 +42,12 @@ export async function createApp({ redisClient }) {
         socket.join(`merchant:${merchant_id}`);
       }
     });
+
+    socket.on("join:payment", ({ payment_id }) => {
+      if (typeof payment_id === "string" && payment_id.length > 0) {
+        socket.join(`payment:${payment_id}`);
+      }
+    });
   });
 
   // Make DB pool and io accessible on every request

@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
+import { usePaymentStatusSocket } from "@/lib/usePaymentSocket";
 import CopyButton from "@/components/CopyButton";
 import WalletSelector from "@/components/WalletSelector";
 import toast from "react-hot-toast";
@@ -221,23 +222,19 @@ export default function PaymentPage() {
     return () => controller.abort();
   }, [paymentId]);
 
-  // ── Poll until settled ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (loading || !payment) return;
-    const settled = ["confirmed", "completed", "failed"].includes(payment.status);
-    if (settled) return;
+  usePaymentStatusSocket(paymentId, (event) => {
+    setPayment((current) => {
+      if (!current || current.id !== event.id) {
+        return current;
+      }
 
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/payment-status/${paymentId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.payment) setPayment(data.payment);
-      } catch { /* silent — retry next tick */ }
-    }, 5000);
-
-    return () => clearInterval(id);
-  }, [paymentId, payment, loading]);
+      return {
+        ...current,
+        status: event.status,
+        tx_id: event.tx_id,
+      };
+    });
+  });
 
   // ── Wallet readiness ───────────────────────────────────────────────────────
   useEffect(() => {

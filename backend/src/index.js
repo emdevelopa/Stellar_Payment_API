@@ -66,7 +66,7 @@ app.use(
       }
     },
     credentials: true,
-  }),
+  })
 );
 
 app.use(express.json({ limit: "1mb" }));
@@ -134,13 +134,25 @@ app.use("/api", auditRouter);
 app.use((err, req, res, next) => {
   if (err instanceof ZodError) {
     return res.status(400).json({
-      error: formatZodError(err),
+      error: formatZodError(err), // Zod errors are client-side validation issues, safe to expose.
     });
   }
 
   const status = err.status || 500;
+  let errorMessage;
+
+  if (process.env.NODE_ENV === "production" && status >= 500) {
+    // For 5xx errors in production, return a generic message to avoid leaking internal details.
+    errorMessage = "An unexpected error occurred. Please try again later.";
+    console.error("Unhandled Production Server Error:", err); // Log full error to server console.
+  } else {
+    // For client errors (e.g., 4xx) or in development, expose the error message.
+    errorMessage = err.message || "Internal Server Error";
+    console.error("Unhandled Error:", err); // Log full error to server console.
+  }
+
   res.status(status).json({
-    error: err.message || "Internal Server Error",
+    error: errorMessage,
   });
 });
 

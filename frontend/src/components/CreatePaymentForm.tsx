@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import CopyButton from "./CopyButton";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import SharePopoverButton from "./SharePopoverButton";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
@@ -198,7 +198,7 @@ export default function CreatePaymentForm() {
               <code className="flex-1 truncate font-mono text-sm text-mint">
                 {created.payment_link}
               </code>
-              <CopyButton text={created.payment_link} />
+              <SharePopoverButton url={created.payment_link} />
             </div>
           </div>
 

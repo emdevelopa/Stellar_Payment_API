@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiKeyAuth, hashPassword, verifyPassword } from "./auth.js";
 
 function createResponse() {
@@ -17,6 +17,20 @@ function createRequest(headers = {}) {
 }
 
 describe("hashPassword / verifyPassword", () => {
+  const originalSaltRounds = process.env.BCRYPT_SALT_ROUNDS;
+
+  beforeAll(() => {
+    process.env.BCRYPT_SALT_ROUNDS = "4";
+  });
+
+  afterAll(() => {
+    if (originalSaltRounds === undefined) {
+      delete process.env.BCRYPT_SALT_ROUNDS;
+    } else {
+      process.env.BCRYPT_SALT_ROUNDS = originalSaltRounds;
+    }
+  });
+
   it("produces a bcrypt hash distinct from the plaintext", async () => {
     const hash = await hashPassword("s3cr3t!");
     expect(hash).not.toBe("s3cr3t!");
@@ -81,7 +95,7 @@ describe("createApiKeyAuth", () => {
 
     expect(from).toHaveBeenCalledWith("merchants");
     expect(select).toHaveBeenCalledWith(
-      "id, email, business_name, notification_email, branding_config",
+      "id, email, business_name, notification_email, branding_config, webhook_secret, payment_limits",
     );
     expect(eq).toHaveBeenCalledWith("api_key", "invalid-key");
     expect(res.status).toHaveBeenCalledWith(401);

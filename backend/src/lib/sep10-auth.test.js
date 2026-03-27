@@ -1,15 +1,19 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import * as StellarSdk from "stellar-sdk";
-import { generateChallenge, verifyChallenge } from "./sep10-auth.js";
 
 describe("SEP-0010 Authentication", () => {
   let clientKeypair;
   let serverKeypair;
+  let generateChallenge;
+  let verifyChallenge;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     clientKeypair = StellarSdk.Keypair.random();
     serverKeypair = StellarSdk.Keypair.random();
     process.env.SEP10_SERVER_SIGNING_KEY = serverKeypair.secret();
+
+    vi.resetModules();
+    ({ generateChallenge, verifyChallenge } = await import("./sep10-auth.js"));
   });
 
   it("should generate a valid challenge transaction", () => {

@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // vi.hoisted makes mockCall available inside the vi.mock factory (which is hoisted above imports)
-const { mockCall, mockTxCall } = vi.hoisted(() => ({
+const { mockCall, mockTxCall, mockLoadAccount } = vi.hoisted(() => ({
   mockCall: vi.fn(),
-  mockTxCall: vi.fn()
+  mockTxCall: vi.fn(),
+  mockLoadAccount: vi.fn()
 }))
 
 vi.mock('stellar-sdk', () => {
@@ -11,6 +12,7 @@ vi.mock('stellar-sdk', () => {
   MockAsset.native = vi.fn(() => ({ isNative: () => true }))
 
   const MockServer = vi.fn(() => ({
+    loadAccount: (...args) => mockLoadAccount(...args),
     payments: () => ({
       forAccount: () => ({
         order: () => ({
@@ -34,6 +36,7 @@ import { findMatchingPayment } from './stellar.js'
 const makePayment = (overrides = {}) => ({
   type: 'payment',
   asset_type: 'native',
+  to: 'GABC',
   amount: '100.0000000',
   id: 'op-1',
   transaction_hash: 'tx-abc123',
@@ -46,6 +49,11 @@ describe('findMatchingPayment', () => {
   beforeEach(() => {
     mockCall.mockReset()
     mockTxCall.mockReset()
+    mockLoadAccount.mockReset()
+    mockLoadAccount.mockResolvedValue({
+      signers: [{ key: 'GABC', weight: 1 }],
+      thresholds: { med_threshold: 1 }
+    })
   })
 
   it('returns matching XLM payment', async () => {
@@ -57,7 +65,7 @@ describe('findMatchingPayment', () => {
       assetCode: 'XLM'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123' })
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
   })
 
   it('returns matching non-native (USDC) payment', async () => {
@@ -79,7 +87,7 @@ describe('findMatchingPayment', () => {
       assetIssuer: USDC_ISSUER
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123' })
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
   })
 
   it('matches when received amount differs by exactly the tolerance boundary (0.0000001)', async () => {
@@ -91,7 +99,7 @@ describe('findMatchingPayment', () => {
       assetCode: 'XLM'
     })
 
-    expect(result).not.toBeNull()
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
   })
 
   it('returns null when amount difference exceeds tolerance', async () => {
@@ -170,7 +178,7 @@ describe('findMatchingPayment', () => {
       assetCode: 'XLM'
     })
 
-    expect(result).toEqual({ id: 'op-first', transaction_hash: 'tx-first' })
+    expect(result).toEqual({ id: 'op-first', transaction_hash: 'tx-first', is_multisig: false })
   })
 
   // ── Memo matching (Issue #16) ──────────────────────────────────────
@@ -187,7 +195,7 @@ describe('findMatchingPayment', () => {
       memoType: 'text'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123' })
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
   })
 
   it('rejects payment with wrong memo value', async () => {
@@ -232,7 +240,7 @@ describe('findMatchingPayment', () => {
       memoType: 'id'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123' })
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
   })
 
   it('matches hash memo type', async () => {
@@ -248,7 +256,7 @@ describe('findMatchingPayment', () => {
       memoType: 'hash'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123' })
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
   })
 
   it('skips memo check when no memo is provided', async () => {
@@ -260,7 +268,7 @@ describe('findMatchingPayment', () => {
       assetCode: 'XLM'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123' })
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
     expect(mockTxCall).not.toHaveBeenCalled()
   })
 

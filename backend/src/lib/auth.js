@@ -1,6 +1,10 @@
 import bcrypt from "bcryptjs";
 
-const SALT_ROUNDS = 12;
+function getSaltRounds() {
+  const parsed = Number.parseInt(process.env.BCRYPT_SALT_ROUNDS ?? "", 10);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return 12;
+}
 
 /**
  * Hash a plain-text merchant password with bcrypt.
@@ -8,7 +12,7 @@ const SALT_ROUNDS = 12;
  * @returns {Promise<string>} bcrypt hash
  */
 export async function hashPassword(plaintext) {
-  return bcrypt.hash(plaintext, SALT_ROUNDS);
+  return bcrypt.hash(plaintext, getSaltRounds());
 }
 
 /**

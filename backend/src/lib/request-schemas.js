@@ -109,6 +109,30 @@ function applyPaymentValidationRules(body, ctx) {
         message: `Invalid memo_type. Must be one of: ${VALID_MEMO_TYPES.join(", ")}`,
       });
     }
+
+    if (body.memo_type === "hash" && body.memo && !/^[0-9a-fA-F]{64}$/.test(body.memo)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["memo"],
+        message: "memo must be a 32-byte hex string (64 characters) when memo_type is hash",
+      });
+    }
+
+    if (body.memo_type === "id" && body.memo && !isValidUnsigned64BitInteger(body.memo)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["memo"],
+        message: "memo must be a valid unsigned 64-bit integer when memo_type is id",
+      });
+    }
+
+    if (body.memo_type === "return" && body.memo && !isValidUnsigned64BitInteger(body.memo) && !/^[0-9a-fA-F]{64}$/.test(body.memo)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["memo"],
+        message: "memo must be a valid unsigned 64-bit integer or a 32-byte hex string (64 characters) when memo_type is return",
+      });
+    }
 }
 
 export const paymentZodSchema = paymentBaseSchema.superRefine(
@@ -200,6 +224,27 @@ export const webhookSettingsSchema = z.object({
     )
     .optional()),
 });
+
+export const v2PaymentSessionSchema = z.object({
+  amount: amountSchema,
+  asset: z.string().trim().transform((v) => v.toUpperCase()),
+  destination_address: z.string().trim().min(1),
+  memo: optionalTrimmedString(),
+  memo_type: optionalTrimmedString().transform((v) => v ? v.toLowerCase() : undefined),
+  branding_overrides: sessionBrandingSchema,
+}).superRefine(applyPaymentValidationRules);
+
+export function parseVersionedPaymentBody(req) {
+  const version = req.headers["x-api-version"] || "v1";
+  if (version === "v2") {
+    const body = v2PaymentSessionSchema.parse(req.body);
+    return {
+      ...body,
+      recipient: body.destination_address,
+    };
+  }
+  return paymentSessionZodSchema.parse(req.body);
+}
 
 export function formatZodError(error) {
   return error.issues?.[0]?.message || "Validation error";

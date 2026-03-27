@@ -317,7 +317,7 @@ describe('findMatchingPayment', () => {
       memoType: 'return'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123' })
+    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
   })
 
   it('skips memo check when no memo is provided', async () => {

@@ -1,7 +1,0 @@
-backend/src/index.js
-backend/src/lib/auth.js
-backend/src/routes/merchants.js
-frontend/src/app/settings/page.tsx
-frontend/src/components/Navbar.tsx
-frontend/src/components/RecentPayments.tsx
-frontend/src/lib/merchant-store.ts

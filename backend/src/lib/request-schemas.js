@@ -151,6 +151,12 @@ export const registerMerchantZodSchema = z.object({
         .optional(),
     })
     .optional(),
+  merchant_settings: z
+    .object({
+      send_success_emails: z.boolean().optional(),
+    })
+    .optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const sessionBrandingSchema = z

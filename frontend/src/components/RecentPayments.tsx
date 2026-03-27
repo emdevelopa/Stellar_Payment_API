@@ -9,7 +9,10 @@ import {
   useMerchantHydrated,
   useMerchantId,
 } from "@/lib/merchant-store";
+import PullToRefresh from "react-simple-pull-to-refresh";
 import { usePaymentSocket } from "@/lib/usePaymentSocket";
+import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import { localeToLanguageTag } from "@/i18n/config";
 import ExportCsvButton from "@/components/ExportCsvButton";
 import { Transaction }  from "@/lib/exportCsv";
@@ -50,12 +53,16 @@ function toStatusLabel(
   return t.has(`statuses.${status}`) ? t(`statuses.${status}`) : status;
 }
 
-export default function RecentPayments() {
+export default function RecentPayments({ showSkeleton = false }: { showSkeleton?: boolean }) {
   const t = useTranslations("recentPayments");
   const locale = localeToLanguageTag(useLocale());
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -185,7 +192,8 @@ useEffect(() => {
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1); // Reset to first page when filters change
+    setPage(1);
+    setPayments([]);
   };
 
   const clearFilter = (key: keyof FilterState) => {
@@ -206,6 +214,7 @@ useEffect(() => {
       dateTo: "",
     });
     setPage(1);
+    setPayments([]);
   };
 
   const hasActiveFilters =
@@ -225,13 +234,53 @@ useEffect(() => {
     setSelectedPayment(null);
   };
 
-  if (loading) {
+  if (showSkeleton || loading) {
     return (
-      <div className="animate-pulse space-y-3">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-12 w-full rounded-lg bg-white/5" />
-        ))}
-      </div>
+      <SkeletonTheme baseColor="#1e293b" highlightColor="#334155">
+        <div className="flex flex-col gap-4">
+          {/* Search and Filters Skeleton */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Skeleton width={60} height={14} borderRadius={4} />
+                <Skeleton height={40} borderRadius={12} />
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="flex flex-col gap-2">
+                    <Skeleton width={60} height={14} borderRadius={4} />
+                    <Skeleton height={40} borderRadius={12} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Table Skeleton */}
+          <div className="overflow-x-auto rounded-xl border border-white/10">
+            <div className="border-b border-white/10 bg-white/5 px-4 py-3">
+              <div className="flex justify-between">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} width={80} height={14} borderRadius={4} />
+                ))}
+              </div>
+            </div>
+            <div className="divide-y divide-white/5">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="px-4 py-4">
+                  <div className="flex justify-between items-center">
+                    <Skeleton width={70} height={24} borderRadius={999} />
+                    <Skeleton width={100} height={20} borderRadius={4} />
+                    <Skeleton width={120} height={16} borderRadius={4} className="hidden sm:block" />
+                    <Skeleton width={80} height={16} borderRadius={4} className="hidden md:block" />
+                    <Skeleton width={60} height={16} borderRadius={4} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </SkeletonTheme>
     );
   }
 
@@ -614,9 +663,97 @@ useEffect(() => {
                 {t("clearAll")}
               </button>
             </div>
-          )}
+
+            {/* Filter Chips and Clear All */}
+            {hasActiveFilters && (
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <span className="text-xs text-slate-400">Active filters:</span>
+
+                {filters.search && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    Search: &quot;{filters.search}&quot;
+                    <button
+                      onClick={() => clearFilter("search")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear search filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.status !== "all" && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    Status: {filters.status}
+                    <button
+                      onClick={() => clearFilter("status")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear status filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.asset !== "all" && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    Asset: {filters.asset}
+                    <button
+                      onClick={() => clearFilter("asset")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear asset filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.dateFrom && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    From: {filters.dateFrom}
+                    <button
+                      onClick={() => clearFilter("dateFrom")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear from date filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.dateTo && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    To: {filters.dateTo}
+                    <button
+                      onClick={() => clearFilter("dateTo")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear to date filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                <button
+                  onClick={clearAllFilters}
+                  className="ml-auto text-xs font-medium text-slate-400 underline underline-offset-4 hover:text-white"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
       {/* Results count */}
       <div className="flex items-center justify-between">
@@ -711,12 +848,7 @@ useEffect(() => {
           </tbody>
         </table>
       </div>
+    </PullToRefresh>
 
-      <PaymentDetailModal
-        paymentId={selectedPayment || ""}
-        isOpen={isModalOpen}
-        onClose={closeModal}
-      />
-    </div>
   );
 }

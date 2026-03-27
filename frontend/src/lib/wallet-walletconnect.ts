@@ -17,6 +17,7 @@ function stellarChainId(network: string): string {
 }
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "";
+const DISABLED_PROJECT_IDS = new Set(["", "your-project-id-here"]);
 
 interface ActiveSession {
   client: InstanceType<typeof import("@walletconnect/sign-client").SignClient>;
@@ -27,22 +28,26 @@ interface ActiveSession {
 
 let activeSession: ActiveSession | null = null;
 
+function hasWalletConnectProjectId(): boolean {
+  return !DISABLED_PROJECT_IDS.has(PROJECT_ID.trim());
+}
+
 /**
  * Lazy-load and initialise the WalletConnect SignClient (singleton).
  */
 async function getSignClient() {
-  if (!PROJECT_ID) {
-    throw new Error(
-      "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set. " +
-        "Create a project at https://cloud.reown.com and add the ID to your .env.",
-    );
-  }
+  if (!hasWalletConnectProjectId()) return null;
 
   if (clientInstance) return clientInstance;
 
   if (!SignClientClass) {
-    const mod = await import("@walletconnect/sign-client");
-    SignClientClass = mod.SignClient;
+    try {
+      const mod = await import("@walletconnect/sign-client");
+      SignClientClass = mod.SignClient;
+    } catch (err) {
+      console.warn("WalletConnect disabled: SignClient could not be loaded.", err);
+      return null;
+    }
   }
 
   clientInstance = await SignClientClass.init({
@@ -68,6 +73,11 @@ export async function connectWalletConnect(
   networkPassphrase: string,
 ): Promise<{ uri: string; approval: Promise<void> }> {
   const client = await getSignClient();
+  if (!client) {
+    throw new Error(
+      "WalletConnect is disabled. Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID to enable it.",
+    );
+  }
   const chainId = stellarChainId(networkPassphrase);
 
   const { uri, approval: approvalPromise } = await client.connect({
@@ -111,7 +121,7 @@ export const walletConnectProvider: WalletProvider = {
   id: "walletconnect",
 
   async isAvailable(): Promise<boolean> {
-    return !!PROJECT_ID;
+    return hasWalletConnectProjectId();
   },
 
   async getPublicKey(): Promise<string> {

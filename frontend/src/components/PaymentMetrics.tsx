@@ -16,6 +16,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import { localeToLanguageTag } from "@/i18n/config";
 
 type TimeRange = "7D" | "30D" | "1Y";
@@ -40,6 +42,8 @@ interface MetricsResponse {
   }>;
   total_volume: number;
   total_payments: number;
+  confirmed_count: number;
+  success_rate: number;
 }
 
 const CHART_HEIGHT = 300;
@@ -203,7 +207,7 @@ function ChartExportButton({
   );
 }
 
-export default function PaymentMetrics() {
+export default function PaymentMetrics({ showSkeleton = false }: { showSkeleton?: boolean }) {
   const t = useTranslations("paymentMetrics");
   const locale = localeToLanguageTag(useLocale());
   const [summary, setSummary] = useState<MetricsResponse | null>(null);
@@ -298,12 +302,43 @@ export default function PaymentMetrics() {
     }
   };
 
-  if (loading || !hydrated) {
+  if (showSkeleton || loading || !hydrated) {
     return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-10 w-48 rounded-lg bg-white/5" />
-        <div className="h-80 w-full rounded-xl bg-white/5" />
-      </div>
+      <SkeletonTheme baseColor="#1e293b" highlightColor="#334155">
+        <div className="flex flex-col gap-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <Skeleton width={100} height={14} borderRadius={4} />
+                <div className="mt-2 flex items-baseline gap-2">
+                  <Skeleton width={120} height={36} borderRadius={6} />
+                  <Skeleton width={40} height={20} borderRadius={4} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-col gap-2">
+                <Skeleton width={240} height={24} borderRadius={6} />
+                <Skeleton width={180} height={16} borderRadius={4} />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton width={100} height={32} borderRadius={8} />
+                <Skeleton width={140} height={32} borderRadius={8} />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Skeleton width={60} height={24} borderRadius={12} />
+              <Skeleton width={60} height={24} borderRadius={12} />
+            </div>
+            <div className="mt-4 h-[300px]">
+              <Skeleton height="100%" borderRadius={8} />
+            </div>
+          </div>
+        </div>
+      </SkeletonTheme>
     );
   }
 
@@ -333,7 +368,7 @@ export default function PaymentMetrics() {
   return (
     <div className="flex flex-col gap-6">
       {summary && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
             <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
               {t("sevenDayVolume")}
@@ -357,6 +392,32 @@ export default function PaymentMetrics() {
               <p className="text-sm text-slate-400">
                 {t("paymentsCount", { count: summary.total_payments })}
               </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+              Confirmed
+            </p>
+            <div className="mt-2 flex items-baseline gap-2">
+              <p className="text-3xl font-bold text-green-400">
+                {summary.confirmed_count}
+              </p>
+              <p className="text-sm text-slate-400">
+                {summary.confirmed_count === 1 ? "intent" : "intents"}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+              Success Rate
+            </p>
+            <div className="mt-2 flex items-baseline gap-2">
+              <p className="text-3xl font-bold text-green-400">
+                {summary.success_rate}
+              </p>
+              <p className="text-sm text-slate-400">%</p>
             </div>
           </div>
         </div>

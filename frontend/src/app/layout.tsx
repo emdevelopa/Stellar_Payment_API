@@ -6,6 +6,7 @@ import ThemeProvider from "@/components/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ToastProvider from "@/components/ToastProvider";
 import CommandPalette from "@/components/CommandPalette";
+import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import { WalletContextProvider } from "@/lib/wallet-context";
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -28,6 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <WalletContextProvider>
               <ToastProvider />
               <CommandPalette />
+              <KeyboardShortcuts />
               <ErrorBoundary>
                 {children}
               </ErrorBoundary>

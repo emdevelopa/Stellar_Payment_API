@@ -16,6 +16,7 @@ import {
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
 import { sendWebhook } from "../lib/webhooks.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
+import { getPayloadForVersion } from "../webhooks/resolver.js";
 
 const createPaymentRateLimit = createCreatePaymentRateLimit();
 
@@ -326,8 +327,8 @@ function createPaymentsRouter({
         let query = supabase
           .from("payments")
           .select(
-            "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret)"
-          );
+  "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version)"
+);
 
         if (req.merchant?.id) {
           query = query.eq("merchant_id", req.merchant.id);
@@ -391,21 +392,27 @@ function createPaymentsRouter({
           });
         }
 
-        const merchantSecret = data.merchants?.webhook_secret;
+       const merchantSecret = data.merchants?.webhook_secret;
+const merchantVersion = data.merchants?.webhook_version || "v1";
 
-        const webhookResult = await sendWebhook(
-          data.webhook_url,
-          {
-            event: "payment.confirmed",
-            payment_id: data.id,
-            amount: data.amount,
-            asset: data.asset,
-            asset_issuer: data.asset_issuer,
-            recipient: data.recipient,
-            tx_id: match.transaction_hash,
-          },
-          merchantSecret
-        );
+const webhookPayload = getPayloadForVersion(
+  merchantVersion,
+  "payment.confirmed",
+  {
+    payment_id: data.id,
+    amount: data.amount,
+    asset: data.asset,
+    asset_issuer: data.asset_issuer,
+    recipient: data.recipient,
+    tx_id: match.transaction_hash,
+  }
+);
+
+const webhookResult = await sendWebhook(
+  data.webhook_url,
+  webhookPayload,
+  merchantSecret
+);
 
         if (!webhookResult.ok && !webhookResult.skipped) {
           console.warn("Webhook failed", webhookResult);
@@ -602,10 +609,18 @@ function createPaymentsRouter({
         }
       }
 
+      const confirmedCount = payments.filter((p) => p.status === "confirmed").length;
+      const successRate =
+        payments.length > 0
+          ? Number(((confirmedCount / payments.length) * 100).toFixed(1))
+          : 0;
+
       res.json({
         data,
         total_volume: Number(totalVolume.toFixed(2)),
         total_payments: payments.length,
+        confirmed_count: confirmedCount,
+        success_rate: successRate,
       });
     } catch (err) {
       next(err);
@@ -946,3 +961,4 @@ function createPaymentsRouter({
 }
 
 export default createPaymentsRouter;
+

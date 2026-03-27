@@ -242,6 +242,24 @@ describe("registerMerchantZodSchema", () => {
       })
     ).toThrowError("primary_color must be a valid hex color");
   });
+
+  it("accepts and passes through a metadata blob", () => {
+    const result = registerMerchantZodSchema.parse({
+      email: "merchant@example.com",
+      metadata: { industry: "retail", country: "NG" },
+    });
+
+    expect(result.metadata).toEqual({ industry: "retail", country: "NG" });
+  });
+
+  it("rejects metadata that is not a plain object", () => {
+    expect(() =>
+      registerMerchantZodSchema.parse({
+        email: "merchant@example.com",
+        metadata: "not-an-object",
+      })
+    ).toThrow();
+  });
 });
 
 describe("paymentSessionZodSchema", () => {

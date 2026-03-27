@@ -1,42 +1,47 @@
 {
-  "name": "stellar-payment-api-backend",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
-    "test": "vitest run",
-    "purge:webhook-logs": "node scripts/purge-webhook-logs.js",
-    "migrate": "knex migrate:latest --knexfile knexfile.js",
-    "migrate:rollback": "knex migrate:rollback --knexfile knexfile.js"
-  },
-  "devDependencies": {
-    "@types/swagger-ui-express": "~4.1.8",
-    "nodemon": "^3.1.14",
-    "vitest": "^2.0.0"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.49.1",
-    "bcryptjs": "^3.0.3",
-    "cors": "^2.8.6",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "express-rate-limit": "^8.3.1",
-    "framer-motion": "^12.38.0",
-    "knex": "^3.2.6",
-    "morgan": "^1.10.0",
-    "pino": "^9.5.0",
-    "pino-http": "^10.3.0",
-    "pino-pretty": "^13.0.0",
-    "socket.io": "^4.8.1",
-    "pg": "^8.20.0",
-    "rate-limit-redis": "^4.3.1",
-    "redis": "^5.11.0",
-    "stellar-sdk": "^12.1.0",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1",
-    "zod": "^3.24.1",
-    "zod-to-json-schema": "~3.25.1"
-  }
+    "name": "stellar-payment-api-backend",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "nodemon src/server.js",
+        "start": "node src/server.js",
+        "test": "vitest run",
+        "test:integration": "node --experimental-vm-modules node_modules/.bin/jest jest.config.js tests/integration",
+        "purge:webhook-logs": "node scripts/purge-webhook-logs.js",
+        "migrate": "knex migrate:latest --knexfile knexfile.js",
+        "migrate:rollback": "knex migrate:rollback --knexfile knexfile.js"
+    },
+    "devDependencies": {
+        "@babel/preset-env": "^7.26.0",
+        "@types/swagger-ui-express": "~4.1.8",
+        "babel-jest": "^29.7.0",
+        "jest": "^29.7.0",
+        "nodemon": "^3.1.14",
+        "supertest": "^7.0.0",
+        "vitest": "^2.0.0"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.49.1",
+        "bcryptjs": "^3.0.3",
+        "cors": "^2.8.6",
+        "dotenv": "^16.4.5",
+        "express": "^4.19.2",
+        "express-rate-limit": "^8.3.1",
+        "framer-motion": "^12.38.0",
+        "knex": "^3.2.6",
+        "morgan": "^1.10.0",
+        "pino": "^9.5.0",
+        "pino-http": "^10.3.0",
+        "pino-pretty": "^13.0.0",
+        "socket.io": "^4.8.1",
+        "pg": "^8.20.0",
+        "rate-limit-redis": "^4.3.1",
+        "redis": "^5.11.0",
+        "stellar-sdk": "^12.1.0",
+        "swagger-jsdoc": "^6.2.8",
+        "swagger-ui-express": "^5.0.1",
+        "zod": "^3.24.1",
+        "zod-to-json-schema": "~3.25.1"
+    }
 }

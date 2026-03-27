@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
+import { usePaymentStatusSocket } from "@/lib/usePaymentSocket";
 import WalletSelector from "@/components/WalletSelector";
 import CopyButton from "@/components/CopyButton";
 import toast from "react-hot-toast";
@@ -239,28 +240,19 @@ export default function PaymentDetailModal({
     return () => controller.abort();
   }, [paymentId, isOpen]);
 
-  /* ---------- poll until settled ---------- */
-
-  useEffect(() => {
-    if (!isOpen || loading || !payment) return;
-    const settled = ["confirmed", "completed", "failed"].includes(
-      payment.status,
-    );
-    if (settled) return;
-
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/payment-status/${paymentId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.payment) setPayment(data.payment);
-      } catch {
-        /* silent — retry next tick */
+  usePaymentStatusSocket(isOpen ? paymentId : null, (event) => {
+    setPayment((current) => {
+      if (!current || current.id !== event.id) {
+        return current;
       }
-    }, 5000);
 
-    return () => clearInterval(id);
-  }, [paymentId, payment, loading, isOpen]);
+      return {
+        ...current,
+        status: event.status,
+        tx_id: event.tx_id,
+      };
+    });
+  });
 
   const networkPassphrase =
     process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015";

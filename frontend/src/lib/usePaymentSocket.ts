@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
 export interface ConfirmedPaymentEvent {
@@ -14,6 +14,29 @@ export interface ConfirmedPaymentEvent {
 }
 
 type Handler = (payment: ConfirmedPaymentEvent) => void;
+type PaymentStatusHandler = (payment: PaymentStatusEvent) => void;
+
+export interface PaymentStatusEvent {
+  id: string;
+  merchant_id: string | null;
+  amount: number;
+  asset: string;
+  asset_issuer: string | null;
+  recipient: string;
+  status: string;
+  tx_id: string | null;
+  updated_at: string;
+}
+
+function createSocketConnection() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+  return io(apiUrl, {
+    transports: ["websocket"],
+    reconnectionAttempts: 5,
+    reconnectionDelay: 2000,
+  });
+}
 
 /**
  * Connects to the backend Socket.io server and joins the merchant's private
@@ -34,13 +57,7 @@ export function usePaymentSocket(
   useEffect(() => {
     if (!merchantId) return;
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-    const socket = io(apiUrl, {
-      transports: ["websocket"],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-    });
+    const socket = createSocketConnection();
 
     socketRef.current = socket;
 
@@ -58,4 +75,35 @@ export function usePaymentSocket(
       socketRef.current = null;
     };
   }, [merchantId]);
+}
+
+export function usePaymentStatusSocket(
+  paymentId: string | null | undefined,
+  onStatus: PaymentStatusHandler,
+) {
+  const socketRef = useRef<Socket | null>(null);
+  const handlerRef = useRef<PaymentStatusHandler>(onStatus);
+  handlerRef.current = onStatus;
+
+  useEffect(() => {
+    if (!paymentId) return;
+
+    const socket = createSocketConnection();
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      socket.emit("join:payment", { payment_id: paymentId });
+    });
+
+    socket.on("payment:status", (payload: PaymentStatusEvent) => {
+      if (payload.id === paymentId) {
+        handlerRef.current(payload);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [paymentId]);
 }

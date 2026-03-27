@@ -5,13 +5,13 @@ import type { AssetMetadata, AssetMetadataResponse } from "@/app/api/asset-metad
 
 export type { AssetMetadata };
 
-// Mirrors the route's static data so consumers have valid values immediately,
-// with no loading gap and no fallback constant scattered across components.
+// Static defaults — logo is null until the route resolves a real URL from stellar.toml.
 const DEFAULT_ASSETS: AssetMetadata[] = [
   {
     code: "XLM",
     issuer: null,
     name: "Stellar Lumens",
+    logo: null,
     description: "The native asset of the Stellar network",
   },
   {
@@ -20,15 +20,11 @@ const DEFAULT_ASSETS: AssetMetadata[] = [
       process.env.NEXT_PUBLIC_USDC_ISSUER ??
       "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
     name: "USD Coin",
+    logo: null,
     description: "USD-backed stablecoin",
   },
 ];
 
-/**
- * Returns asset metadata from the edge-cached `/api/asset-metadata` route.
- * Initialised with static defaults so consumers always have a valid value —
- * the background fetch updates state once the cached route responds.
- */
 export function useAssetMetadata(): { assets: AssetMetadata[] } {
   const [assets, setAssets] = useState<AssetMetadata[]>(DEFAULT_ASSETS);
 
@@ -44,7 +40,7 @@ export function useAssetMetadata(): { assets: AssetMetadata[] } {
         if (!cancelled && data) setAssets(data.assets);
       })
       .catch(() => {
-        // defaults remain in place
+
       });
 
     return () => {

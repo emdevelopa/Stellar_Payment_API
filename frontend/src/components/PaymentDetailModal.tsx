@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
+import { useAssetMetadata } from "@/lib/useAssetMetadata";
 import WalletSelector from "@/components/WalletSelector";
 import CopyButton from "@/components/CopyButton";
 import toast from "react-hot-toast";
@@ -40,8 +41,29 @@ interface PaymentDetailModalProps {
   onClose: () => void;
 }
 
-function AssetBadge({ asset }: { asset: string }) {
+function AssetBadge({
+  asset,
+  logo,
+  name,
+}: {
+  asset: string;
+  logo?: string | null;
+  name?: string | null;
+}) {
   const a = asset.toUpperCase();
+
+  if (logo) {
+    return (
+      <span
+        aria-hidden="true"
+        className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logo} alt={name ?? asset} className="h-6 w-6 object-contain" />
+      </span>
+    );
+  }
+
   if (a === "XLM" || a === "NATIVE") {
     return (
       <span
@@ -181,6 +203,7 @@ export default function PaymentDetailModal({
   const sheetRef = useRef<HTMLDivElement>(null);
   const { activeProvider } = useWallet();
   const walletReady = !!activeProvider;
+  const { assets: assetMetadata } = useAssetMetadata();
 
   const { isProcessing, error: paymentError, processPayment } = usePayment(activeProvider);
 
@@ -418,7 +441,11 @@ export default function PaymentDetailModal({
             <div className="p-6 space-y-6">
               {/* ── Amount hero ── */}
               <div className="flex flex-col items-center gap-3 text-center">
-                <AssetBadge asset={payment.asset} />
+                <AssetBadge
+                  asset={payment.asset}
+                  logo={assetMetadata.find((a) => a.code === payment.asset.toUpperCase())?.logo}
+                  name={assetMetadata.find((a) => a.code === payment.asset.toUpperCase())?.name}
+                />
                 <div className="flex items-baseline gap-2">
                   <span className="text-4xl font-bold tracking-tight text-white">
                     {payment.amount.toLocaleString(undefined, {

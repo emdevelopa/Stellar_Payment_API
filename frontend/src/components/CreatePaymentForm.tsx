@@ -12,9 +12,13 @@ import {
   useMerchantTrustedAddresses,
 } from "@/lib/merchant-store";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { useAssetMetadata } from "@/lib/useAssetMetadata";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
+// Stellar testnet USDC issuer — override via NEXT_PUBLIC_USDC_ISSUER for mainnet
+const USDC_ISSUER =
+  process.env.NEXT_PUBLIC_USDC_ISSUER ??
+  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
 /** Basic Stellar public-key format check (G + 55 base-32 chars = 56 total). */
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
@@ -48,9 +52,6 @@ export default function CreatePaymentForm() {
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const trustedAddresses = useMerchantTrustedAddresses();
-  const { assets: supportedAssets } = useAssetMetadata();
-
-  const usdcIssuer = supportedAssets.find((a) => a.code === "USDC")?.issuer ?? "";
 
   useHydrateMerchantStore();
 
@@ -76,7 +77,7 @@ export default function CreatePaymentForm() {
         asset,
         recipient: recipient.trim(),
       };
-      if (asset === "USDC") body.asset_issuer = usdcIssuer;
+      if (asset === "USDC") body.asset_issuer = USDC_ISSUER;
       if (description.trim()) body.description = description.trim();
       if (useSessionBranding) {
         for (const [key, color] of Object.entries(branding)) {
@@ -298,7 +299,7 @@ export default function CreatePaymentForm() {
             <p className="text-[11px] text-slate-500">
               {t("issuer")}:{" "}
               <span className="font-mono">
-                {usdcIssuer.slice(0, 8)}…{usdcIssuer.slice(-6)}
+                {USDC_ISSUER.slice(0, 8)}…{USDC_ISSUER.slice(-6)}
               </span>
             </p>
           )}

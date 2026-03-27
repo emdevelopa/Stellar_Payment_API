@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState, JSX } from "react";
 import { useRouter } from "next/navigation";
 
+/* ------------------------------------------------------------------ */
+/*  Command definitions                                                */
+/* ------------------------------------------------------------------ */
 
 type Command = {
   id: string;
@@ -112,6 +115,9 @@ const commands: Command[] = [
   },
 ];
 
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);

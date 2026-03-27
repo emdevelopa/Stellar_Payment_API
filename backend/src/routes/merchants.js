@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js";
 import {
   registerMerchantZodSchema,
   sessionBrandingSchema,
+  webhookSettingsSchema,
 } from "../lib/request-schemas.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
 
@@ -190,6 +191,129 @@ router.put("/merchant-branding", async (req, res, next) => {
     }
 
     res.json({ branding_config: data.branding_config });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Webhook Settings ────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/webhook-settings:
+ *   get:
+ *     summary: Retrieve current webhook URL and masked webhook secret
+ *     tags: [Merchants]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Current webhook settings
+ */
+router.get("/webhook-settings", async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("merchants")
+      .select("webhook_url, webhook_secret")
+      .eq("id", req.merchant.id)
+      .single();
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
+
+    // Mask the secret: show first 10 chars, hide the rest
+    const secret = data.webhook_secret || "";
+    const maskedSecret =
+      secret.length > 10
+        ? secret.slice(0, 10) + "•".repeat(secret.length - 10)
+        : "•".repeat(secret.length);
+
+    res.json({
+      webhook_url: data.webhook_url || "",
+      webhook_secret_masked: maskedSecret,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @swagger
+ * /api/webhook-settings:
+ *   put:
+ *     summary: Update the merchant's webhook endpoint URL
+ *     tags: [Merchants]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               webhook_url:
+ *                 type: string
+ *                 format: uri
+ *     responses:
+ *       200:
+ *         description: Webhook URL updated
+ *       400:
+ *         description: Validation error
+ */
+router.put("/webhook-settings", async (req, res, next) => {
+  try {
+    const body = webhookSettingsSchema.parse(req.body || {});
+
+    const { data, error } = await supabase
+      .from("merchants")
+      .update({ webhook_url: body.webhook_url || null })
+      .eq("id", req.merchant.id)
+      .select("webhook_url")
+      .single();
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
+
+    res.json({ webhook_url: data.webhook_url || "" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @swagger
+ * /api/regenerate-webhook-secret:
+ *   post:
+ *     summary: Regenerate the merchant's webhook signing secret
+ *     tags: [Merchants]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: New webhook secret issued
+ *       401:
+ *         description: Missing or invalid x-api-key header
+ */
+router.post("/regenerate-webhook-secret", async (req, res, next) => {
+  try {
+    const newSecret = `whsec_${randomBytes(24).toString("hex")}`;
+
+    const { error } = await supabase
+      .from("merchants")
+      .update({ webhook_secret: newSecret })
+      .eq("id", req.merchant.id);
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
+
+    res.json({ webhook_secret: newSecret });
   } catch (err) {
     next(err);
   }

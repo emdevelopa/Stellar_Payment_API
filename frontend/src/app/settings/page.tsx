@@ -19,7 +19,7 @@ const DEFAULT_BRANDING = {
   background_color: "#050608",
 };
 
-type SettingsTab = "api" | "branding";
+type SettingsTab = "api" | "branding" | "webhooks";
 
 function normalizeHexInput(value: string) {
   const trimmed = value.trim();
@@ -128,6 +128,18 @@ export default function SettingsPage() {
   const [brandingError, setBrandingError] = useState<string | null>(null);
   const [loadingBranding, setLoadingBranding] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
+
+  // Webhook state
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookSecretMasked, setWebhookSecretMasked] = useState("");
+  const [webhookNewSecret, setWebhookNewSecret] = useState<string | null>(null);
+  const [webhookUrlError, setWebhookUrlError] = useState<string | null>(null);
+  const [webhookSaveError, setWebhookSaveError] = useState<string | null>(null);
+  const [loadingWebhook, setLoadingWebhook] = useState(false);
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [regeneratingSecret, setRegeneratingSecret] = useState(false);
+  const [confirmRegenSecret, setConfirmRegenSecret] = useState(false);
+  const [webhookRevealedSecret, setWebhookRevealedSecret] = useState(false);
 
   useHydrateMerchantStore();
 
@@ -238,6 +250,107 @@ export default function SettingsPage() {
     }
   };
 
+  // ── Webhook: load settings ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!apiKey) return;
+
+    const loadWebhookSettings = async () => {
+      setLoadingWebhook(true);
+      setWebhookSaveError(null);
+      try {
+        const res = await fetch(`${API_URL}/api/webhook-settings`, {
+          headers: { "x-api-key": apiKey },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load webhook settings");
+        setWebhookUrl(data.webhook_url ?? "");
+        setWebhookSecretMasked(data.webhook_secret_masked ?? "");
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to load webhook settings";
+        setWebhookSaveError(msg);
+      } finally {
+        setLoadingWebhook(false);
+      }
+    };
+
+    loadWebhookSettings();
+  }, [apiKey]);
+
+  // ── Webhook: URL validation ───────────────────────────────────────────────
+  const validateWebhookUrl = (url: string): string | null => {
+    if (!url.trim()) return null; // empty is ok — clears the URL
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:") return "Webhook URL must use HTTPS";
+      return null;
+    } catch {
+      return "Invalid URL format (e.g. https://example.com/webhook)";
+    }
+  };
+
+  const handleWebhookUrlChange = (value: string) => {
+    setWebhookUrl(value);
+    setWebhookUrlError(validateWebhookUrl(value));
+  };
+
+  // ── Webhook: save URL ─────────────────────────────────────────────────────
+  const saveWebhookUrl = async () => {
+    if (!apiKey) return;
+    const err = validateWebhookUrl(webhookUrl);
+    if (err) {
+      setWebhookUrlError(err);
+      return;
+    }
+
+    setSavingWebhook(true);
+    setWebhookSaveError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/webhook-settings`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({ webhook_url: webhookUrl.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save webhook URL");
+      setWebhookUrl(data.webhook_url ?? "");
+      toast.success(data.webhook_url ? "Webhook URL saved" : "Webhook URL cleared");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save webhook URL";
+      setWebhookSaveError(msg);
+      toast.error(msg);
+    } finally {
+      setSavingWebhook(false);
+    }
+  };
+
+  // ── Webhook: regenerate secret ────────────────────────────────────────────
+  const regenerateWebhookSecret = async () => {
+    if (!apiKey) return;
+    setRegeneratingSecret(true);
+    setWebhookSaveError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/regenerate-webhook-secret`, {
+        method: "POST",
+        headers: { "x-api-key": apiKey },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to regenerate secret");
+      setWebhookNewSecret(data.webhook_secret);
+      setWebhookRevealedSecret(true);
+      setConfirmRegenSecret(false);
+      toast.success("Webhook secret regenerated — update your integrations.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to regenerate secret";
+      setWebhookSaveError(msg);
+      toast.error(msg);
+    } finally {
+      setRegeneratingSecret(false);
+    }
+  };
+
   // ── Await hydration ──────────────────────────────────────────────────────
   if (!hydrated) return null;
 
@@ -321,9 +434,20 @@ export default function SettingsPage() {
           >
             Branding
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("webhooks")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "webhooks"
+                ? "bg-white text-black"
+                : "text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            Webhooks
+          </button>
         </div>
 
-        {activeTab === "api" ? <div className="flex flex-col gap-8">
+        {activeTab === "api" && <div className="flex flex-col gap-8">
           {/* API Key section */}
           <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -446,7 +570,9 @@ export default function SettingsPage() {
               </div>
             )}
           </section>
-        </div> : (
+        </div>}
+
+        {activeTab === "branding" && (
           <section className="flex flex-col gap-5">
             <div className="flex flex-col gap-1">
               <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
@@ -527,6 +653,198 @@ export default function SettingsPage() {
               {savingBranding ? "Saving..." : loadingBranding ? "Loading..." : "Save Branding"}
             </button>
           </section>
+        )}
+
+        {activeTab === "webhooks" && (
+          <div className="flex flex-col gap-8">
+            {/* Webhook Endpoint section */}
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Webhook Endpoint
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Events like payment confirmations will be sent as POST requests
+                  to this URL. Must use HTTPS.
+                </p>
+              </div>
+
+              {webhookSaveError && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400"
+                >
+                  {webhookSaveError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <input
+                  type="url"
+                  value={webhookUrl}
+                  onChange={(e) => handleWebhookUrlChange(e.target.value)}
+                  placeholder="https://example.com/webhooks/stellar"
+                  aria-invalid={!!webhookUrlError}
+                  aria-describedby={webhookUrlError ? "webhook-url-error" : undefined}
+                  className={`w-full rounded-xl border bg-black/40 p-3 font-mono text-sm text-white placeholder-slate-600 outline-none transition-colors focus:ring-1 ${
+                    webhookUrlError
+                      ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/30"
+                      : "border-white/10 focus:border-mint/50 focus:ring-mint/20"
+                  }`}
+                />
+                {webhookUrlError && (
+                  <p
+                    id="webhook-url-error"
+                    role="alert"
+                    className="flex items-center gap-1.5 text-xs text-red-400"
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      className="h-3.5 w-3.5 shrink-0"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {webhookUrlError}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={saveWebhookUrl}
+                disabled={savingWebhook || loadingWebhook || !!webhookUrlError}
+                className="h-11 rounded-xl bg-mint font-semibold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingWebhook
+                  ? "Saving…"
+                  : loadingWebhook
+                  ? "Loading…"
+                  : "Save Webhook URL"}
+              </button>
+            </section>
+
+            {/* Divider */}
+            <div className="h-px bg-white/10" />
+
+            {/* Webhook Secret section */}
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Webhook Signing Secret
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Used to verify that webhook payloads are from Stellar Pay.
+                  Validate the <code className="text-slate-400">Stellar-Signature</code> header
+                  against this secret.
+                </p>
+              </div>
+
+              {/* Display current / new secret */}
+              <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
+                <code className="flex-1 truncate font-mono text-sm text-slate-500">
+                  {webhookNewSecret
+                    ? webhookRevealedSecret
+                      ? webhookNewSecret
+                      : "•".repeat(webhookNewSecret.length)
+                    : webhookSecretMasked || "—"}
+                </code>
+                {webhookNewSecret && (
+                  <button
+                    type="button"
+                    onClick={() => setWebhookRevealedSecret((v) => !v)}
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    <EyeIcon open={webhookRevealedSecret} />
+                    {webhookRevealedSecret ? "Hide" : "Reveal"}
+                  </button>
+                )}
+                {webhookNewSecret && webhookRevealedSecret && (
+                  <CopyButton text={webhookNewSecret} />
+                )}
+              </div>
+
+              {webhookNewSecret && (
+                <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3">
+                  <p className="text-xs text-yellow-200">
+                    Copy this secret now — it won&apos;t be shown again after you leave this page.
+                  </p>
+                </div>
+              )}
+
+              {/* Regenerate flow */}
+              {!confirmRegenSecret ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWebhookSaveError(null);
+                    setConfirmRegenSecret(true);
+                  }}
+                  className="flex h-11 items-center justify-center rounded-xl border border-red-500/40 bg-red-500/10 px-5 text-sm font-semibold text-red-400 transition-all hover:border-red-500/70 hover:bg-red-500/20"
+                >
+                  Regenerate Secret…
+                </button>
+              ) : (
+                <div className="flex flex-col gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+                  <p className="text-sm font-medium text-yellow-200">
+                    Are you sure? This cannot be undone.
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    The current secret will stop working immediately. Any
+                    integration validating signatures with the old secret will
+                    fail.
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={regenerateWebhookSecret}
+                      disabled={regeneratingSecret}
+                      className="group relative flex flex-1 h-10 items-center justify-center rounded-xl bg-mint font-bold text-black text-sm transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {regeneratingSecret ? (
+                        <span className="flex items-center gap-2">
+                          <svg
+                            className="h-4 w-4 animate-spin"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                              fill="none"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                          Regenerating…
+                        </span>
+                      ) : (
+                        "Yes, regenerate secret"
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRegenSecret(false)}
+                      disabled={regeneratingSecret}
+                      className="flex flex-1 h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm font-medium text-slate-300 transition-all hover:bg-white/10 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
         )}
       </div>
 

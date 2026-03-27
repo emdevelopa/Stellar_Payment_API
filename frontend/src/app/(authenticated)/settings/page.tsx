@@ -9,10 +9,6 @@ import {
   useMerchantApiKey,
   useMerchantHydrated,
   useSetMerchantApiKey,
-  useSetMerchantMetadata,
-  useMerchantTrustedAddresses,
-  useAddTrustedAddress,
-  useRemoveTrustedAddress,
 } from "@/lib/merchant-store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -22,11 +18,8 @@ const DEFAULT_BRANDING = {
   secondary_color: "#b8ffe2",
   background_color: "#050608",
 };
-const DEFAULT_MERCHANT_SETTINGS = {
-  send_success_emails: true,
-};
 
-type SettingsTab = "api" | "branding" | "notifications" | "addresses";
+type SettingsTab = "api" | "branding" | "webhooks";
 
 function normalizeHexInput(value: string) {
   const trimmed = value.trim();
@@ -123,10 +116,6 @@ export default function SettingsPage() {
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const setApiKey = useSetMerchantApiKey();
-  const setMerchant = useSetMerchantMetadata();
-  const trustedAddresses = useMerchantTrustedAddresses();
-  const addTrustedAddress = useAddTrustedAddress();
-  const removeTrustedAddress = useRemoveTrustedAddress();
 
   const [revealed, setRevealed] = useState(false);
 
@@ -139,18 +128,18 @@ export default function SettingsPage() {
   const [brandingError, setBrandingError] = useState<string | null>(null);
   const [loadingBranding, setLoadingBranding] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
-  const [merchantSettings, setMerchantSettings] = useState(
-    DEFAULT_MERCHANT_SETTINGS,
-  );
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
 
-  // Trusted addresses state
-  const [addressLabel, setAddressLabel] = useState("");
-  const [addressValue, setAddressValue] = useState("");
-  const [addressError, setAddressError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Webhook state
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookSecretMasked, setWebhookSecretMasked] = useState("");
+  const [webhookNewSecret, setWebhookNewSecret] = useState<string | null>(null);
+  const [webhookUrlError, setWebhookUrlError] = useState<string | null>(null);
+  const [webhookSaveError, setWebhookSaveError] = useState<string | null>(null);
+  const [loadingWebhook, setLoadingWebhook] = useState(false);
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [regeneratingSecret, setRegeneratingSecret] = useState(false);
+  const [confirmRegenSecret, setConfirmRegenSecret] = useState(false);
+  const [webhookRevealedSecret, setWebhookRevealedSecret] = useState(false);
 
   useHydrateMerchantStore();
 
@@ -177,37 +166,6 @@ export default function SettingsPage() {
 
     loadBranding();
   }, [apiKey]);
-
-  useEffect(() => {
-    if (!apiKey) return;
-
-    const loadProfile = async () => {
-      setLoadingProfile(true);
-      setProfileError(null);
-
-      try {
-        const res = await fetch(`${API_URL}/api/merchant-profile`, {
-          headers: { "x-api-key": apiKey },
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load profile");
-        setMerchantSettings({
-          send_success_emails:
-            data.merchant?.merchant_settings?.send_success_emails ?? true,
-        });
-        if (data.merchant) {
-          setMerchant(data.merchant);
-        }
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Failed to load profile";
-        setProfileError(msg);
-      } finally {
-        setLoadingProfile(false);
-      }
-    };
-
-    loadProfile();
-  }, [apiKey, setMerchant]);
 
   const startRotate = () => {
     setRotateError(null);
@@ -292,79 +250,105 @@ export default function SettingsPage() {
     }
   };
 
-  const saveNotificationSettings = async () => {
+  // ── Webhook: load settings ────────────────────────────────────────────────
+  useEffect(() => {
     if (!apiKey) return;
 
-    setSavingProfile(true);
-    setProfileError(null);
+    const loadWebhookSettings = async () => {
+      setLoadingWebhook(true);
+      setWebhookSaveError(null);
+      try {
+        const res = await fetch(`${API_URL}/api/webhook-settings`, {
+          headers: { "x-api-key": apiKey },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load webhook settings");
+        setWebhookUrl(data.webhook_url ?? "");
+        setWebhookSecretMasked(data.webhook_secret_masked ?? "");
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to load webhook settings";
+        setWebhookSaveError(msg);
+      } finally {
+        setLoadingWebhook(false);
+      }
+    };
 
+    loadWebhookSettings();
+  }, [apiKey]);
+
+  // ── Webhook: URL validation ───────────────────────────────────────────────
+  const validateWebhookUrl = (url: string): string | null => {
+    if (!url.trim()) return null; // empty is ok — clears the URL
     try {
-      const res = await fetch(`${API_URL}/api/merchant-profile`, {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:") return "Webhook URL must use HTTPS";
+      return null;
+    } catch {
+      return "Invalid URL format (e.g. https://example.com/webhook)";
+    }
+  };
+
+  const handleWebhookUrlChange = (value: string) => {
+    setWebhookUrl(value);
+    setWebhookUrlError(validateWebhookUrl(value));
+  };
+
+  // ── Webhook: save URL ─────────────────────────────────────────────────────
+  const saveWebhookUrl = async () => {
+    if (!apiKey) return;
+    const err = validateWebhookUrl(webhookUrl);
+    if (err) {
+      setWebhookUrlError(err);
+      return;
+    }
+
+    setSavingWebhook(true);
+    setWebhookSaveError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/webhook-settings`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "x-api-key": apiKey,
         },
-        body: JSON.stringify({
-          merchant_settings: merchantSettings,
-        }),
+        body: JSON.stringify({ webhook_url: webhookUrl.trim() || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
-
-      setMerchantSettings({
-        send_success_emails:
-          data.merchant?.merchant_settings?.send_success_emails ?? true,
-      });
-
-      if (data.merchant) {
-        setMerchant(data.merchant);
-      }
-
-      toast.success("Notification settings saved");
+      if (!res.ok) throw new Error(data.error ?? "Failed to save webhook URL");
+      setWebhookUrl(data.webhook_url ?? "");
+      toast.success(data.webhook_url ? "Webhook URL saved" : "Webhook URL cleared");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to save settings";
-      setProfileError(msg);
+      const msg = err instanceof Error ? err.message : "Failed to save webhook URL";
+      setWebhookSaveError(msg);
       toast.error(msg);
     } finally {
-      setSavingProfile(false);
+      setSavingWebhook(false);
     }
   };
-  const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
-  const addAddress = () => {
-    setAddressError(null);
-
-    if (!addressLabel.trim()) {
-      setAddressError("Label is required");
-      return;
+  // ── Webhook: regenerate secret ────────────────────────────────────────────
+  const regenerateWebhookSecret = async () => {
+    if (!apiKey) return;
+    setRegeneratingSecret(true);
+    setWebhookSaveError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/regenerate-webhook-secret`, {
+        method: "POST",
+        headers: { "x-api-key": apiKey },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to regenerate secret");
+      setWebhookNewSecret(data.webhook_secret);
+      setWebhookRevealedSecret(true);
+      setConfirmRegenSecret(false);
+      toast.success("Webhook secret regenerated — update your integrations.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to regenerate secret";
+      setWebhookSaveError(msg);
+      toast.error(msg);
+    } finally {
+      setRegeneratingSecret(false);
     }
-
-    if (!STELLAR_ADDRESS_RE.test(addressValue.trim())) {
-      setAddressError(
-        "Address must be a valid Stellar public key (56 characters, starts with G).",
-      );
-      return;
-    }
-
-    const newAddress = {
-      id: `addr_${Date.now()}`,
-      label: addressLabel.trim(),
-      address: addressValue.trim(),
-      created_at: new Date().toISOString(),
-    };
-
-    addTrustedAddress(newAddress);
-    setAddressLabel("");
-    setAddressValue("");
-    toast.success("Address added to trusted addresses");
-  };
-
-  const removeAddress = (id: string) => {
-    setDeletingId(id);
-    removeTrustedAddress(id);
-    setDeletingId(null);
-    toast.success("Address removed");
   };
 
   // ── Await hydration ──────────────────────────────────────────────────────
@@ -452,29 +436,18 @@ export default function SettingsPage() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("notifications")}
+            onClick={() => setActiveTab("webhooks")}
             className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
-              activeTab === "notifications"
+              activeTab === "webhooks"
                 ? "bg-white text-black"
                 : "text-slate-300 hover:bg-white/10"
             }`}
           >
-            Notifications
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("addresses")}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
-              activeTab === "addresses"
-                ? "bg-white text-black"
-                : "text-slate-300 hover:bg-white/10"
-            }`}
-          >
-            Trusted Addresses
+            Webhooks
           </button>
         </div>
 
-        {activeTab === "api" ? <div className="flex flex-col gap-8">
+        {activeTab === "api" && <div className="flex flex-col gap-8">
           {/* API Key section */}
           <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -597,7 +570,9 @@ export default function SettingsPage() {
               </div>
             )}
           </section>
-        </div> : activeTab === "branding" ? (
+        </div>}
+
+        {activeTab === "branding" && (
           <section className="flex flex-col gap-5">
             <div className="flex flex-col gap-1">
               <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
@@ -678,188 +653,198 @@ export default function SettingsPage() {
               {savingBranding ? "Saving..." : loadingBranding ? "Loading..." : "Save Branding"}
             </button>
           </section>
-        ) : (
-          <section className="flex flex-col gap-5">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                Email Notifications
-              </h2>
-              <p className="text-sm text-slate-500">
-                Control whether successful payment emails are sent to your
-                notification inbox.
-              </p>
-            </div>
-
-            {profileError && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-                {profileError}
-              </div>
-            )}
-
-            <label className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 p-4">
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-white">
-                  Success emails
-                </span>
-                <span className="text-xs text-slate-400">
-                  Send an email when a payment is confirmed.
-                </span>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={merchantSettings.send_success_emails}
-                onClick={() =>
-                  setMerchantSettings((current) => ({
-                    ...current,
-                    send_success_emails: !current.send_success_emails,
-                  }))
-                }
-                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                  merchantSettings.send_success_emails
-                    ? "bg-mint"
-                    : "bg-slate-700"
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 rounded-full bg-black transition-transform ${
-                    merchantSettings.send_success_emails
-                      ? "translate-x-6"
-                      : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </label>
-
-            <button
-              type="button"
-              onClick={saveNotificationSettings}
-              disabled={loadingProfile || savingProfile}
-              className="h-11 rounded-xl bg-mint font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {savingProfile
-                ? "Saving..."
-                : loadingProfile
-                  ? "Loading..."
-                  : "Save Notification Settings"}
-            </button>
-          </section>
         )}
 
-        {activeTab === "addresses" && (
-          <section className="flex flex-col gap-5">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                Trusted Addresses
-              </h2>
-              <p className="text-sm text-slate-500">
-                Save frequently used Stellar addresses for quick access when creating payments.
-              </p>
-            </div>
-
-            {addressError && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-                {addressError}
+        {activeTab === "webhooks" && (
+          <div className="flex flex-col gap-8">
+            {/* Webhook Endpoint section */}
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Webhook Endpoint
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Events like payment confirmations will be sent as POST requests
+                  to this URL. Must use HTTPS.
+                </p>
               </div>
-            )}
 
-            {/* Add new address form */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-400">
-                Add New Address
-              </p>
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="address-label" className="text-xs text-slate-400">
-                    Label
-                  </label>
-                  <input
-                    id="address-label"
-                    type="text"
-                    value={addressLabel}
-                    onChange={(e) => setAddressLabel(e.target.value)}
-                    className="rounded-xl border border-white/10 bg-black/40 p-2.5 text-sm text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-                    placeholder="e.g. Main Wallet, Supplier ABC"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="address-value" className="text-xs text-slate-400">
-                    Stellar Address
-                  </label>
-                  <input
-                    id="address-value"
-                    type="text"
-                    value={addressValue}
-                    onChange={(e) => setAddressValue(e.target.value)}
-                    className="rounded-xl border border-white/10 bg-black/40 p-2.5 font-mono text-sm text-white placeholder:font-sans placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-                    placeholder="GABC...XYZ (56 characters)"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={addAddress}
-                  className="mt-1 flex h-10 items-center justify-center rounded-xl bg-mint font-semibold text-black transition-all hover:bg-glow"
+              {webhookSaveError && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400"
                 >
-                  Add Address
-                </button>
-              </div>
-            </div>
-
-            {/* Saved addresses list */}
-            <div className="flex flex-col gap-3">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                Saved Addresses ({trustedAddresses.length})
-              </h3>
-              
-              {trustedAddresses.length === 0 ? (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
-                  <p className="text-sm text-slate-400">
-                    No trusted addresses saved yet. Add your first address above.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {trustedAddresses.map((addr) => (
-                    <div
-                      key={addr.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-white">
-                          {addr.label}
-                        </p>
-                        <p className="truncate font-mono text-xs text-slate-500">
-                          {addr.address.slice(0, 12)}...{addr.address.slice(-8)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(addr.address);
-                            toast.success("Address copied to clipboard");
-                          }}
-                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all hover:bg-white/10 hover:text-white"
-                        >
-                          Copy
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeAddress(addr.id)}
-                          disabled={deletingId === addr.id}
-                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:border-red-500/50 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {deletingId === addr.id ? "Removing..." : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  {webhookSaveError}
                 </div>
               )}
-            </div>
-          </section>
+
+              <div className="flex flex-col gap-1.5">
+                <input
+                  type="url"
+                  value={webhookUrl}
+                  onChange={(e) => handleWebhookUrlChange(e.target.value)}
+                  placeholder="https://example.com/webhooks/stellar"
+                  aria-invalid={!!webhookUrlError}
+                  aria-describedby={webhookUrlError ? "webhook-url-error" : undefined}
+                  className={`w-full rounded-xl border bg-black/40 p-3 font-mono text-sm text-white placeholder-slate-600 outline-none transition-colors focus:ring-1 ${
+                    webhookUrlError
+                      ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/30"
+                      : "border-white/10 focus:border-mint/50 focus:ring-mint/20"
+                  }`}
+                />
+                {webhookUrlError && (
+                  <p
+                    id="webhook-url-error"
+                    role="alert"
+                    className="flex items-center gap-1.5 text-xs text-red-400"
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      className="h-3.5 w-3.5 shrink-0"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {webhookUrlError}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={saveWebhookUrl}
+                disabled={savingWebhook || loadingWebhook || !!webhookUrlError}
+                className="h-11 rounded-xl bg-mint font-semibold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingWebhook
+                  ? "Saving…"
+                  : loadingWebhook
+                  ? "Loading…"
+                  : "Save Webhook URL"}
+              </button>
+            </section>
+
+            {/* Divider */}
+            <div className="h-px bg-white/10" />
+
+            {/* Webhook Secret section */}
+            <section className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Webhook Signing Secret
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Used to verify that webhook payloads are from Stellar Pay.
+                  Validate the <code className="text-slate-400">Stellar-Signature</code> header
+                  against this secret.
+                </p>
+              </div>
+
+              {/* Display current / new secret */}
+              <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
+                <code className="flex-1 truncate font-mono text-sm text-slate-500">
+                  {webhookNewSecret
+                    ? webhookRevealedSecret
+                      ? webhookNewSecret
+                      : "•".repeat(webhookNewSecret.length)
+                    : webhookSecretMasked || "—"}
+                </code>
+                {webhookNewSecret && (
+                  <button
+                    type="button"
+                    onClick={() => setWebhookRevealedSecret((v) => !v)}
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    <EyeIcon open={webhookRevealedSecret} />
+                    {webhookRevealedSecret ? "Hide" : "Reveal"}
+                  </button>
+                )}
+                {webhookNewSecret && webhookRevealedSecret && (
+                  <CopyButton text={webhookNewSecret} />
+                )}
+              </div>
+
+              {webhookNewSecret && (
+                <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3">
+                  <p className="text-xs text-yellow-200">
+                    Copy this secret now — it won&apos;t be shown again after you leave this page.
+                  </p>
+                </div>
+              )}
+
+              {/* Regenerate flow */}
+              {!confirmRegenSecret ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWebhookSaveError(null);
+                    setConfirmRegenSecret(true);
+                  }}
+                  className="flex h-11 items-center justify-center rounded-xl border border-red-500/40 bg-red-500/10 px-5 text-sm font-semibold text-red-400 transition-all hover:border-red-500/70 hover:bg-red-500/20"
+                >
+                  Regenerate Secret…
+                </button>
+              ) : (
+                <div className="flex flex-col gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+                  <p className="text-sm font-medium text-yellow-200">
+                    Are you sure? This cannot be undone.
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    The current secret will stop working immediately. Any
+                    integration validating signatures with the old secret will
+                    fail.
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={regenerateWebhookSecret}
+                      disabled={regeneratingSecret}
+                      className="group relative flex flex-1 h-10 items-center justify-center rounded-xl bg-mint font-bold text-black text-sm transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {regeneratingSecret ? (
+                        <span className="flex items-center gap-2">
+                          <svg
+                            className="h-4 w-4 animate-spin"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                              fill="none"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                          Regenerating…
+                        </span>
+                      ) : (
+                        "Yes, regenerate secret"
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRegenSecret(false)}
+                      disabled={regeneratingSecret}
+                      className="flex flex-1 h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm font-medium text-slate-300 transition-all hover:bg-white/10 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
         )}
       </div>
 

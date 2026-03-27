@@ -1,12 +1,22 @@
 /** @type {import('next').NextConfig} */
 const path = require("path");
+const createNextIntlPlugin = require("next-intl/plugin");
 
 const withSentryConfig = (config) => config;
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig = {
   reactStrictMode: true,
   compress: true,
   poweredByHeader: false,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "i.pravatar.cc",
+      },
+    ],
+  },
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
@@ -23,4 +33,6 @@ const sentryWebpackPluginOptions = {
   silent: true, // Suppresses all logs
 };
 
-module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
+module.exports = withNextIntl(
+  withSentryConfig(nextConfig, sentryWebpackPluginOptions),
+);

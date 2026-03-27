@@ -10,6 +10,20 @@ export interface PaymentTransactionParams {
   networkPassphrase: string;
 }
 
+export interface PathPaymentTransactionParams {
+  sourcePublicKey: string;
+  destinationPublicKey: string;
+  sendMax: string;
+  sendAssetCode: string;
+  sendAssetIssuer: string | null;
+  destAmount: string;
+  destAssetCode: string;
+  destAssetIssuer: string | null;
+  path: Array<{ asset_code: string; asset_issuer: string | null }>;
+  horizonUrl: string;
+  networkPassphrase: string;
+}
+
 /**
  * Resolve a Stellar asset based on code and issuer
  */
@@ -64,11 +78,53 @@ export async function buildPaymentTransaction(
 }
 
 /**
+ * Build a path payment (strict receive) transaction.
+ * The sender pays up to `sendMax` of the source asset so that the
+ * destination receives exactly `destAmount` of the destination asset.
+ */
+export async function buildPathPaymentTransaction(
+  params: PathPaymentTransactionParams
+): Promise<string> {
+  try {
+    const server = new StellarSdk.Horizon.Server(params.horizonUrl);
+    const sourceAccount = await server.loadAccount(params.sourcePublicKey);
+
+    const sendAsset = resolveAsset(params.sendAssetCode, params.sendAssetIssuer);
+    const destAsset = resolveAsset(params.destAssetCode, params.destAssetIssuer);
+
+    const stellarPath = params.path.map((p) => resolveAsset(p.asset_code, p.asset_issuer));
+
+    const transaction = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: params.networkPassphrase,
+    })
+      .addOperation(
+        StellarSdk.Operation.pathPaymentStrictReceive({
+          sendAsset,
+          sendMax: params.sendMax,
+          destination: params.destinationPublicKey,
+          destAsset,
+          destAmount: params.destAmount,
+          path: stellarPath,
+        })
+      )
+      .setTimeout(300)
+      .build();
+
+    return transaction.toXDR();
+  } catch (error) {
+    throw new Error(
+      `Failed to build path payment transaction: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+
+/**
  * SEP-0001: Discover the anchor services from stellar.toml
  */
 export async function getAnchorServices(domain: string) {
   try {
-    const toml = await StellarSdk.StellarToml.Config.from(domain);
+    const toml = await StellarSdk.StellarToml.Resolver.resolve(domain);
     return {
       transferServer: toml.TRANSFER_SERVER_SEP0024 || toml.TRANSFER_SERVER,
       webAuthEndpoint: toml.WEB_AUTH_ENDPOINT,
@@ -141,4 +197,3 @@ export async function initiateWithdrawal(
 
   return data.url;
 }
-

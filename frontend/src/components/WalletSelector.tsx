@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useWallet } from "@/lib/wallet-context";
 import { connectWalletConnect } from "@/lib/wallet-walletconnect";
 import { QRCodeSVG } from "qrcode.react";
@@ -14,6 +15,7 @@ export default function WalletSelector({
   networkPassphrase,
   onConnected,
 }: WalletSelectorProps) {
+  const t = useTranslations("walletSelector");
   const { providers, activeProvider, selectProvider } = useWallet();
 
   const [providerAvailability, setProviderAvailability] = useState<
@@ -55,7 +57,7 @@ export default function WalletSelector({
         selectProvider("walletconnect");
         onConnected();
       } catch (err) {
-        setWcError(err instanceof Error ? err.message : "WalletConnect pairing failed");
+        setWcError(err instanceof Error ? err.message : t("pairingFailed"));
       } finally {
         setWcPairing(false);
         setWcUri(null);
@@ -70,7 +72,7 @@ export default function WalletSelector({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-center text-sm font-medium text-slate-300">
-        Choose a wallet
+        {t("chooseWallet")}
       </p>
 
       <div className="flex flex-col gap-2">
@@ -104,14 +106,14 @@ export default function WalletSelector({
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Waiting for wallet…
+                  {t("walletConnectWaiting")}
                 </span>
               ) : (
                 <>
                   {p.name}
                   {!available && (
                     <span className="text-xs text-slate-500">
-                      {isWc ? "(no project ID)" : "(not installed)"}
+                      {isWc ? t("noProjectId") : t("notInstalled")}
                     </span>
                   )}
                 </>
@@ -125,7 +127,7 @@ export default function WalletSelector({
       {wcUri && (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-6">
           <p className="text-xs font-medium text-slate-400">
-            Scan with your Stellar wallet app
+            {t("scanTitle")}
           </p>
           <div className="rounded-lg bg-white p-3">
             <QRCodeSVG value={wcUri} size={200} level="M" />

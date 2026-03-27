@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 export default function Breadcrumbs() {
+  const t = useTranslations("breadcrumbs");
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
 
@@ -12,12 +14,14 @@ export default function Breadcrumbs() {
   return (
     <nav className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-slate-500">
       <Link href="/" className="hover:text-white transition-colors">
-        Home
+        {t("home")}
       </Link>
       {segments.map((segment, index) => {
         const href = `/${segments.slice(0, index + 1).join("/")}`;
         const isLast = index === segments.length - 1;
-        const label = segment.replace(/-/g, " ");
+        const label = t.has(`segments.${segment}`)
+          ? t(`segments.${segment}`)
+          : segment.replace(/-/g, " ");
 
         return (
           <div key={href} className="flex items-center gap-2">

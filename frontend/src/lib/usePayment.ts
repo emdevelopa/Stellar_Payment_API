@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { submitTransaction } from "@/lib/freighter";
-import { buildPaymentTransaction } from "@/lib/stellar";
+import { buildPaymentTransaction, buildPathPaymentTransaction } from "@/lib/stellar";
 import type { WalletProvider } from "@/lib/wallet-types";
 
 interface PaymentParams {
@@ -10,11 +10,23 @@ interface PaymentParams {
   assetIssuer: string | null;
 }
 
+interface PathPaymentParams {
+  recipient: string;
+  destAmount: string;
+  destAssetCode: string;
+  destAssetIssuer: string | null;
+  sendMax: string;
+  sendAssetCode: string;
+  sendAssetIssuer: string | null;
+  path: Array<{ asset_code: string; asset_issuer: string | null }>;
+}
+
 interface UsePaymentReturn {
   isProcessing: boolean;
   status: string | null;
   error: string | null;
   processPayment: (params: PaymentParams) => Promise<{ hash: string }>;
+  processPathPayment: (params: PathPaymentParams) => Promise<{ hash: string }>;
 }
 
 /**
@@ -91,10 +103,73 @@ export function usePayment(provider: WalletProvider | null): UsePaymentReturn {
     [provider],
   );
 
+  const processPathPayment = useCallback(
+    async (params: PathPaymentParams): Promise<{ hash: string }> => {
+      if (!provider) throw new Error("No wallet provider selected");
+
+      setIsProcessing(true);
+      setStatus("Connecting to wallet...");
+      setError(null);
+
+      try {
+        setStatus("Requesting account from wallet...");
+        const publicKey = await provider.getPublicKey();
+
+        const networkUrl =
+          process.env.NEXT_PUBLIC_HORIZON_URL ||
+          "https://horizon-testnet.stellar.org";
+        const networkPassphrase =
+          process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ||
+          "Test SDF Network ; September 2015";
+
+        setStatus("Building path payment transaction...");
+        const transactionXDR = await buildPathPaymentTransaction({
+          sourcePublicKey: publicKey,
+          destinationPublicKey: params.recipient,
+          sendMax: params.sendMax,
+          sendAssetCode: params.sendAssetCode,
+          sendAssetIssuer: params.sendAssetIssuer,
+          destAmount: params.destAmount,
+          destAssetCode: params.destAssetCode,
+          destAssetIssuer: params.destAssetIssuer,
+          path: params.path,
+          horizonUrl: networkUrl,
+          networkPassphrase,
+        });
+
+        setStatus("Signing transaction...");
+        const signedXDR = await provider.signTransaction(
+          transactionXDR,
+          networkPassphrase,
+        );
+
+        setStatus("Submitting transaction...");
+        const result = await submitTransaction(
+          signedXDR,
+          networkUrl,
+          networkPassphrase,
+        );
+
+        setStatus("Payment completed successfully!");
+        return result;
+      } catch (err) {
+        const errorMsg =
+          err instanceof Error ? err.message : "Unknown error occurred";
+        setError(errorMsg);
+        setStatus(null);
+        throw err;
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [provider],
+  );
+
   return {
     isProcessing,
     status,
     error,
     processPayment,
+    processPathPayment,
   };
 }

@@ -3,16 +3,135 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+}
+
+:root.dark {
   color-scheme: dark;
 }
 
 body {
+  background: radial-gradient(1200px circle at 10% -10%, #d9e8ff 0%, #f5f8ff 45%, #eef3ff 100%);
+  color: #0f172a;
+}
+
+.dark body {
   background: radial-gradient(1200px circle at 10% -10%, #15233b 0%, #0b0c10 45%, #050608 100%);
   color: #f3f5f7;
+}
+
+/* Light-mode overrides for components that currently use dark-only utility classes. */
+:root:not(.dark) .text-white,
+:root:not(.dark) .text-slate-100,
+:root:not(.dark) .text-slate-200,
+:root:not(.dark) .text-slate-300,
+:root:not(.dark) .text-slate-400 {
+  color: #0f172a;
+}
+
+:root:not(.dark) .border-white\/10,
+:root:not(.dark) .border-white\/20 {
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+:root:not(.dark) .bg-black\/40,
+:root:not(.dark) .bg-black\/50,
+:root:not(.dark) .bg-black\/60,
+:root:not(.dark) .bg-black\/70,
+:root:not(.dark) .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.78);
+}
+
+:root:not(.dark) .hover\:bg-white\/10:hover {
+  background-color: rgba(15, 23, 42, 0.08);
 }
 
 @media (max-width: 767px) {
   body.dashboard-mobile-nav {
     padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
   }
+}
+
+.docs-prose {
+  color: #cbd5e1;
+  line-height: 1.8;
+}
+
+.docs-prose h1,
+.docs-prose h2,
+.docs-prose h3,
+.docs-prose h4 {
+  color: #f8fafc;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 2.25rem;
+  margin-bottom: 1rem;
+}
+
+.docs-prose h1 {
+  font-size: 2rem;
+}
+
+.docs-prose h2 {
+  font-size: 1.5rem;
+}
+
+.docs-prose h3 {
+  font-size: 1.25rem;
+}
+
+.docs-prose p,
+.docs-prose ul,
+.docs-prose ol {
+  margin-bottom: 1rem;
+}
+
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 1.25rem;
+}
+
+.docs-prose li + li {
+  margin-top: 0.35rem;
+}
+
+.docs-prose code {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 0.5rem;
+  color: #b8ffe2;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 0.15rem 0.45rem;
+}
+
+.docs-prose pre {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(2, 6, 23, 0.82);
+  border-radius: 1rem;
+  padding: 1rem 1.1rem;
+  margin: 1.25rem 0;
+}
+
+.docs-prose pre code {
+  border: 0;
+  background: transparent;
+  color: #e2e8f0;
+  padding: 0;
+}
+
+.docs-prose a {
+  color: #5ef2c0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.docs-prose strong {
+  color: #f8fafc;
+}
+
+.docs-prose hr {
+  border-color: rgba(255, 255, 255, 0.08);
+  margin: 2rem 0;
 }

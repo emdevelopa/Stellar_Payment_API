@@ -111,7 +111,7 @@ export async function registerMerchant(
 ): Promise<{ message: string; merchant: Merchant }> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-  const res = await fetch(`${apiUrl}/api/merchants/register`, {
+  const res = await fetch(`${apiUrl}/api/register-merchant`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, business_name, notification_email }),

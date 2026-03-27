@@ -1,25 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import * as Recharts from "recharts";
+const { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } = Recharts;
+import toast from "react-hot-toast";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
   useMerchantHydrated,
 } from "@/lib/merchant-store";
-
-// ── Types ────────────────────────────────────────────────────────────────────
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
+import { localeToLanguageTag } from "@/i18n/config";
 
 type TimeRange = "7D" | "30D" | "1Y";
+type ExportFormat = "png" | "svg";
 
 interface VolumeDataPoint {
   date: string;
@@ -32,58 +34,198 @@ interface VolumeResponse {
   data: VolumeDataPoint[];
 }
 
-interface MetricData {
-  date: string;
-  volume: number;
-  count: number;
-}
-
 interface MetricsResponse {
-  data: MetricData[];
+  data: Array<{
+    date: string;
+    volume: number;
+    count: number;
+  }>;
   total_volume: number;
   total_payments: number;
+  confirmed_count: number;
+  success_rate: number;
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const CHART_HEIGHT = 300;
+const EXPORT_SCALE = 2;
 
-/** Asset-specific brand colors — Blue for USDC, Gold for XLM */
 const ASSET_COLORS: Record<string, string> = {
   USDC: "#2775CA",
-  XLM:  "#E8B84B",
+  XLM: "#E8B84B",
 };
+
 const FALLBACK_COLORS = ["#0ea5e9", "#10b981", "#8b5cf6", "#f43f5e", "#f97316"];
+const TIME_RANGES: TimeRange[] = ["7D", "30D", "1Y"];
 
 function colorForAsset(asset: string, index: number): string {
   return ASSET_COLORS[asset] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 }
 
-const TIME_RANGES: TimeRange[] = ["7D", "30D", "1Y"];
+function buildSvgMarkup(svg: SVGSVGElement): { markup: string; width: number; height: number } {
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  const bounds = svg.getBoundingClientRect();
+  const width = Math.max(Math.round(bounds.width), 1);
+  const height = Math.max(Math.round(bounds.height), 1);
 
-const RANGE_LABELS: Record<TimeRange, string> = {
-  "7D":  "7 Days",
-  "30D": "30 Days",
-  "1Y":  "1 Year",
-};
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
 
-// ── Component ────────────────────────────────────────────────────────────────
+  if (!clone.getAttribute("viewBox")) {
+    clone.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  }
 
-export default function PaymentMetrics() {
+  const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  background.setAttribute("width", "100%");
+  background.setAttribute("height", "100%");
+  background.setAttribute("fill", "#0f172a");
+  clone.insertBefore(background, clone.firstChild);
+
+  return {
+    markup: new XMLSerializer().serializeToString(clone),
+    width,
+    height,
+  };
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportChart(
+  containerRef: RefObject<HTMLDivElement>,
+  format: ExportFormat,
+  filename: string,
+) {
+  const svg = containerRef.current?.querySelector("svg");
+  if (!svg) {
+    throw new Error("Chart export is unavailable until the chart finishes rendering.");
+  }
+
+  const { markup, width, height } = buildSvgMarkup(svg);
+  const svgBlob = new Blob([markup], {
+    type: "image/svg+xml;charset=utf-8",
+  });
+
+  if (format === "svg") {
+    downloadBlob(svgBlob, `${filename}.svg`);
+    return;
+  }
+
+  const url = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = () => reject(new Error("Failed to load chart for PNG export."));
+      nextImage.src = url;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width * EXPORT_SCALE;
+    canvas.height = height * EXPORT_SCALE;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Canvas export is not available in this browser.");
+    }
+
+    context.scale(EXPORT_SCALE, EXPORT_SCALE);
+    context.drawImage(image, 0, 0, width, height);
+
+    const pngBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/png");
+    });
+
+    if (!pngBlob) {
+      throw new Error("Failed to generate PNG export.");
+    }
+
+    downloadBlob(pngBlob, `${filename}.png`);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function ChartExportButton({
+  containerRef,
+  exporting,
+  onExport,
+  t,
+}: {
+  containerRef: RefObject<HTMLDivElement>;
+  exporting: boolean;
+  onExport: (format: ExportFormat, containerRef: RefObject<HTMLDivElement>) => Promise<void>;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          disabled={exporting}
+          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-mint/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+          >
+            <path d="M12 4v10" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="m8.5 10.5 3.5 3.5 3.5-3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M5 18.5h14"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {exporting ? t("exporting") : t("downloadImage")}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => void onExport("png", containerRef)}>
+          {t("downloadPng")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void onExport("svg", containerRef)}>
+          {t("downloadSvg")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export default function PaymentMetrics({ showSkeleton = false }: { showSkeleton?: boolean }) {
+  const t = useTranslations("paymentMetrics");
+  const locale = localeToLanguageTag(useLocale());
   const [summary, setSummary] = useState<MetricsResponse | null>(null);
   const [volumeData, setVolumeData] = useState<VolumeResponse | null>(null);
   const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
   const [range, setRange] = useState<TimeRange>("7D");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   useHydrateMerchantStore();
 
-  // Fetch 7-day summary (total volume + payment count cards)
   useEffect(() => {
     if (!hydrated || !apiKey) return;
+
     const controller = new AbortController();
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -91,22 +233,24 @@ export default function PaymentMetrics() {
       headers: { "x-api-key": apiKey },
       signal: controller.signal,
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed to fetch metrics"))))
+      .then((response) =>
+        response.ok ? response.json() : Promise.reject(new Error(t("fetchMetricsFailed"))),
+      )
       .then((data: MetricsResponse) => setSummary(data))
-      .catch((err) => {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(err.message);
+      .catch((fetchError) => {
+        if (fetchError instanceof Error && fetchError.name === "AbortError") return;
+        setError(fetchError instanceof Error ? fetchError.message : t("fetchMetricsFailed"));
       });
 
     return () => controller.abort();
-  }, [apiKey, hydrated]);
+  }, [apiKey, hydrated, t]);
 
-  // Fetch per-asset volume whenever range changes
   useEffect(() => {
     if (!hydrated || !apiKey) {
       setLoading(false);
       return;
     }
+
     const controller = new AbortController();
     setLoading(true);
 
@@ -116,16 +260,20 @@ export default function PaymentMetrics() {
       headers: { "x-api-key": apiKey },
       signal: controller.signal,
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed to fetch volume data"))))
+      .then((response) =>
+        response.ok
+          ? response.json()
+          : Promise.reject(new Error(t("fetchVolumeFailed"))),
+      )
       .then((data: VolumeResponse) => setVolumeData(data))
-      .catch((err) => {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(err.message);
+      .catch((fetchError) => {
+        if (fetchError instanceof Error && fetchError.name === "AbortError") return;
+        setError(fetchError instanceof Error ? fetchError.message : t("fetchVolumeFailed"));
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [apiKey, hydrated, range]);
+  }, [apiKey, hydrated, range, t]);
 
   const toggleAsset = (asset: string) => {
     setHiddenAssets((prev) => {
@@ -136,14 +284,61 @@ export default function PaymentMetrics() {
     });
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  const handleExport = async (
+    format: ExportFormat,
+    containerRef: RefObject<HTMLDivElement>,
+  ) => {
+    setExporting(true);
 
-  if (loading || !hydrated) {
+    try {
+      await exportChart(containerRef, format, `multi-asset-volume-${range.toLowerCase()}`);
+      toast.success(t("exportSuccess", { format: format.toUpperCase() }));
+    } catch (exportError) {
+      const message =
+        exportError instanceof Error ? exportError.message : t("exportFailed");
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  if (showSkeleton || loading || !hydrated) {
     return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-10 w-48 rounded-lg bg-white/5" />
-        <div className="h-80 w-full rounded-xl bg-white/5" />
-      </div>
+      <SkeletonTheme baseColor="#1e293b" highlightColor="#334155">
+        <div className="flex flex-col gap-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <Skeleton width={100} height={14} borderRadius={4} />
+                <div className="mt-2 flex items-baseline gap-2">
+                  <Skeleton width={120} height={36} borderRadius={6} />
+                  <Skeleton width={40} height={20} borderRadius={4} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-col gap-2">
+                <Skeleton width={240} height={24} borderRadius={6} />
+                <Skeleton width={180} height={16} borderRadius={4} />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton width={100} height={32} borderRadius={8} />
+                <Skeleton width={140} height={32} borderRadius={8} />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Skeleton width={60} height={24} borderRadius={12} />
+              <Skeleton width={60} height={24} borderRadius={12} />
+            </div>
+            <div className="mt-4 h-[300px]">
+              <Skeleton height="100%" borderRadius={8} />
+            </div>
+          </div>
+        </div>
+      </SkeletonTheme>
     );
   }
 
@@ -155,16 +350,16 @@ export default function PaymentMetrics() {
           onClick={() => setError(null)}
           className="mt-3 text-xs text-slate-400 underline"
         >
-          Retry
+          {t("retry")}
         </button>
       </div>
     );
   }
 
   const assets = volumeData?.assets ?? [];
-  const chartData = (volumeData?.data ?? []).map((d) => ({
-    ...d,
-    dateShort: new Date(d.date).toLocaleDateString("en-US", {
+  const chartData = (volumeData?.data ?? []).map((dataPoint) => ({
+    ...dataPoint,
+    dateShort: new Date(dataPoint.date).toLocaleDateString(locale, {
       month: "short",
       day: "numeric",
     }),
@@ -172,12 +367,11 @@ export default function PaymentMetrics() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Summary cards */}
       {summary && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
             <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
-              7-Day Volume
+              {t("sevenDayVolume")}
             </p>
             <div className="mt-2 flex items-baseline gap-2">
               <p className="text-3xl font-bold text-mint">
@@ -189,63 +383,100 @@ export default function PaymentMetrics() {
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
             <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
-              Total Payments
+              {t("totalPayments")}
             </p>
             <div className="mt-2 flex items-baseline gap-2">
               <p className="text-3xl font-bold text-mint">
                 {summary.total_payments}
               </p>
               <p className="text-sm text-slate-400">
-                {summary.total_payments === 1 ? "payment" : "payments"}
+                {t("paymentsCount", { count: summary.total_payments })}
               </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+              Confirmed
+            </p>
+            <div className="mt-2 flex items-baseline gap-2">
+              <p className="text-3xl font-bold text-green-400">
+                {summary.confirmed_count}
+              </p>
+              <p className="text-sm text-slate-400">
+                {summary.confirmed_count === 1 ? "intent" : "intents"}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+              Success Rate
+            </p>
+            <div className="mt-2 flex items-baseline gap-2">
+              <p className="text-3xl font-bold text-green-400">
+                {summary.success_rate}
+              </p>
+              <p className="text-sm text-slate-400">%</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Multi-asset volume comparison chart */}
-      <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-        {/* Header row */}
+      <div
+        ref={chartContainerRef}
+        className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur"
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="font-semibold text-white">
-              Multi-Asset Volume Comparison
+              {t("chartTitle")}
             </h3>
             <p className="text-xs text-slate-400">
-              Daily transaction volume broken down by asset
+              {t("chartSubtitle")}
             </p>
           </div>
 
-          {/* Time-range selector */}
-          <div className="flex gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
-            {TIME_RANGES.map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                  range === r
-                    ? "bg-white/10 text-white"
-                    : "text-slate-400 hover:text-white"
-                }`}
-                aria-pressed={range === r}
-                aria-label={`Show ${RANGE_LABELS[r]}`}
-              >
-                {r}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
+              {TIME_RANGES.map((nextRange) => (
+                <button
+                  key={nextRange}
+                  onClick={() => setRange(nextRange)}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    range === nextRange
+                      ? "bg-white/10 text-white"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  aria-pressed={range === nextRange}
+                  aria-label={t("showRange", { range: t(`ranges.${nextRange}`) })}
+                >
+                  {nextRange}
+                </button>
+              ))}
+            </div>
+
+            {assets.length > 0 && (
+              <ChartExportButton
+                containerRef={chartContainerRef}
+                exporting={exporting}
+                onExport={handleExport}
+                t={t}
+              />
+            )}
           </div>
         </div>
 
-        {/* Asset toggle legend */}
         {assets.length > 0 && (
           <div
             className="flex flex-wrap gap-2"
             role="group"
-            aria-label="Toggle asset visibility"
+            aria-label={t("toggleAssetVisibility")}
           >
-            {assets.map((asset, i) => {
-              const color = colorForAsset(asset, i);
+            {assets.map((asset, index) => {
+              const color = colorForAsset(asset, index);
               const hidden = hiddenAssets.has(asset);
+
               return (
                 <button
                   key={asset}
@@ -255,11 +486,14 @@ export default function PaymentMetrics() {
                   }`}
                   style={{ borderColor: color, color }}
                   aria-pressed={!hidden}
-                  aria-label={`${hidden ? "Show" : "Hide"} ${asset}`}
+                  aria-label={hidden ? t("showAsset", { asset }) : t("hideAsset", { asset })}
                 >
                   <span
                     className="inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: hidden ? "transparent" : color, border: `1px solid ${color}` }}
+                    style={{
+                      backgroundColor: hidden ? "transparent" : color,
+                      border: `1px solid ${color}`,
+                    }}
                   />
                   {asset}
                 </button>
@@ -270,7 +504,7 @@ export default function PaymentMetrics() {
 
         {assets.length === 0 ? (
           <p className="py-12 text-center text-sm text-slate-500">
-            No completed payments in this period.
+            {t("noPayments")}
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
@@ -292,7 +526,7 @@ export default function PaymentMetrics() {
               <YAxis
                 stroke="#64748b"
                 style={{ fontSize: "12px" }}
-                tickFormatter={(v) => v.toLocaleString()}
+                tickFormatter={(value) => value.toLocaleString()}
               />
               <Tooltip
                 contentStyle={{
@@ -308,16 +542,16 @@ export default function PaymentMetrics() {
                 ]}
               />
               <Legend wrapperStyle={{ display: "none" }} />
-              {assets.map((asset, i) =>
+              {assets.map((asset, index) =>
                 hiddenAssets.has(asset) ? null : (
                   <Line
                     key={asset}
                     type="monotone"
                     dataKey={asset}
                     name={asset}
-                    stroke={colorForAsset(asset, i)}
+                    stroke={colorForAsset(asset, index)}
                     strokeWidth={2}
-                    dot={{ fill: colorForAsset(asset, i), r: 3 }}
+                    dot={{ fill: colorForAsset(asset, index), r: 3 }}
                     activeDot={{ r: 5 }}
                     isAnimationActive
                     animationDuration={400}

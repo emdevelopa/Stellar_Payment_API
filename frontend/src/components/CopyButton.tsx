@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface CopyButtonProps {
@@ -9,6 +10,7 @@ interface CopyButtonProps {
 }
 
 export default function CopyButton({ text, className = "" }: CopyButtonProps) {
+    const t = useTranslations("copyButton");
     const [copied, setCopied] = useState(false);
 
     const handleCopy = async () => {
@@ -32,7 +34,7 @@ export default function CopyButton({ text, className = "" }: CopyButtonProps) {
         <div className="relative inline-flex items-center">
             <motion.button
                 onClick={handleCopy}
-                aria-label="Copy to clipboard"
+                aria-label={t("ariaLabel")}
                 className={`rounded-lg border border-white/10 p-1.5 text-slate-400 transition-all hover:border-mint/40 hover:text-mint active:scale-95 ${className}`}
                 whileTap={{ scale: 0.95 }}
                 whileHover={{ scale: 1.05 }}
@@ -98,7 +100,7 @@ export default function CopyButton({ text, className = "" }: CopyButtonProps) {
                         transition={{ duration: 0.3, ease: "easeOut" }}
                         className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-mint/30 bg-tide px-2 py-1 font-mono text-xs text-mint shadow-lg"
                     >
-                        Copied!
+                        {t("copied")}
                     </motion.span>
                 )}
             </AnimatePresence>

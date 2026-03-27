@@ -1,113 +1,18 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useHydrateMerchantStore } from "@/lib/merchant-store";
 import MerchantProfileCard from "@/components/MerchantProfileCard";
 import ApiHealthBadge from "@/components/ApiHealthBadge";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 type AppNavLink = {
   href: string;
   label: string;
 };
-
-type DashboardNavLink = {
-  href: string;
-  label: string;
-  icon: (active: boolean) => React.ReactNode;
-  enabled: boolean;
-};
-
-function CreateIcon(active: boolean) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={`h-5 w-5 ${active ? "text-mint" : "text-slate-400"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-    >
-      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function OverviewIcon(active: boolean) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={`h-5 w-5 ${active ? "text-mint" : "text-slate-400"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-    >
-      <path
-        d="M4 5.5h16M4 12h16M4 18.5h16"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M7 8.5h4M13 8.5h4M7 15h4M13 15h4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PaymentsIcon(active: boolean) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={`h-5 w-5 ${active ? "text-mint" : "text-slate-400"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-    >
-      <rect
-        x="3.5"
-        y="5.5"
-        width="17"
-        height="13"
-        rx="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M7 14h4M7 10h10" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function WebhooksIcon(active: boolean) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={`h-5 w-5 ${active ? "text-mint" : "text-slate-400"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-    >
-      <path
-        d="M9 7.5a4 4 0 1 1 6.8 2.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M15 16.5a4 4 0 1 1-6.8-2.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M8.5 14 15.5 10"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="8" cy="14.5" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="9.5" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
 
 function isActive(pathname: string, href: string) {
   if (href === "/") {
@@ -117,16 +22,18 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-const appNavLinks: AppNavLink[] = [
-  { href: "/", label: "Home" },
-  { href: "/login", label: "Login" },
-  { href: "/register", label: "Register" },
-];
-
 export default function Navbar() {
+  const t = useTranslations("nav");
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const appNavLinks: AppNavLink[] = [
+    { href: "/", label: t("home") },
+    { href: "/docs", label: t("docs") },
+    { href: "/login", label: t("login") },
+    { href: "/register", label: t("register") },
+  ];
 
   useHydrateMerchantStore();
 
@@ -180,7 +87,7 @@ export default function Navbar() {
               ref={triggerRef}
               onClick={toggleMenu}
               className="flex flex-col gap-1.5 md:hidden p-2 text-white"
-              aria-label="Toggle menu"
+              aria-label={t("toggleMenu")}
               aria-expanded={isMenuOpen}
               aria-controls="mobile-nav-menu"
             >
@@ -200,7 +107,9 @@ export default function Navbar() {
                 }`}
               ></span>
             </button>
+            <LocaleSwitcher className="hidden sm:inline-flex md:hidden" />
             <div className="hidden md:flex items-center gap-3">
+              <LocaleSwitcher />
               <ApiHealthBadge />
               <MerchantProfileCard />
             </div>
@@ -216,6 +125,7 @@ export default function Navbar() {
           <div className="mb-4 flex flex-col items-center justify-center gap-4">
             <MerchantProfileCard />
             <ApiHealthBadge />
+            <LocaleSwitcher />
           </div>
           <div className="flex flex-col gap-4">
             {appNavLinks.map((link) => (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
 import CopyButton from "@/components/CopyButton";
@@ -10,6 +11,7 @@ import toast from "react-hot-toast";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import { QRCodeSVG } from "qrcode.react";
+import { localeToLanguageTag } from "@/i18n/config";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -83,15 +85,21 @@ function AssetBadge({ asset }: { asset: string }) {
 
 // ─── Status badge ────────────────────────────────────────────────────────────
 
-const STATUS_MAP: Record<string, { label: string; classes: string }> = {
-  pending:   { label: "Awaiting Payment",  classes: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" },
-  confirmed: { label: "Confirmed",         classes: "bg-mint/10 text-mint border border-mint/30" },
-  completed: { label: "Completed",         classes: "bg-green-500/15 text-green-400 border border-green-500/30" },
-  failed:    { label: "Failed",            classes: "bg-red-500/15 text-red-400 border border-red-500/30" },
-};
+function StatusBadge({
+  status,
+  t,
+}: {
+  status: string;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const statusMap: Record<string, { label: string; classes: string }> = {
+    pending:   { label: t("status.pending"), classes: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" },
+    confirmed: { label: t("status.confirmed"), classes: "bg-mint/10 text-mint border border-mint/30" },
+    completed: { label: t("status.completed"), classes: "bg-green-500/15 text-green-400 border border-green-500/30" },
+    failed:    { label: t("status.failed"), classes: "bg-red-500/15 text-red-400 border border-red-500/30" },
+  };
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_MAP[status.toLowerCase()] ?? {
+  const s = statusMap[status.toLowerCase()] ?? {
     label: status,
     classes: "bg-white/10 text-slate-400 border border-white/10",
   };
@@ -180,6 +188,8 @@ function LoadingSkeleton() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PaymentPage() {
+  const t = useTranslations("checkout");
+  const locale = localeToLanguageTag(useLocale());
   const params = useParams();
   const paymentId = params.id as string;
 
@@ -187,14 +197,25 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [walletReady, setWalletReady] = useState(false);
+  const [showRawIntent, setShowRawIntent] = useState(false);
+
+  // Path payment state
+  const [usePathPayment, setUsePathPayment] = useState(false);
+  const [pathQuote, setPathQuote] = useState<{
+    source_asset: string;
+    source_asset_issuer: string | null;
+    source_amount: string;
+    send_max: string;
+    destination_asset: string;
+    destination_amount: string;
+    path: Array<{ asset_code: string; asset_issuer: string | null }>;
+    slippage: number;
+  } | null>(null);
+  const [pathQuoteLoading, setPathQuoteLoading] = useState(false);
+  const [pathQuoteError, setPathQuoteError] = useState<string | null>(null);
 
   const { activeProvider } = useWallet();
-  const { isProcessing, status: txStatus, error: paymentError, processPayment } = usePayment(activeProvider);
-
-  const networkPassphrase =
-    process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ||
-    "Test SDF Network ; September 2015";
+  const { isProcessing, status: txStatus, error: paymentError, processPayment, processPathPayment } = usePayment(activeProvider);
 
   // ── Fetch payment details ──────────────────────────────────────────────────
   useEffect(() => {
@@ -205,13 +226,13 @@ export default function PaymentPage() {
         const res = await fetch(`${API_URL}/api/payment-status/${paymentId}`, {
           signal: controller.signal,
         });
-        if (res.status === 404) throw new Error("Payment not found.");
-        if (!res.ok) throw new Error("Could not load payment details.");
+        if (res.status === 404) throw new Error(t("paymentMissing"));
+        if (!res.ok) throw new Error(t("loadFailed"));
         const data = await res.json();
         setPayment(data.payment);
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") return;
-        setFetchError(err instanceof Error ? err.message : "Failed to load payment.");
+        setFetchError(err instanceof Error ? err.message : t("loadPaymentFailed"));
       } finally {
         setLoading(false);
       }
@@ -219,7 +240,7 @@ export default function PaymentPage() {
 
     load();
     return () => controller.abort();
-  }, [paymentId]);
+  }, [paymentId, t]);
 
   // ── Poll until settled ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -239,10 +260,38 @@ export default function PaymentPage() {
     return () => clearInterval(id);
   }, [paymentId, payment, loading]);
 
-  // ── Wallet readiness ───────────────────────────────────────────────────────
+  // ── Fetch path payment quote when wallet is connected ────────────────────
   useEffect(() => {
-    setWalletReady(!!activeProvider);
-  }, [activeProvider]);
+    if (!payment || !activeProvider || payment.status !== "pending") return;
+
+    let cancelled = false;
+    (async () => {
+      setPathQuoteLoading(true);
+      setPathQuoteError(null);
+      try {
+        const pubKey = await activeProvider.getPublicKey();
+        const qs = new URLSearchParams({
+          source_asset: "XLM",
+          source_asset_issuer: "",
+          source_account: pubKey,
+        });
+        const res = await fetch(
+          `${API_URL}/api/path-payment-quote/${paymentId}?${qs}`,
+        );
+        if (!res.ok) {
+          setPathQuote(null);
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled) setPathQuote(data);
+      } catch {
+        if (!cancelled) setPathQuoteError("Could not fetch path payment quote.");
+      } finally {
+        if (!cancelled) setPathQuoteLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [payment, activeProvider, paymentId]);
 
   // ── Pay handler ───────────────────────────────────────────────────────────
   const handlePay = async () => {
@@ -250,15 +299,30 @@ export default function PaymentPage() {
     setActionError(null);
 
     try {
-      const result = await processPayment({
-        recipient: payment.recipient,
-        amount: String(payment.amount),
-        assetCode: payment.asset,
-        assetIssuer: payment.asset_issuer,
-      });
+      let result: { hash: string };
+
+      if (usePathPayment && pathQuote) {
+        result = await processPathPayment({
+          recipient: payment.recipient,
+          destAmount: pathQuote.destination_amount,
+          destAssetCode: pathQuote.destination_asset,
+          destAssetIssuer: payment.asset_issuer,
+          sendMax: pathQuote.send_max,
+          sendAssetCode: pathQuote.source_asset,
+          sendAssetIssuer: pathQuote.source_asset_issuer,
+          path: pathQuote.path,
+        });
+      } else {
+        result = await processPayment({
+          recipient: payment.recipient,
+          amount: String(payment.amount),
+          assetCode: payment.asset,
+          assetIssuer: payment.asset_issuer,
+        });
+      }
 
       setPayment({ ...payment, status: "completed", tx_id: result.hash });
-      toast.success("Payment sent!");
+      toast.success(t("paymentSent"));
 
       // Best-effort backend verification
       setTimeout(async () => {
@@ -267,7 +331,7 @@ export default function PaymentPage() {
         } catch { /* non-critical */ }
       }, 2000);
     } catch {
-      const msg = paymentError ?? "Payment failed. Please try again.";
+      const msg = paymentError ?? t("paymentFailed");
       setActionError(msg);
       toast.error(msg);
     }
@@ -280,12 +344,12 @@ export default function PaymentPage() {
     return (
       <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-6 px-6 py-16">
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8 text-center">
-          <p className="text-sm font-medium uppercase tracking-wider text-red-400">Error</p>
+          <p className="text-sm font-medium uppercase tracking-wider text-red-400">{t("errorTitle")}</p>
           <h1 className="mt-3 text-lg font-semibold text-white">
-            {fetchError ?? "Payment not found"}
+            {fetchError ?? t("paymentNotFound")}
           </h1>
           <p className="mt-2 text-sm text-slate-400">
-            Check the payment link and try again, or contact the sender.
+            {t("errorDescription")}
           </p>
         </div>
       </main>
@@ -307,9 +371,9 @@ export default function PaymentPage() {
           <div className="h-14 w-14 animate-spin rounded-full border-4 border-white/15 border-t-mint" />
           <div className="flex flex-col items-center gap-1 text-center">
             <p className="text-base font-semibold text-white">
-              {txStatus ?? "Processing transaction…"}
+              {txStatus ?? t("processingFallback")}
             </p>
-            <p className="text-sm text-slate-400">Do not close this tab</p>
+            <p className="text-sm text-slate-400">{t("doNotClose")}</p>
           </div>
         </div>
       )}
@@ -329,9 +393,9 @@ export default function PaymentPage() {
         {/* ── Page header ── */}
         <header className="flex flex-col gap-2">
           <p className="font-mono text-xs uppercase tracking-[0.3em]" style={{ color: "var(--checkout-primary)" }}>
-            Payment Request
+            {t("paymentRequest")}
           </p>
-          <h1 className="text-3xl font-bold text-white">Complete Payment</h1>
+          <h1 className="text-3xl font-bold text-white">{t("completePayment")}</h1>
           <p className="font-mono text-xs text-slate-500 break-all">
             ID: {payment.id}
           </p>
@@ -345,7 +409,7 @@ export default function PaymentPage() {
             <AssetBadge asset={payment.asset} />
             <div className="flex items-baseline gap-2">
               <span className="text-5xl font-bold tracking-tight text-white">
-                {payment.amount.toLocaleString(undefined, {
+                {payment.amount.toLocaleString(locale, {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 7,
                 })}
@@ -357,7 +421,7 @@ export default function PaymentPage() {
             {payment.description && (
               <p className="mt-1 text-sm text-slate-400">{payment.description}</p>
             )}
-            <StatusBadge status={payment.status} />
+            <StatusBadge status={payment.status} t={t} />
           </div>
 
           {/* Details */}
@@ -366,7 +430,7 @@ export default function PaymentPage() {
       {/* Recipient */}
       <div className="flex flex-col gap-1.5">
         <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-          Recipient
+          {t("recipient")}
         </p>
         <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
           <code className="flex-1 truncate font-mono text-sm text-slate-200">
@@ -379,7 +443,7 @@ export default function PaymentPage() {
       {/* QR Code */}
       <div className="flex flex-col gap-1.5">
         <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-          Scan to Pay
+          {t("scanToPay")}
         </p>
         <div className="flex items-center justify-center rounded-xl border border-white/10 bg-white p-4">
           <QRCodeSVG
@@ -391,7 +455,7 @@ export default function PaymentPage() {
           />
         </div>
         <p className="text-center text-xs text-slate-500">
-          Scan with Freighter or any Stellar wallet
+          {t("scanDescription")}
         </p>
         <div className="sm:hidden">
           {/* Mobile-only SEP-0007 fallback for manual wallet paste */}
@@ -400,7 +464,7 @@ export default function PaymentPage() {
             onClick={() => setShowRawIntent((prev) => !prev)}
             className="mx-auto mt-2 text-xs font-medium text-mint transition-colors hover:text-glow"
           >
-            {showRawIntent ? "Hide raw intent link" : "View raw intent link"}
+            {showRawIntent ? t("hideRawIntent") : t("viewRawIntent")}
           </button>
           {showRawIntent && (
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-white/10 bg-black/40 p-3">
@@ -416,10 +480,10 @@ export default function PaymentPage() {
             {/* Date */}
             <div className="flex flex-col gap-1">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                Created
+                {t("created")}
               </p>
               <p className="text-sm text-slate-300">
-                {new Date(payment.created_at).toLocaleString(undefined, {
+                {new Date(payment.created_at).toLocaleString(locale, {
                   dateStyle: "medium",
                   timeStyle: "short",
                 })}
@@ -430,7 +494,7 @@ export default function PaymentPage() {
             {payment.tx_id && (
               <div className="flex flex-col gap-1.5">
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Transaction
+                  {t("transaction")}
                 </p>
                 <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
                   <a
@@ -459,16 +523,39 @@ export default function PaymentPage() {
             {/* ── CTA section ── */}
             {!isSettled && !isFailed && (
               <div className="flex flex-col gap-3 pt-2">
-                {walletReady ? (
+                {activeProvider ? (
                   <>
                     <p className="text-center text-xs text-slate-500">
-                      Connected via {activeProvider?.name}
+                      {t("connectedVia", { provider: activeProvider?.name ?? "" })}
                     </p>
+                    {/* Path payment toggle */}
+                    {pathQuote && !pathQuoteLoading && (
+                      <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-4 py-3 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={usePathPayment}
+                          onChange={(e) => setUsePathPayment(e.target.checked)}
+                          className="h-4 w-4 accent-[var(--checkout-primary)]"
+                        />
+                        <span className="text-sm text-slate-300">
+                          Pay with <span className="font-semibold text-white">{pathQuote.send_max} {pathQuote.source_asset}</span> instead
+                        </span>
+                      </label>
+                    )}
+                    {pathQuoteLoading && (
+                      <p className="text-center text-xs text-slate-500">Checking alternative payment paths…</p>
+                    )}
+                    {pathQuoteError && (
+                      <p className="text-center text-xs text-red-400">{pathQuoteError}</p>
+                    )}
                     <button
                       type="button"
                       onClick={handlePay}
                       disabled={isProcessing}
-                      className="group relative flex h-12 w-full items-center justify-center rounded-xl bg-mint font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+                      className="group relative flex h-12 w-full items-center justify-center rounded-xl font-bold text-black transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{
+                        backgroundColor: "var(--checkout-primary)",
+                      }}
                     >
                       {isProcessing ? (
                         <span className="flex items-center gap-2">
@@ -476,18 +563,28 @@ export default function PaymentPage() {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                           </svg>
-                          Processing…
+                          {t("processing")}
                         </span>
+                      ) : usePathPayment && pathQuote ? (
+                        `Pay ${pathQuote.send_max} ${pathQuote.source_asset}`
                       ) : (
-                        `Pay with ${activeProvider?.name ?? "Wallet"}`
+                        activeProvider?.name
+                          ? t("payWith", { provider: activeProvider.name })
+                          : t("payWithFallback")
                       )}
-                      <div className="absolute inset-0 -z-10 bg-mint/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
+                      <div
+                        className="absolute inset-0 -z-10 opacity-0 blur-xl transition-opacity group-hover:opacity-100"
+                        style={{ backgroundColor: "color-mix(in srgb, var(--checkout-primary) 20%, transparent)" }}
+                      />
                     </button>
                   </>
                 ) : (
                   <WalletSelector
-                    networkPassphrase={networkPassphrase}
-                    onConnected={() => setWalletReady(true)}
+                    networkPassphrase={
+                      process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ??
+                      "Test SDF Network ; September 2015"
+                    }
+                    onConnected={() => {}}
                   />
                 )}
               </div>
@@ -503,10 +600,10 @@ export default function PaymentPage() {
                 }}
               >
                 <p className="text-sm font-semibold" style={{ color: "var(--checkout-primary)" }}>
-                  This payment has been received.
+                  {t("receivedTitle")}
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  The transaction was confirmed on the Stellar network.
+                  {t("receivedDescription")}
                 </p>
               </div>
             )}
@@ -515,10 +612,10 @@ export default function PaymentPage() {
             {isFailed && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
                 <p className="text-sm font-semibold text-red-400">
-                  This payment has failed.
+                  {t("failedTitle")}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Contact the merchant if you believe this is an error.
+                  {t("failedDescription")}
                 </p>
               </div>
             )}

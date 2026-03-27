@@ -25,7 +25,7 @@ export default function ApiHealthBadge() {
             setErrorMsg(data.error || "Service Disruption Detected");
           }
         }
-      } catch (err) {
+      } catch {
         if (mounted) {
           setStatus("error");
           setErrorMsg("API Unreachable");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import React,{ useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
 import WalletSelector from "@/components/WalletSelector";
@@ -98,7 +98,7 @@ function DetailRow({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1">

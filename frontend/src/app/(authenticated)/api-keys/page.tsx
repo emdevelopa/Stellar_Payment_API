@@ -5,7 +5,7 @@ import { useState } from "react";
 import CopyButton from "@/components/CopyButton";
 import toast from "react-hot-toast";
 
-export default function apiKeysPage() {
+export default function ApiKeysPage() {
   const storedApiKey = useMerchantApiKey();
   const [isRotating, setIsRotating] = useState(false);
 
@@ -27,7 +27,7 @@ export default function apiKeysPage() {
       toast.success("API key rotated successfully. Please update your env files.");
       // Note: The store will handle the update if it's wired with cookies or session
       // For now, we tell the user to refresh or rely on the store's hydration.
-    } catch (err) {
+    } catch {
       toast.error("Failed to rotate API key");
     } finally {
       setIsRotating(false);

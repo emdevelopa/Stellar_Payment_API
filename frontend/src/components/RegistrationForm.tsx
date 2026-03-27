@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { registerMerchant, type Merchant } from "../lib/auth";
-import CopyButton from "./CopyButton";
+import MaskedValue from "./MaskedValue";
 import toast from "react-hot-toast";
 import {
   useSetMerchantApiKey,
@@ -63,28 +63,22 @@ export default function RegistrationForm() {
             </p>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3">
-            <label className="text-xs font-medium text-slate-300">
-              Your API Key
-            </label>
-            <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
-              <code className="flex-1 truncate font-mono text-sm text-mint">
-                {registeredMerchant.api_key}
-              </code>
-              <CopyButton text={registeredMerchant.api_key} />
-            </div>
+          <div className="mt-6">
+            <MaskedValue
+              label="Your API Key"
+              value={registeredMerchant.api_key}
+              copyText={registeredMerchant.api_key}
+              defaultRevealed={true}
+            />
           </div>
 
-          <div className="mt-4 flex flex-col gap-3">
-            <label className="text-xs font-medium text-slate-300">
-              Webhook Secret
-            </label>
-            <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
-              <code className="flex-1 truncate font-mono text-sm text-mint">
-                {registeredMerchant.webhook_secret}
-              </code>
-              <CopyButton text={registeredMerchant.webhook_secret} />
-            </div>
+          <div className="mt-4">
+            <MaskedValue
+              label="Webhook Secret"
+              value={registeredMerchant.webhook_secret}
+              copyText={registeredMerchant.webhook_secret}
+              defaultRevealed={true}
+            />
           </div>
         </div>
 

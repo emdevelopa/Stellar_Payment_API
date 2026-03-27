@@ -1,4 +1,12 @@
+import Image from "next/image";
+
 export default function HeroSection() {
+  const avatars = [
+    "https://i.pravatar.cc/100?img=1",
+    "https://i.pravatar.cc/100?img=2",
+    "https://i.pravatar.cc/100?img=3",
+  ];
+
   return (
     <div className="flex w-full flex-col justify-center max-w-[460px]">
       {/* 3D-ish Card Illustration */}
@@ -41,9 +49,26 @@ export default function HeroSection() {
       {/* Avatars row */}
       <div className="flex items-center gap-4">
         <div className="flex -space-x-2">
-          <div className="w-8 h-8 rounded-full border border-[#0b0c10] bg-slate-700 overflow-hidden relative grayscale"><img src="https://i.pravatar.cc/100?img=1" alt="user" className="w-full h-full object-cover" /></div>
-          <div className="w-8 h-8 rounded-full border border-[#0b0c10] bg-slate-600 overflow-hidden relative grayscale"><img src="https://i.pravatar.cc/100?img=2" alt="user" className="w-full h-full object-cover" /></div>
-          <div className="w-8 h-8 rounded-full border border-[#0b0c10] bg-slate-500 overflow-hidden relative grayscale"><img src="https://i.pravatar.cc/100?img=3" alt="user" className="w-full h-full object-cover" /></div>
+          {avatars.map((src, index) => (
+            <div
+              key={src}
+              className={`relative h-8 w-8 overflow-hidden rounded-full border border-[#0b0c10] grayscale ${
+                index === 0
+                  ? "bg-slate-700"
+                  : index === 1
+                    ? "bg-slate-600"
+                    : "bg-slate-500"
+              }`}
+            >
+              <Image
+                src={src}
+                alt={`User avatar ${index + 1}`}
+                fill
+                sizes="32px"
+                className="object-cover"
+              />
+            </div>
+          ))}
         </div>
         <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">JOINED BY 2M+ USERS</span>
       </div>

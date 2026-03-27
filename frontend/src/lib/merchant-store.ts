@@ -32,6 +32,9 @@ export interface MerchantMetadata {
     secondary_color?: string;
     background_color?: string;
   } | null;
+  merchant_settings?: {
+    send_success_emails?: boolean;
+  } | null;
   trusted_addresses?: TrustedAddress[] | null;
   created_at: string;
 }
@@ -258,4 +261,8 @@ export function useAddTrustedAddress() {
 
 export function useRemoveTrustedAddress() {
   return useMerchantStore((state) => state.removeTrustedAddress);
+}
+
+export function useMerchantId() {
+  return useMerchantStore((state) => state.merchant?.id ?? null);
 }

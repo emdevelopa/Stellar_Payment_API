@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import PaymentDetailModal from "@/components/PaymentDetailModal";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
   useMerchantHydrated,
+  useMerchantId,
 } from "@/lib/merchant-store";
+import { usePaymentSocket } from "@/lib/usePaymentSocket";
 
 interface Payment {
   id: string;
@@ -46,6 +48,8 @@ export default function RecentPayments() {
   const [totalCount, setTotalCount] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Track IDs of rows that should display the confirmed flash animation
+  const [flashedIds, setFlashedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     status: "all",
@@ -55,8 +59,34 @@ export default function RecentPayments() {
   });
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
+  const merchantId = useMerchantId();
 
   useHydrateMerchantStore();
+
+  // Real-time payment confirmation via WebSocket (issue #229)
+  const handleConfirmed = useCallback(
+    (event: { id: string; amount: number; asset: string; asset_issuer: string | null; recipient: string; tx_id: string; confirmed_at: string }) => {
+      // Update the row status in-place without a full refetch
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.id === event.id ? { ...p, status: "confirmed" } : p,
+        ),
+      );
+      // Trigger flash animation on the confirmed row
+      setFlashedIds((prev) => new Set([...prev, event.id]));
+      // Remove flash class after animation completes (600 ms)
+      setTimeout(() => {
+        setFlashedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(event.id);
+          return next;
+        });
+      }, 1200);
+    },
+    [],
+  );
+
+  usePaymentSocket(merchantId, handleConfirmed);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -592,7 +622,11 @@ export default function RecentPayments() {
             {payments.map((payment) => (
               <tr
                 key={payment.id}
-                className="transition-colors hover:bg-white/5 cursor-pointer"
+                className={`transition-colors hover:bg-white/5 cursor-pointer ${
+                  flashedIds.has(payment.id)
+                    ? "animate-payment-confirmed bg-green-500/10"
+                    : ""
+                }`}
                 onClick={() => handlePaymentClick(payment.id)}
               >
                 <td className="px-4 py-3">

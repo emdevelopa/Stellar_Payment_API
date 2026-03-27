@@ -78,6 +78,32 @@ describe("paymentZodSchema", () => {
     ).toThrowError("Invalid memo_type. Must be one of: text, id, hash, return");
   });
 
+  it("validates hash memo format", () => {
+    expect(() =>
+      paymentZodSchema.parse({
+        amount: 50,
+        asset: "XLM",
+        recipient: "GRECIPIENT",
+        memo: "invalidhash",
+        memo_type: "hash",
+      })
+    ).toThrowError("Invalid hash memo: must be exactly 64 hexadecimal characters");
+  });
+
+  it("accepts valid hash memo", () => {
+    const validHash = "a".repeat(64);
+    const result = paymentZodSchema.parse({
+      amount: 50,
+      asset: "XLM",
+      recipient: "GRECIPIENT",
+      memo: validHash,
+      memo_type: "hash",
+    });
+
+    expect(result.memo).toBe(validHash);
+    expect(result.memo_type).toBe("hash");
+  });
+
   it("rejects invalid amounts", () => {
     expect(() =>
       paymentZodSchema.parse({

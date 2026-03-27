@@ -27,3 +27,16 @@ out/
 *.sqlite3
 
 supabase/.temp/
+
+scripts/create_more_50_issues.py
+scripts/create_new_50_issues.py
+task.md
+issueTmeplate.md
+batch3_issues.py
+failure_fixes.py
+flow_issues.py
+scripts/batch3_issues.py
+scripts/failure_fixes.py
+scripts/flow_issues.py
+template_issues_v3.py
+

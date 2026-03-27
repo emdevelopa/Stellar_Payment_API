@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
     "test": "vitest run",
     "purge:webhook-logs": "node scripts/purge-webhook-logs.js",
     "migrate": "knex migrate:latest --knexfile knexfile.js",
     "migrate:rollback": "knex migrate:rollback --knexfile knexfile.js"
   },
   "devDependencies": {
+    "@types/swagger-ui-express": "~4.1.8",
     "nodemon": "^3.1.14",
     "vitest": "^2.0.0"
   },
@@ -25,12 +26,17 @@
     "framer-motion": "^12.38.0",
     "knex": "^3.2.6",
     "morgan": "^1.10.0",
+    "pino": "^9.5.0",
+    "pino-http": "^10.3.0",
+    "pino-pretty": "^13.0.0",
+    "socket.io": "^4.8.1",
     "pg": "^8.20.0",
     "rate-limit-redis": "^4.3.1",
     "redis": "^5.11.0",
     "stellar-sdk": "^12.1.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "zod-to-json-schema": "~3.25.1"
   }
 }

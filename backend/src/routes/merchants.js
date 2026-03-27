@@ -3,10 +3,12 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 import { supabase } from "../lib/supabase.js";
 import {
+  merchantProfileUpdateZodSchema,
   registerMerchantZodSchema,
   sessionBrandingSchema,
 } from "../lib/request-schemas.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
+import { resolveMerchantSettings } from "../lib/merchant-settings.js";
 import { sendWebhook } from "../lib/webhooks.js";
 
 const router = express.Router();
@@ -80,6 +82,7 @@ router.post("/register-merchant", async (req, res, next) => {
       api_key: apiKey,
       webhook_secret: webhookSecret,
       webhook_version: "v1",
+      merchant_settings: resolveMerchantSettings(body.merchant_settings),
       created_at: new Date().toISOString()
     };
 
@@ -101,6 +104,7 @@ router.post("/register-merchant", async (req, res, next) => {
         email: merchant.email,
         business_name: merchant.business_name,
         notification_email: merchant.notification_email,
+        merchant_settings: resolveMerchantSettings(merchant.merchant_settings),
         api_key: merchant.api_key,
         webhook_secret: merchant.webhook_secret,
         webhook_version: merchant.webhook_version,
@@ -194,6 +198,36 @@ router.put("/merchant-branding", async (req, res, next) => {
     }
 
     res.json({ branding_config: data.branding_config });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/merchant-profile", async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("merchants")
+      .select(
+        "id, email, business_name, notification_email, merchant_settings, created_at",
+      )
+      .eq("id", req.merchant.id)
+      .maybeSingle();
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: "Merchant profile not found" });
+    }
+
+    res.json({
+      merchant: {
+        ...data,
+        merchant_settings: resolveMerchantSettings(data.merchant_settings),
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -310,12 +344,53 @@ router.get("/merchant-limits", async (req, res, next) => {
   }
 });
 
+router.put("/merchant-profile", async (req, res, next) => {
+  try {
+    const body = merchantProfileUpdateZodSchema.parse(req.body || {});
+    const updatePayload = {};
+
+    if (body.notification_email !== undefined) {
+      updatePayload.notification_email = body.notification_email;
+    }
+
+    if (body.merchant_settings !== undefined) {
+      updatePayload.merchant_settings = resolveMerchantSettings({
+        ...req.merchant.merchant_settings,
+        ...body.merchant_settings,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("merchants")
+      .update(updatePayload)
+      .eq("id", req.merchant.id)
+      .select(
+        "id, email, business_name, notification_email, merchant_settings, created_at",
+      )
+      .single();
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
+
+    res.json({
+      merchant: {
+        ...data,
+        merchant_settings: resolveMerchantSettings(data.merchant_settings),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /**
  * @swagger
  * /api/merchant-limits:
  *   put:
  *     summary: Set per-asset payment limits for the authenticated merchant
- *     tags: [Merchants]
+ *   tags: [Merchants]
  *     security:
  *       - ApiKeyAuth: []
  *     requestBody:
@@ -352,6 +427,106 @@ router.put("/merchant-limits", async (req, res, next) => {
     }
 
     res.json({ payment_limits: data.payment_limits });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Stellar public keys start with 'G' and are 56 characters long.
+const stellarAddressSchema = z
+  .string()
+  .trim()
+  .refine(
+    (v) => v.startsWith("G") && v.length === 56,
+    "Each issuer must be a valid Stellar public key (starts with 'G', 56 characters)"
+  );
+
+const allowedIssuersSchema = z.array(stellarAddressSchema);
+
+/**
+ * @swagger
+ * /api/merchant-issuers:
+ *   get:
+ *     summary: Get the allowed issuers list for the authenticated merchant
+ *     tags: [Merchants]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Current allowed issuers list (empty array means all issuers accepted)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 allowed_issuers:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ */
+router.get("/merchant-issuers", async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("merchants")
+      .select("allowed_issuers")
+      .eq("id", req.merchant.id)
+      .maybeSingle();
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
+
+    res.json({ allowed_issuers: data?.allowed_issuers ?? [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @swagger
+ * /api/merchant-issuers:
+ *   put:
+ *     summary: Set the allowed issuers list for the authenticated merchant
+ *     tags: [Merchants]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [allowed_issuers]
+ *             properties:
+ *               allowed_issuers:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of trusted Stellar issuer public keys. Send an empty array to allow all issuers.
+ *     responses:
+ *       200:
+ *         description: Updated allowed issuers list
+ *       400:
+ *         description: Validation error
+ */
+router.put("/merchant-issuers", async (req, res, next) => {
+  try {
+    const body = z.object({ allowed_issuers: allowedIssuersSchema }).parse(req.body || {});
+
+    const { data, error } = await supabase
+      .from("merchants")
+      .update({ allowed_issuers: body.allowed_issuers })
+      .eq("id", req.merchant.id)
+      .select("allowed_issuers")
+      .single();
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
+
+    res.json({ allowed_issuers: data.allowed_issuers });
   } catch (err) {
     next(err);
   }

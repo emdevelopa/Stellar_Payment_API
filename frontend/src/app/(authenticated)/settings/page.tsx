@@ -9,6 +9,7 @@ import {
   useMerchantApiKey,
   useMerchantHydrated,
   useSetMerchantApiKey,
+  useSetMerchantMetadata,
   useMerchantTrustedAddresses,
   useAddTrustedAddress,
   useRemoveTrustedAddress,
@@ -21,8 +22,11 @@ const DEFAULT_BRANDING = {
   secondary_color: "#b8ffe2",
   background_color: "#050608",
 };
+const DEFAULT_MERCHANT_SETTINGS = {
+  send_success_emails: true,
+};
 
-type SettingsTab = "api" | "branding" | "addresses";
+type SettingsTab = "api" | "branding" | "notifications" | "addresses";
 
 function normalizeHexInput(value: string) {
   const trimmed = value.trim();
@@ -119,6 +123,7 @@ export default function SettingsPage() {
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const setApiKey = useSetMerchantApiKey();
+  const setMerchant = useSetMerchantMetadata();
   const trustedAddresses = useMerchantTrustedAddresses();
   const addTrustedAddress = useAddTrustedAddress();
   const removeTrustedAddress = useRemoveTrustedAddress();
@@ -134,6 +139,12 @@ export default function SettingsPage() {
   const [brandingError, setBrandingError] = useState<string | null>(null);
   const [loadingBranding, setLoadingBranding] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
+  const [merchantSettings, setMerchantSettings] = useState(
+    DEFAULT_MERCHANT_SETTINGS,
+  );
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Trusted addresses state
   const [addressLabel, setAddressLabel] = useState("");
@@ -166,6 +177,37 @@ export default function SettingsPage() {
 
     loadBranding();
   }, [apiKey]);
+
+  useEffect(() => {
+    if (!apiKey) return;
+
+    const loadProfile = async () => {
+      setLoadingProfile(true);
+      setProfileError(null);
+
+      try {
+        const res = await fetch(`${API_URL}/api/merchant-profile`, {
+          headers: { "x-api-key": apiKey },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load profile");
+        setMerchantSettings({
+          send_success_emails:
+            data.merchant?.merchant_settings?.send_success_emails ?? true,
+        });
+        if (data.merchant) {
+          setMerchant(data.merchant);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to load profile";
+        setProfileError(msg);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+
+    loadProfile();
+  }, [apiKey, setMerchant]);
 
   const startRotate = () => {
     setRotateError(null);
@@ -250,6 +292,44 @@ export default function SettingsPage() {
     }
   };
 
+  const saveNotificationSettings = async () => {
+    if (!apiKey) return;
+
+    setSavingProfile(true);
+    setProfileError(null);
+
+    try {
+      const res = await fetch(`${API_URL}/api/merchant-profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          merchant_settings: merchantSettings,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
+
+      setMerchantSettings({
+        send_success_emails:
+          data.merchant?.merchant_settings?.send_success_emails ?? true,
+      });
+
+      if (data.merchant) {
+        setMerchant(data.merchant);
+      }
+
+      toast.success("Notification settings saved");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save settings";
+      setProfileError(msg);
+      toast.error(msg);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
   const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
   const addAddress = () => {
@@ -369,6 +449,17 @@ export default function SettingsPage() {
             }`}
           >
             Branding
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("notifications")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "notifications"
+                ? "bg-white text-black"
+                : "text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            Notifications
           </button>
           <button
             type="button"
@@ -506,7 +597,7 @@ export default function SettingsPage() {
               </div>
             )}
           </section>
-        </div> : (
+        </div> : activeTab === "branding" ? (
           <section className="flex flex-col gap-5">
             <div className="flex flex-col gap-1">
               <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
@@ -585,6 +676,72 @@ export default function SettingsPage() {
               className="h-11 rounded-xl bg-mint font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
             >
               {savingBranding ? "Saving..." : loadingBranding ? "Loading..." : "Save Branding"}
+            </button>
+          </section>
+        ) : (
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Email Notifications
+              </h2>
+              <p className="text-sm text-slate-500">
+                Control whether successful payment emails are sent to your
+                notification inbox.
+              </p>
+            </div>
+
+            {profileError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                {profileError}
+              </div>
+            )}
+
+            <label className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 p-4">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-white">
+                  Success emails
+                </span>
+                <span className="text-xs text-slate-400">
+                  Send an email when a payment is confirmed.
+                </span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={merchantSettings.send_success_emails}
+                onClick={() =>
+                  setMerchantSettings((current) => ({
+                    ...current,
+                    send_success_emails: !current.send_success_emails,
+                  }))
+                }
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  merchantSettings.send_success_emails
+                    ? "bg-mint"
+                    : "bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-black transition-transform ${
+                    merchantSettings.send_success_emails
+                      ? "translate-x-6"
+                      : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </label>
+
+            <button
+              type="button"
+              onClick={saveNotificationSettings}
+              disabled={loadingProfile || savingProfile}
+              className="h-11 rounded-xl bg-mint font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingProfile
+                ? "Saving..."
+                : loadingProfile
+                  ? "Loading..."
+                  : "Save Notification Settings"}
             </button>
           </section>
         )}

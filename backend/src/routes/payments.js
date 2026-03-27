@@ -150,6 +150,17 @@ function createPaymentsRouter({
         }
       }
 
+      // Allowed-issuers check: if the merchant has configured a non-empty
+      // allowlist, only those issuer addresses may be used.
+      const allowedIssuers = req.merchant.allowed_issuers;
+      if (Array.isArray(allowedIssuers) && allowedIssuers.length > 0) {
+        if (!body.asset_issuer || !allowedIssuers.includes(body.asset_issuer)) {
+          return res.status(400).json({
+            error: "asset_issuer is not in the merchant's list of allowed issuers",
+          });
+        }
+      }
+
       const paymentId = randomUUID();
       const now = new Date().toISOString();
       const paymentLinkBase =
@@ -311,7 +322,7 @@ function createPaymentsRouter({
         const { data, error } = await supabase
           .from("payments")
           .select(
-            "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret)",
+            "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret)",
           )
           .eq("id", req.params.id)
           .maybeSingle();
@@ -354,6 +365,20 @@ function createPaymentsRouter({
         if (updateError) {
           updateError.status = 500;
           throw updateError;
+        }
+
+        // Emit real-time event to the merchant's private room (issue #229)
+        const io = req.app.locals.io;
+        if (io && data.merchant_id) {
+          io.to(`merchant:${data.merchant_id}`).emit("payment:confirmed", {
+            id: data.id,
+            amount: data.amount,
+            asset: data.asset,
+            asset_issuer: data.asset_issuer,
+            recipient: data.recipient,
+            tx_id: match.transaction_hash,
+            confirmed_at: new Date().toISOString(),
+          });
         }
 
         const merchantSecret = data.merchants?.webhook_secret;

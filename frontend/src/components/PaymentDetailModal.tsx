@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
 import WalletSelector from "@/components/WalletSelector";
@@ -15,6 +15,10 @@ const EXPLORER_BASE =
     ? "https://stellar.expert/explorer/public"
     : "https://stellar.expert/explorer/testnet";
 
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
 interface PaymentDetails {
   id: string;
   amount: number;
@@ -22,8 +26,11 @@ interface PaymentDetails {
   asset_issuer: string | null;
   recipient: string;
   description: string | null;
+  memo: string | null;
+  memo_type: string | null;
   status: string;
   tx_id: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -33,7 +40,6 @@ interface PaymentDetailModalProps {
   onClose: () => void;
 }
 
-// Asset badge component
 function AssetBadge({ asset }: { asset: string }) {
   const a = asset.toUpperCase();
   if (a === "XLM" || a === "NATIVE") {
@@ -67,7 +73,6 @@ function AssetBadge({ asset }: { asset: string }) {
   );
 }
 
-// Status badge component
 const STATUS_MAP: Record<string, { label: string; classes: string }> = {
   pending:   { label: "Awaiting Payment",  classes: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" },
   confirmed: { label: "Confirmed",         classes: "bg-mint/10 text-mint border border-mint/30" },
@@ -87,23 +92,131 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function PaymentDetailModal({ paymentId, isOpen, onClose }: PaymentDetailModalProps) {
+/** A labelled detail row used in the attributes grid */
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+/** Recursively render a JSON metadata tree */
+function MetadataValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined) {
+    return <span className="text-slate-600">null</span>;
+  }
+
+  if (typeof value === "boolean") {
+    return (
+      <span className={value ? "text-green-400" : "text-red-400"}>
+        {String(value)}
+      </span>
+    );
+  }
+
+  if (typeof value === "number") {
+    return <span className="text-amber-300">{value}</span>;
+  }
+
+  if (typeof value === "string") {
+    return <span className="text-sky-300 break-all">{value}</span>;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-slate-500">[]</span>;
+    return (
+      <div className="flex flex-col gap-1 pl-3 border-l border-white/10">
+        {value.map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <span className="text-slate-600 text-xs mt-0.5">{i}</span>
+            <MetadataValue value={item} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return <span className="text-slate-500">{"{}"}</span>;
+    return (
+      <div className="flex flex-col gap-2 pl-3 border-l border-white/10">
+        {entries.map(([key, val]) => (
+          <div key={key} className="flex flex-col gap-0.5">
+            <span className="font-mono text-xs text-slate-400">{key}</span>
+            <MetadataValue value={val} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <span className="text-slate-400">{String(value)}</span>;
+}
+
+export default function PaymentDetailModal({
+  paymentId,
+  isOpen,
+  onClose,
+}: PaymentDetailModalProps) {
   const [payment, setPayment] = useState<PaymentDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [metadataExpanded, setMetadataExpanded] = useState(false);
+
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  const sheetRef = useRef<HTMLDivElement>(null);
   const { activeProvider } = useWallet();
   const walletReady = !!activeProvider;
 
   const { isProcessing, error: paymentError, processPayment } = usePayment(activeProvider);
 
-  // Fetch payment details
+  useEffect(() => {
+    if (isOpen) {
+      setMounted(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+    } else {
+      setVisible(false);
+      const timer = setTimeout(() => setMounted(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  /* ---------- body scroll lock ---------- */
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [isOpen]);
+
+  /* ---------- fetch payment details ---------- */
+
   useEffect(() => {
     if (!isOpen || !paymentId) return;
-    
+
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setMetadataExpanded(false);
 
     const load = async () => {
       try {
@@ -126,10 +239,13 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
     return () => controller.abort();
   }, [paymentId, isOpen]);
 
-  // Poll until settled
+  /* ---------- poll until settled ---------- */
+
   useEffect(() => {
     if (!isOpen || loading || !payment) return;
-    const settled = ["confirmed", "completed", "failed"].includes(payment.status);
+    const settled = ["confirmed", "completed", "failed"].includes(
+      payment.status,
+    );
     if (settled) return;
 
     const id = setInterval(async () => {
@@ -138,7 +254,9 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
         if (!res.ok) return;
         const data = await res.json();
         if (data.payment) setPayment(data.payment);
-      } catch { /* silent — retry next tick */ }
+      } catch {
+        /* silent — retry next tick */
+      }
     }, 5000);
 
     return () => clearInterval(id);
@@ -147,7 +265,26 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
   const networkPassphrase =
     process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015";
 
-  // Pay handler
+  /* ---------- keyboard & focus ---------- */
+
+  const stableOnClose = useCallback(() => onClose(), [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") stableOnClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    // Move focus into the sheet
+    sheetRef.current?.focus();
+
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, stableOnClose]);
+
+  /* ---------- pay handler ---------- */
+
   const handlePay = async () => {
     if (!payment) return;
     setActionError(null);
@@ -166,8 +303,12 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
       // Best-effort backend verification
       setTimeout(async () => {
         try {
-          await fetch(`${API_URL}/api/verify-payment/${paymentId}`, { method: "POST" });
-        } catch { /* non-critical */ }
+          await fetch(`${API_URL}/api/verify-payment/${paymentId}`, {
+            method: "POST",
+          });
+        } catch {
+          /* non-critical */
+        }
       }, 2000);
     } catch {
       const msg = paymentError ?? "Payment failed. Please try again.";
@@ -176,65 +317,98 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
     }
   };
 
-  // Close on escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    
-    if (isOpen) {
-      document.addEventListener("keydown", handleEscape);
-      return () => document.removeEventListener("keydown", handleEscape);
-    }
-  }, [isOpen, onClose]);
+  /* ---------- derived state ---------- */
 
-  if (!isOpen) return null;
-
-  const isSettled = payment?.status === "confirmed" || payment?.status === "completed";
+  const isSettled =
+    payment?.status === "confirmed" || payment?.status === "completed";
   const isFailed = payment?.status === "failed";
+
+  // Filter out internal/branding keys from metadata for display
+  const displayMetadata = payment?.metadata
+    ? Object.fromEntries(
+        Object.entries(payment.metadata).filter(
+          ([key]) => key !== "branding_config",
+        ),
+      )
+    : null;
+  const hasMetadata =
+    displayMetadata !== null && Object.keys(displayMetadata).length > 0;
+
+  /* ---------- render nothing until first open ---------- */
+
+  if (!mounted) return null;
 
   return (
     <>
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
+          visible ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={stableOnClose}
+        aria-hidden="true"
       />
-      
+
       {/* Right sliding sheet */}
-      <div className={`fixed right-0 top-0 z-50 h-full w-full max-w-lg bg-slate-900 shadow-2xl transform transition-transform duration-300 ease-in-out ${
-        isOpen ? "translate-x-0" : "translate-x-full"
-      }`}>
+      <div
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Payment details"
+        tabIndex={-1}
+        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col bg-slate-900 shadow-2xl outline-none transition-transform duration-300 ease-in-out ${
+          visible ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 p-6">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-6">
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-mint">Payment Details</p>
-            <p className="font-mono text-xs text-slate-500 mt-1">ID: {paymentId}</p>
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-mint">
+              Payment Details
+            </p>
+            <p className="mt-1 font-mono text-xs text-slate-500">
+              ID: {paymentId}
+            </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={stableOnClose}
+            aria-label="Close payment details"
             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
 
-        {/* Content */}
-        <div className="h-full overflow-y-auto pb-20">
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="p-6 space-y-4">
               <div className="animate-pulse space-y-3">
                 <div className="h-8 w-32 rounded-lg bg-white/10" />
                 <div className="h-12 w-48 rounded-lg bg-white/10" />
                 <div className="h-6 w-64 rounded-lg bg-white/10" />
+                <div className="h-20 w-full rounded-lg bg-white/10" />
+                <div className="h-20 w-full rounded-lg bg-white/10" />
               </div>
             </div>
           ) : error || !payment ? (
             <div className="p-6">
               <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center">
-                <p className="text-sm font-medium uppercase tracking-wider text-red-400">Error</p>
+                <p className="text-sm font-medium uppercase tracking-wider text-red-400">
+                  Error
+                </p>
                 <p className="mt-3 text-lg font-semibold text-white">
                   {error ?? "Payment not found"}
                 </p>
@@ -242,7 +416,7 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
             </div>
           ) : (
             <div className="p-6 space-y-6">
-              {/* Amount hero */}
+              {/* ── Amount hero ── */}
               <div className="flex flex-col items-center gap-3 text-center">
                 <AssetBadge asset={payment.asset} />
                 <div className="flex items-baseline gap-2">
@@ -257,64 +431,80 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
                   </span>
                 </div>
                 {payment.description && (
-                  <p className="text-sm text-slate-400">{payment.description}</p>
+                  <p className="text-sm text-slate-400">
+                    {payment.description}
+                  </p>
                 )}
                 <StatusBadge status={payment.status} />
               </div>
 
-              {/* Details */}
+              {/* ── Core attributes ── */}
               <div className="space-y-4">
                 {/* Recipient */}
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Recipient
-                  </p>
+                <DetailRow label="Recipient">
                   <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
                     <code className="flex-1 truncate font-mono text-sm text-slate-200">
                       {payment.recipient}
                     </code>
                     <CopyButton text={payment.recipient} />
                   </div>
-                </div>
+                </DetailRow>
 
-                {/* QR Code */}
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Scan to Pay
-                  </p>
-                  <div className="flex items-center justify-center rounded-xl border border-white/10 bg-white p-4">
-                    <QRCodeSVG
-                      value={payment.recipient}
-                      size={140}
-                      level="M"
-                      bgColor="#ffffff"
-                      fgColor="#000000"
-                    />
-                  </div>
-                  <p className="text-center text-xs text-slate-500">
-                    Scan with Freighter or any Stellar wallet
-                  </p>
-                </div>
+                {/* Asset issuer (non-native) */}
+                {payment.asset_issuer && (
+                  <DetailRow label="Asset Issuer">
+                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
+                      <code className="flex-1 truncate font-mono text-sm text-slate-200">
+                        {payment.asset_issuer}
+                      </code>
+                      <CopyButton text={payment.asset_issuer} />
+                    </div>
+                  </DetailRow>
+                )}
+
+                {/* Memo */}
+                {payment.memo && (
+                  <DetailRow label={`Memo${payment.memo_type ? ` (${payment.memo_type})` : ""}`}>
+                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
+                      <code className="flex-1 break-all font-mono text-sm text-slate-200">
+                        {payment.memo}
+                      </code>
+                      <CopyButton text={payment.memo} />
+                    </div>
+                  </DetailRow>
+                )}
+
+                {/* QR Code — only for unsettled payments */}
+                {!isSettled && !isFailed && (
+                  <DetailRow label="Scan to Pay">
+                    <div className="flex items-center justify-center rounded-xl border border-white/10 bg-white p-4">
+                      <QRCodeSVG
+                        value={payment.recipient}
+                        size={140}
+                        level="M"
+                        bgColor="#ffffff"
+                        fgColor="#000000"
+                      />
+                    </div>
+                    <p className="text-center text-xs text-slate-500">
+                      Scan with Freighter or any Stellar wallet
+                    </p>
+                  </DetailRow>
+                )}
 
                 {/* Date */}
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Created
-                  </p>
+                <DetailRow label="Created">
                   <p className="text-sm text-slate-300">
                     {new Date(payment.created_at).toLocaleString(undefined, {
                       dateStyle: "medium",
                       timeStyle: "short",
                     })}
                   </p>
-                </div>
+                </DetailRow>
 
                 {/* Transaction hash */}
                 {payment.tx_id && (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Transaction
-                    </p>
+                  <DetailRow label="Transaction">
                     <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
                       <a
                         href={`${EXPLORER_BASE}/tx/${payment.tx_id}`}
@@ -326,18 +516,65 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
                       </a>
                       <CopyButton text={payment.tx_id} />
                     </div>
-                  </div>
+                  </DetailRow>
                 )}
 
-                {/* Action error */}
-                {actionError && (
-                  <div
-                    role="alert"
-                    className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400"
-                  >
-                    {actionError}
+                {/* Payment ID (copiable) */}
+                <DetailRow label="Payment ID">
+                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
+                    <code className="flex-1 truncate font-mono text-sm text-slate-200">
+                      {payment.id}
+                    </code>
+                    <CopyButton text={payment.id} />
                   </div>
-                )}
+                </DetailRow>
+              </div>
+
+              {/* ── Metadata section ── */}
+              {hasMetadata && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setMetadataExpanded((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:bg-white/10"
+                  >
+                    <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                      Metadata
+                    </span>
+                    <svg
+                      className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${
+                        metadataExpanded ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+
+                  {metadataExpanded && (
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-4 font-mono text-sm">
+                      <MetadataValue value={displayMetadata} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Action error ── */}
+              {actionError && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400"
+                >
+                  {actionError}
+                </div>
+              )}
 
                 {/* CTA section */}
                 {!isSettled && !isFailed && (
@@ -371,29 +608,28 @@ export default function PaymentDetailModal({ paymentId, isOpen, onClose }: Payme
                   </div>
                 )}
 
-                {/* Status messages */}
-                {isSettled && (
-                  <div className="rounded-xl border border-mint/30 bg-mint/5 p-4 text-center">
-                    <p className="text-sm font-semibold text-mint">
-                      This payment has been received.
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      The transaction was confirmed on the Stellar network.
-                    </p>
-                  </div>
-                )}
+              {/* ── Status messages ── */}
+              {isSettled && (
+                <div className="rounded-xl border border-mint/30 bg-mint/5 p-4 text-center">
+                  <p className="text-sm font-semibold text-mint">
+                    This payment has been received.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    The transaction was confirmed on the Stellar network.
+                  </p>
+                </div>
+              )}
 
-                {isFailed && (
-                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
-                    <p className="text-sm font-semibold text-red-400">
-                      This payment has failed.
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Contact the merchant if you believe this is an error.
-                    </p>
-                  </div>
-                )}
-              </div>
+              {isFailed && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
+                  <p className="text-sm font-semibold text-red-400">
+                    This payment has failed.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Contact the merchant if you believe this is an error.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

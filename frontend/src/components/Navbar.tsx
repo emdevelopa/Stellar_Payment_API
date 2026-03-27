@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useHydrateMerchantStore } from "@/lib/merchant-store";
 import MerchantProfileCard from "@/components/MerchantProfileCard";
+import ApiHealthBadge from "@/components/ApiHealthBadge";
 
 type AppNavLink = {
   href: string;
@@ -118,37 +119,8 @@ function isActive(pathname: string, href: string) {
 
 const appNavLinks: AppNavLink[] = [
   { href: "/", label: "Home" },
-  { href: "/dashboard/create", label: "Create Payment" },
-  { href: "/settings", label: "Settings" },
+  { href: "/login", label: "Login" },
   { href: "/register", label: "Register" },
-];
-
-// Add future dashboard routes here and set `enabled: true` when the page exists.
-const dashboardMobileNavLinks: DashboardNavLink[] = [
-  {
-    href: "/dashboard/overview",
-    label: "Overview",
-    icon: OverviewIcon,
-    enabled: true,
-  },
-  {
-    href: "/dashboard/payments",
-    label: "Payments",
-    icon: PaymentsIcon,
-    enabled: true,
-  },
-  {
-    href: "/dashboard/webhooks",
-    label: "Webhooks",
-    icon: WebhooksIcon,
-    enabled: true,
-  },
-  {
-    href: "/dashboard/create",
-    label: "Create",
-    icon: CreateIcon,
-    enabled: true,
-  },
 ];
 
 export default function Navbar() {
@@ -175,68 +147,42 @@ export default function Navbar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isMenuOpen]);
 
-  const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/dashboard/create", label: "Create Payment" },
-    { href: "/settings", label: "Settings" },
-    { href: "/register", label: "Register" },
-  ];
-
   return (
-    <>
-      <nav className="border-b border-white/10 bg-black/50 backdrop-blur dark:border-white/10 dark:bg-black/50">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="font-mono text-sm uppercase tracking-[0.3em] text-mint">
-                Stellar Pay
-              </span>
-            </Link>
-
-            <div className="flex items-center gap-4">
-              <div className="hidden items-center gap-8 md:flex">
-                {appNavLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    aria-current={isActive(pathname, link.href) ? "page" : undefined}
-                    className={`text-sm transition-colors ${
-                      isActive(pathname, link.href)
-                        ? "text-white"
-                        : "text-slate-300 hover:text-white"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            ref={triggerRef}
-            onClick={toggleMenu}
-            className="flex flex-col gap-1.5 md:hidden"
-            aria-label="Toggle menu"
-            aria-expanded={isMenuOpen}
-            aria-controls="mobile-nav-menu"
-          >
-            {/* Network Badge */}
-            <span
-              aria-label={`Network: ${networkLabel}`}
-              className={`rounded-full border px-3 py-1 text-[10px] font-semibold tracking-[0.2em] ${
-                isMainnet
-                  ? "border-green-500/40 bg-green-500/15 text-green-300"
-                  : "border-yellow-500/50 bg-yellow-500/15 text-yellow-300"
-              }`}
-            >
-              {networkLabel}
+    <nav className="border-b border-white/10 bg-black/50 backdrop-blur dark:border-white/10 dark:bg-black/50">
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="flex h-16 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="font-mono text-sm uppercase tracking-[0.3em] text-mint">
+              Stellar Pay
             </span>
+          </Link>
+
+          <div className="flex items-center gap-4">
+            <div className="hidden items-center gap-8 md:flex">
+              {appNavLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={isActive(pathname, link.href) ? "page" : undefined}
+                  className={`text-sm transition-colors ${
+                    isActive(pathname, link.href)
+                      ? "text-white"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
 
             {/* Mobile Menu Button */}
             <button
+              ref={triggerRef}
               onClick={toggleMenu}
-              className="flex flex-col gap-1.5 md:hidden"
+              className="flex flex-col gap-1.5 md:hidden p-2 text-white"
               aria-label="Toggle menu"
+              aria-expanded={isMenuOpen}
+              aria-controls="mobile-nav-menu"
             >
               <span
                 className={`block h-0.5 w-6 bg-white transition-all ${
@@ -249,75 +195,30 @@ export default function Navbar() {
                 }`}
               ></span>
               <span
-                aria-label={`Network: ${networkLabel}`}
-                className={`rounded-full border px-3 py-1 text-[10px] font-semibold tracking-[0.2em] ${
-                  isMainnet
-                    ? "border-green-500/40 bg-green-500/15 text-green-300"
-                    : "border-yellow-500/50 bg-yellow-500/15 text-yellow-300"
+                className={`block h-0.5 w-6 bg-white transition-all ${
+                  isMenuOpen ? "-translate-y-2 -rotate-45" : ""
                 }`}
-              >
-                {networkLabel}
-              </span>
-
+              ></span>
+            </button>
+            <div className="hidden md:flex items-center gap-3">
+              <ApiHealthBadge />
               <MerchantProfileCard />
-
-              {!showMobileBottomNav && (
-                <button
-                  type="button"
-                  onClick={() => setIsMenuOpen((open) => !open)}
-                  className="flex flex-col gap-1.5 md:hidden"
-                  aria-label="Toggle menu"
-                >
-                  <span
-                    className={`block h-0.5 w-6 bg-white transition-all ${
-                      isMenuOpen ? "translate-y-2 rotate-45" : ""
-                    }`}
-                  ></span>
-                  <span
-                    className={`block h-0.5 w-6 bg-white transition-all ${
-                      isMenuOpen ? "opacity-0" : ""
-                    }`}
-                  ></span>
-                  <span
-                    className={`block h-0.5 w-6 bg-white transition-all ${
-                      isMenuOpen ? "-translate-y-2 -rotate-45" : ""
-                    }`}
-                  ></span>
-                </button>
-              )}
             </div>
           </div>
-
-          {!showMobileBottomNav && isMenuOpen && (
-            <div className="border-t border-white/10 py-4 md:hidden">
-              <div className="mb-4 flex items-center justify-center">
-                <MerchantProfileCard />
-              </div>
-              <div className="flex flex-col gap-4">
-                {appNavLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="text-sm text-slate-300 transition-colors hover:text-white"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-      </nav>
 
-        {/* Mobile Menu — uses hidden attribute so the panel stays in DOM for
-            reliable aria-controls reference; visibility is controlled via CSS */}
+        {/* Mobile Menu Panel */}
         <div
           id="mobile-nav-menu"
           hidden={!isMenuOpen}
           className="border-t border-white/10 py-4 md:hidden"
         >
+          <div className="mb-4 flex flex-col items-center justify-center gap-4">
+            <MerchantProfileCard />
+            <ApiHealthBadge />
+          </div>
           <div className="flex flex-col gap-4">
-            {navLinks.map((link) => (
+            {appNavLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

@@ -21,7 +21,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <WalletContextProvider>
           <ToastProvider />
-          <Navbar />
           <ErrorBoundary>
             {children}
           </ErrorBoundary>

@@ -13,6 +13,13 @@ export interface MerchantSession {
   exp: number;
 }
 
+export interface TrustedAddress {
+  id: string;
+  label: string;
+  address: string;
+  created_at: string;
+}
+
 export interface MerchantMetadata {
   id: string;
   email: string;
@@ -25,6 +32,10 @@ export interface MerchantMetadata {
     secondary_color?: string;
     background_color?: string;
   } | null;
+  merchant_settings?: {
+    send_success_emails?: boolean;
+  } | null;
+  trusted_addresses?: TrustedAddress[] | null;
   created_at: string;
 }
 
@@ -38,6 +49,8 @@ interface MerchantStore {
   setToken: (token: string | null) => void;
   setApiKey: (apiKey: string | null) => void;
   setMerchant: (merchant: MerchantMetadata | null) => void;
+  addTrustedAddress: (address: TrustedAddress) => void;
+  removeTrustedAddress: (id: string) => void;
   logout: () => void;
 }
 
@@ -150,6 +163,46 @@ export const useMerchantStore = create<MerchantStore>((set) => ({
     set({ merchant });
   },
 
+  addTrustedAddress: (address) => {
+    set((state) => {
+      if (!state.merchant) return state;
+      
+      const currentAddresses = state.merchant.trusted_addresses || [];
+      const updatedAddresses = [...currentAddresses, address];
+      
+      const updatedMerchant = {
+        ...state.merchant,
+        trusted_addresses: updatedAddresses,
+      };
+      
+      if (typeof window !== "undefined") {
+        localStorage.setItem(MERCHANT_KEY, JSON.stringify(updatedMerchant));
+      }
+      
+      return { merchant: updatedMerchant };
+    });
+  },
+
+  removeTrustedAddress: (id) => {
+    set((state) => {
+      if (!state.merchant) return state;
+      
+      const currentAddresses = state.merchant.trusted_addresses || [];
+      const updatedAddresses = currentAddresses.filter((addr) => addr.id !== id);
+      
+      const updatedMerchant = {
+        ...state.merchant,
+        trusted_addresses: updatedAddresses,
+      };
+      
+      if (typeof window !== "undefined") {
+        localStorage.setItem(MERCHANT_KEY, JSON.stringify(updatedMerchant));
+      }
+      
+      return { merchant: updatedMerchant };
+    });
+  },
+
   logout: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(TOKEN_KEY);
@@ -196,4 +249,16 @@ export function useSetMerchantMetadata() {
 
 export function useMerchantLogout() {
   return useMerchantStore((state) => state.logout);
+}
+
+export function useMerchantTrustedAddresses() {
+  return useMerchantStore((state) => state.merchant?.trusted_addresses || []);
+}
+
+export function useAddTrustedAddress() {
+  return useMerchantStore((state) => state.addTrustedAddress);
+}
+
+export function useRemoveTrustedAddress() {
+  return useMerchantStore((state) => state.removeTrustedAddress);
 }

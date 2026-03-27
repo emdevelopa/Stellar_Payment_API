@@ -11,6 +11,9 @@ export interface Merchant {
   email: string;
   business_name: string;
   notification_email: string;
+  merchant_settings?: {
+    send_success_emails?: boolean;
+  } | null;
   api_key: string;
   webhook_secret: string;
   created_at: string;

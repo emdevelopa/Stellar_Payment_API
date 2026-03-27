@@ -8,6 +8,7 @@ import {
   useHydrateMerchantStore,
   useMerchantApiKey,
   useMerchantHydrated,
+  useMerchantTrustedAddresses,
 } from "@/lib/merchant-store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -47,8 +48,10 @@ export default function CreatePaymentForm() {
   const [created, setCreated] = useState<CreatedPayment | null>(null);
   const [useSessionBranding, setUseSessionBranding] = useState(false);
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  const [selectedTrustedAddress, setSelectedTrustedAddress] = useState<string>("");
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
+  const trustedAddresses = useMerchantTrustedAddresses();
 
   useHydrateMerchantStore();
 
@@ -122,7 +125,18 @@ export default function CreatePaymentForm() {
     setAsset("XLM");
     setUseSessionBranding(false);
     setBranding(DEFAULT_BRANDING);
+    setSelectedTrustedAddress("");
     setError(null);
+  };
+
+  const handleTrustedAddressSelect = (addressId: string) => {
+    setSelectedTrustedAddress(addressId);
+    if (addressId) {
+      const selected = trustedAddresses.find((addr) => addr.id === addressId);
+      if (selected) {
+        setRecipient(selected.address);
+      }
+    }
   };
 
   const updateBrandingField = (
@@ -283,6 +297,31 @@ export default function CreatePaymentForm() {
             </p>
           )}
         </div>
+
+        {/* Trusted Addresses Dropdown */}
+        {trustedAddresses.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="trusted-address"
+              className="text-xs font-medium uppercase tracking-wider text-slate-400"
+            >
+              Select from Trusted Addresses
+            </label>
+            <select
+              id="trusted-address"
+              value={selectedTrustedAddress}
+              onChange={(e) => handleTrustedAddressSelect(e.target.value)}
+              className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+            >
+              <option value="">-- Select a saved address --</option>
+              {trustedAddresses.map((addr) => (
+                <option key={addr.id} value={addr.id}>
+                  {addr.label} ({addr.address.slice(0, 8)}...{addr.address.slice(-6)})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Recipient */}
         <div className="flex flex-col gap-1.5">

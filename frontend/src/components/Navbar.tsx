@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useHydrateMerchantStore } from "@/lib/merchant-store";
+import MerchantProfileCard from "@/components/MerchantProfileCard";
+import ApiHealthBadge from "@/components/ApiHealthBadge";
 
 type AppNavLink = {
   href: string;
@@ -13,7 +15,7 @@ type AppNavLink = {
 type DashboardNavLink = {
   href: string;
   label: string;
-  icon: (active: boolean) => JSX.Element;
+  icon: (active: boolean) => React.ReactNode;
   enabled: boolean;
 };
 
@@ -122,180 +124,114 @@ const appNavLinks: AppNavLink[] = [
   { href: "/register", label: "Register" },
 ];
 
-// Add future dashboard routes here and set `enabled: true` when the page exists.
-const dashboardMobileNavLinks: DashboardNavLink[] = [
-  {
-    href: "/dashboard/overview",
-    label: "Overview",
-    icon: OverviewIcon,
-    enabled: true,
-  },
-  {
-    href: "/dashboard/payments",
-    label: "Payments",
-    icon: PaymentsIcon,
-    enabled: true,
-  },
-  {
-    href: "/dashboard/webhooks",
-    label: "Webhooks",
-    icon: WebhooksIcon,
-    enabled: true,
-  },
-  {
-    href: "/dashboard/create",
-    label: "Create",
-    icon: CreateIcon,
-    enabled: true,
-  },
-];
-
 export default function Navbar() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const network =
-    (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet").toLowerCase();
-  const isMainnet = network === "public" || network === "mainnet";
-  const networkLabel = isMainnet ? "MAINNET" : "TESTNET";
-  const activeDashboardMobileNavLinks = dashboardMobileNavLinks.filter(
-    (link) => link.enabled,
-  );
-  const showMobileBottomNav = activeDashboardMobileNavLinks.some((link) =>
-    isActive(pathname, link.href),
-  );
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useHydrateMerchantStore();
 
-  useEffect(() => {
-    setIsMenuOpen(false);
-  }, [pathname]);
+  const toggleMenu = () => {
+    setIsMenuOpen((prev) => !prev);
+  };
 
+  // Close on Escape and return focus to the trigger button
   useEffect(() => {
-    document.body.classList.toggle("dashboard-mobile-nav", showMobileBottomNav);
-
-    return () => {
-      document.body.classList.remove("dashboard-mobile-nav");
+    if (!isMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsMenuOpen(false);
+        triggerRef.current?.focus();
+      }
     };
-  }, [showMobileBottomNav]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMenuOpen]);
 
   return (
-    <>
-      <nav className="border-b border-white/10 bg-black/50 backdrop-blur dark:border-white/10 dark:bg-black/50">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="font-mono text-sm uppercase tracking-[0.3em] text-mint">
-                Stellar Pay
-              </span>
-            </Link>
+    <nav className="border-b border-white/10 bg-black/50 backdrop-blur dark:border-white/10 dark:bg-black/50">
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="flex h-16 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="font-mono text-sm uppercase tracking-[0.3em] text-mint">
+              Stellar Pay
+            </span>
+          </Link>
 
-            <div className="flex items-center gap-4">
-              <div className="hidden items-center gap-8 md:flex">
-                {appNavLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    aria-current={isActive(pathname, link.href) ? "page" : undefined}
-                    className={`text-sm transition-colors ${
-                      isActive(pathname, link.href)
-                        ? "text-white"
-                        : "text-slate-300 hover:text-white"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-
-              <span
-                aria-label={`Network: ${networkLabel}`}
-                className={`rounded-full border px-3 py-1 text-[10px] font-semibold tracking-[0.2em] ${
-                  isMainnet
-                    ? "border-green-500/40 bg-green-500/15 text-green-300"
-                    : "border-yellow-500/50 bg-yellow-500/15 text-yellow-300"
-                }`}
-              >
-                {networkLabel}
-              </span>
-
-              {!showMobileBottomNav && (
-                <button
-                  type="button"
-                  onClick={() => setIsMenuOpen((open) => !open)}
-                  className="flex flex-col gap-1.5 md:hidden"
-                  aria-label="Toggle menu"
-                >
-                  <span
-                    className={`block h-0.5 w-6 bg-white transition-all ${
-                      isMenuOpen ? "translate-y-2 rotate-45" : ""
-                    }`}
-                  ></span>
-                  <span
-                    className={`block h-0.5 w-6 bg-white transition-all ${
-                      isMenuOpen ? "opacity-0" : ""
-                    }`}
-                  ></span>
-                  <span
-                    className={`block h-0.5 w-6 bg-white transition-all ${
-                      isMenuOpen ? "-translate-y-2 -rotate-45" : ""
-                    }`}
-                  ></span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {!showMobileBottomNav && isMenuOpen && (
-            <div className="border-t border-white/10 py-4 md:hidden">
-              <div className="flex flex-col gap-4">
-                {appNavLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="text-sm text-slate-300 transition-colors hover:text-white"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </nav>
-
-      {showMobileBottomNav && (
-        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-black/85 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
-          <div
-            className="mx-auto grid max-w-md gap-2 px-4"
-            style={{
-              gridTemplateColumns: `repeat(${activeDashboardMobileNavLinks.length}, minmax(0, 1fr))`,
-            }}
-          >
-            {activeDashboardMobileNavLinks.map((link) => {
-              const active = isActive(pathname, link.href);
-
-              return (
+          <div className="flex items-center gap-4">
+            <div className="hidden items-center gap-8 md:flex">
+              {appNavLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  aria-label={link.label}
-                  aria-current={active ? "page" : undefined}
-                  className={`group relative flex min-h-14 items-center justify-center rounded-2xl border transition-all ${
-                    active
-                      ? "border-mint/40 bg-mint/10 shadow-[0_0_20px_rgba(94,242,192,0.12)]"
-                      : "border-white/5 bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.06]"
+                  aria-current={isActive(pathname, link.href) ? "page" : undefined}
+                  className={`text-sm transition-colors ${
+                    isActive(pathname, link.href)
+                      ? "text-white"
+                      : "text-slate-300 hover:text-white"
                   }`}
                 >
-                  <span className="pointer-events-none absolute -top-8 rounded-full border border-white/10 bg-slate-950/95 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-lg transition-all duration-200 group-hover:-translate-y-1 group-hover:opacity-100 group-focus-visible:-translate-y-1 group-focus-visible:opacity-100">
-                    {link.label}
-                  </span>
-                  {link.icon(active)}
+                  {link.label}
                 </Link>
-              );
-            })}
+              ))}
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              ref={triggerRef}
+              onClick={toggleMenu}
+              className="flex flex-col gap-1.5 md:hidden p-2 text-white"
+              aria-label="Toggle menu"
+              aria-expanded={isMenuOpen}
+              aria-controls="mobile-nav-menu"
+            >
+              <span
+                className={`block h-0.5 w-6 bg-white transition-all ${
+                  isMenuOpen ? "translate-y-2 rotate-45" : ""
+                }`}
+              ></span>
+              <span
+                className={`block h-0.5 w-6 bg-white transition-all ${
+                  isMenuOpen ? "opacity-0" : ""
+                }`}
+              ></span>
+              <span
+                className={`block h-0.5 w-6 bg-white transition-all ${
+                  isMenuOpen ? "-translate-y-2 -rotate-45" : ""
+                }`}
+              ></span>
+            </button>
+            <div className="hidden md:flex items-center gap-3">
+              <ApiHealthBadge />
+              <MerchantProfileCard />
+            </div>
           </div>
-        </nav>
-      )}
-    </>
+        </div>
+
+        {/* Mobile Menu Panel */}
+        <div
+          id="mobile-nav-menu"
+          hidden={!isMenuOpen}
+          className="border-t border-white/10 py-4 md:hidden"
+        >
+          <div className="mb-4 flex flex-col items-center justify-center gap-4">
+            <MerchantProfileCard />
+            <ApiHealthBadge />
+          </div>
+          <div className="flex flex-col gap-4">
+            {appNavLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setIsMenuOpen(false)}
+                className="text-sm text-slate-300 transition-colors hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 }

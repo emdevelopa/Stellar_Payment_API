@@ -81,7 +81,7 @@ describe("createApiKeyAuth", () => {
 
     expect(from).toHaveBeenCalledWith("merchants");
     expect(select).toHaveBeenCalledWith(
-      "id, email, business_name, notification_email, branding_config",
+      "id, email, business_name, notification_email, branding_config, merchant_settings",
     );
     expect(eq).toHaveBeenCalledWith("api_key", "invalid-key");
     expect(res.status).toHaveBeenCalledWith(401);

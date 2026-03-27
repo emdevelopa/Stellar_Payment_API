@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isFreighterAvailable } from "@/lib/freighter";
+import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
+import WalletSelector from "@/components/WalletSelector";
 import CopyButton from "@/components/CopyButton";
 import toast from "react-hot-toast";
 import { QRCodeSVG } from "qrcode.react";
@@ -172,15 +173,16 @@ export default function PaymentDetailModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [freighterReady, setFreighterReady] = useState(false);
   const [metadataExpanded, setMetadataExpanded] = useState(false);
 
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
 
   const sheetRef = useRef<HTMLDivElement>(null);
+  const { activeProvider } = useWallet();
+  const walletReady = !!activeProvider;
 
-  const { isProcessing, error: paymentError, processPayment } = usePayment();
+  const { isProcessing, error: paymentError, processPayment } = usePayment(activeProvider);
 
   useEffect(() => {
     if (isOpen) {
@@ -260,13 +262,8 @@ export default function PaymentDetailModal({
     return () => clearInterval(id);
   }, [paymentId, payment, loading, isOpen]);
 
-  /* ---------- Freighter check ---------- */
-
-  useEffect(() => {
-    isFreighterAvailable()
-      .then(setFreighterReady)
-      .catch(() => setFreighterReady(false));
-  }, []);
+  const networkPassphrase =
+    process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015";
 
   /* ---------- keyboard & focus ---------- */
 
@@ -579,61 +576,37 @@ export default function PaymentDetailModal({
                 </div>
               )}
 
-              {/* ── CTA section ── */}
-              {!isSettled && !isFailed && (
-                <div className="flex flex-col gap-3 pt-2">
-                  {freighterReady ? (
-                    <button
-                      type="button"
-                      onClick={handlePay}
-                      disabled={isProcessing}
-                      className="group relative flex h-12 w-full items-center justify-center rounded-xl bg-mint font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isProcessing ? (
-                        <span className="flex items-center gap-2">
-                          <svg
-                            className="h-4 w-4 animate-spin"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                              fill="none"
-                            />
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            />
-                          </svg>
-                          Processing…
-                        </span>
-                      ) : (
-                        "Pay with Freighter"
-                      )}
-                      <div className="absolute inset-0 -z-10 bg-mint/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
-                    </button>
-                  ) : (
-                    <div className="flex flex-col gap-3">
-                      <p className="text-center text-xs text-slate-500">
-                        Freighter wallet not detected in this browser
-                      </p>
-                      <a
-                        href="https://freighter.app/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex h-12 items-center justify-center rounded-xl border border-mint/50 font-semibold text-mint transition-all hover:bg-mint/10"
+                {/* CTA section */}
+                {!isSettled && !isFailed && (
+                  <div className="flex flex-col gap-3 pt-2">
+                    {walletReady ? (
+                      <button
+                        type="button"
+                        onClick={handlePay}
+                        disabled={isProcessing}
+                        className="group relative flex h-12 w-full items-center justify-center rounded-xl bg-mint font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Install Freighter Extension
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
+                        {isProcessing ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Processing…
+                          </span>
+                        ) : (
+                          `Pay with ${activeProvider!.name}`
+                        )}
+                        <div className="absolute inset-0 -z-10 bg-mint/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
+                      </button>
+                    ) : (
+                      <WalletSelector
+                        networkPassphrase={networkPassphrase}
+                        onConnected={() => {}}
+                      />
+                    )}
+                  </div>
+                )}
 
               {/* ── Status messages ── */}
               {isSettled && (

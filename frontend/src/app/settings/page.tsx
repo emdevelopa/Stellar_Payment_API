@@ -9,6 +9,10 @@ import {
   useMerchantApiKey,
   useMerchantHydrated,
   useSetMerchantApiKey,
+  useSetMerchantMetadata,
+  useMerchantTrustedAddresses,
+  useAddTrustedAddress,
+  useRemoveTrustedAddress,
 } from "@/lib/merchant-store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -18,8 +22,11 @@ const DEFAULT_BRANDING = {
   secondary_color: "#b8ffe2",
   background_color: "#050608",
 };
+const DEFAULT_MERCHANT_SETTINGS = {
+  send_success_emails: true,
+};
 
-type SettingsTab = "api" | "branding";
+type SettingsTab = "api" | "branding" | "notifications" | "addresses";
 
 function normalizeHexInput(value: string) {
   const trimmed = value.trim();
@@ -116,6 +123,10 @@ export default function SettingsPage() {
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const setApiKey = useSetMerchantApiKey();
+  const setMerchant = useSetMerchantMetadata();
+  const trustedAddresses = useMerchantTrustedAddresses();
+  const addTrustedAddress = useAddTrustedAddress();
+  const removeTrustedAddress = useRemoveTrustedAddress();
 
   const [revealed, setRevealed] = useState(false);
 
@@ -128,6 +139,18 @@ export default function SettingsPage() {
   const [brandingError, setBrandingError] = useState<string | null>(null);
   const [loadingBranding, setLoadingBranding] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
+  const [merchantSettings, setMerchantSettings] = useState(
+    DEFAULT_MERCHANT_SETTINGS,
+  );
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Trusted addresses state
+  const [addressLabel, setAddressLabel] = useState("");
+  const [addressValue, setAddressValue] = useState("");
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useHydrateMerchantStore();
 
@@ -154,6 +177,37 @@ export default function SettingsPage() {
 
     loadBranding();
   }, [apiKey]);
+
+  useEffect(() => {
+    if (!apiKey) return;
+
+    const loadProfile = async () => {
+      setLoadingProfile(true);
+      setProfileError(null);
+
+      try {
+        const res = await fetch(`${API_URL}/api/merchant-profile`, {
+          headers: { "x-api-key": apiKey },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load profile");
+        setMerchantSettings({
+          send_success_emails:
+            data.merchant?.merchant_settings?.send_success_emails ?? true,
+        });
+        if (data.merchant) {
+          setMerchant(data.merchant);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to load profile";
+        setProfileError(msg);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+
+    loadProfile();
+  }, [apiKey, setMerchant]);
 
   const startRotate = () => {
     setRotateError(null);
@@ -238,6 +292,81 @@ export default function SettingsPage() {
     }
   };
 
+  const saveNotificationSettings = async () => {
+    if (!apiKey) return;
+
+    setSavingProfile(true);
+    setProfileError(null);
+
+    try {
+      const res = await fetch(`${API_URL}/api/merchant-profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          merchant_settings: merchantSettings,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
+
+      setMerchantSettings({
+        send_success_emails:
+          data.merchant?.merchant_settings?.send_success_emails ?? true,
+      });
+
+      if (data.merchant) {
+        setMerchant(data.merchant);
+      }
+
+      toast.success("Notification settings saved");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save settings";
+      setProfileError(msg);
+      toast.error(msg);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+  const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
+
+  const addAddress = () => {
+    setAddressError(null);
+
+    if (!addressLabel.trim()) {
+      setAddressError("Label is required");
+      return;
+    }
+
+    if (!STELLAR_ADDRESS_RE.test(addressValue.trim())) {
+      setAddressError(
+        "Address must be a valid Stellar public key (56 characters, starts with G).",
+      );
+      return;
+    }
+
+    const newAddress = {
+      id: `addr_${Date.now()}`,
+      label: addressLabel.trim(),
+      address: addressValue.trim(),
+      created_at: new Date().toISOString(),
+    };
+
+    addTrustedAddress(newAddress);
+    setAddressLabel("");
+    setAddressValue("");
+    toast.success("Address added to trusted addresses");
+  };
+
+  const removeAddress = (id: string) => {
+    setDeletingId(id);
+    removeTrustedAddress(id);
+    setDeletingId(null);
+    toast.success("Address removed");
+  };
+
   // ── Await hydration ──────────────────────────────────────────────────────
   if (!hydrated) return null;
 
@@ -320,6 +449,28 @@ export default function SettingsPage() {
             }`}
           >
             Branding
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("notifications")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "notifications"
+                ? "bg-white text-black"
+                : "text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            Notifications
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("addresses")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "addresses"
+                ? "bg-white text-black"
+                : "text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            Trusted Addresses
           </button>
         </div>
 
@@ -446,7 +597,7 @@ export default function SettingsPage() {
               </div>
             )}
           </section>
-        </div> : (
+        </div> : activeTab === "branding" ? (
           <section className="flex flex-col gap-5">
             <div className="flex flex-col gap-1">
               <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
@@ -526,6 +677,188 @@ export default function SettingsPage() {
             >
               {savingBranding ? "Saving..." : loadingBranding ? "Loading..." : "Save Branding"}
             </button>
+          </section>
+        ) : (
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Email Notifications
+              </h2>
+              <p className="text-sm text-slate-500">
+                Control whether successful payment emails are sent to your
+                notification inbox.
+              </p>
+            </div>
+
+            {profileError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                {profileError}
+              </div>
+            )}
+
+            <label className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 p-4">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-white">
+                  Success emails
+                </span>
+                <span className="text-xs text-slate-400">
+                  Send an email when a payment is confirmed.
+                </span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={merchantSettings.send_success_emails}
+                onClick={() =>
+                  setMerchantSettings((current) => ({
+                    ...current,
+                    send_success_emails: !current.send_success_emails,
+                  }))
+                }
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  merchantSettings.send_success_emails
+                    ? "bg-mint"
+                    : "bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-black transition-transform ${
+                    merchantSettings.send_success_emails
+                      ? "translate-x-6"
+                      : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </label>
+
+            <button
+              type="button"
+              onClick={saveNotificationSettings}
+              disabled={loadingProfile || savingProfile}
+              className="h-11 rounded-xl bg-mint font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingProfile
+                ? "Saving..."
+                : loadingProfile
+                  ? "Loading..."
+                  : "Save Notification Settings"}
+            </button>
+          </section>
+        )}
+
+        {activeTab === "addresses" && (
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Trusted Addresses
+              </h2>
+              <p className="text-sm text-slate-500">
+                Save frequently used Stellar addresses for quick access when creating payments.
+              </p>
+            </div>
+
+            {addressError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                {addressError}
+              </div>
+            )}
+
+            {/* Add new address form */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-400">
+                Add New Address
+              </p>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="address-label" className="text-xs text-slate-400">
+                    Label
+                  </label>
+                  <input
+                    id="address-label"
+                    type="text"
+                    value={addressLabel}
+                    onChange={(e) => setAddressLabel(e.target.value)}
+                    className="rounded-xl border border-white/10 bg-black/40 p-2.5 text-sm text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                    placeholder="e.g. Main Wallet, Supplier ABC"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="address-value" className="text-xs text-slate-400">
+                    Stellar Address
+                  </label>
+                  <input
+                    id="address-value"
+                    type="text"
+                    value={addressValue}
+                    onChange={(e) => setAddressValue(e.target.value)}
+                    className="rounded-xl border border-white/10 bg-black/40 p-2.5 font-mono text-sm text-white placeholder:font-sans placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                    placeholder="GABC...XYZ (56 characters)"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addAddress}
+                  className="mt-1 flex h-10 items-center justify-center rounded-xl bg-mint font-semibold text-black transition-all hover:bg-glow"
+                >
+                  Add Address
+                </button>
+              </div>
+            </div>
+
+            {/* Saved addresses list */}
+            <div className="flex flex-col gap-3">
+              <h3 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Saved Addresses ({trustedAddresses.length})
+              </h3>
+              
+              {trustedAddresses.length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-center">
+                  <p className="text-sm text-slate-400">
+                    No trusted addresses saved yet. Add your first address above.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {trustedAddresses.map((addr) => (
+                    <div
+                      key={addr.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-white">
+                          {addr.label}
+                        </p>
+                        <p className="truncate font-mono text-xs text-slate-500">
+                          {addr.address.slice(0, 12)}...{addr.address.slice(-8)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(addr.address);
+                            toast.success("Address copied to clipboard");
+                          }}
+                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all hover:bg-white/10 hover:text-white"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeAddress(addr.id)}
+                          disabled={deletingId === addr.id}
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:border-red-500/50 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingId === addr.id ? "Removing..." : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         )}
       </div>

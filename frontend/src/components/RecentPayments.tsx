@@ -9,7 +9,6 @@ import {
   useMerchantHydrated,
   useMerchantId,
 } from "@/lib/merchant-store";
-import PullToRefresh from "react-simple-pull-to-refresh";
 import { usePaymentSocket } from "@/lib/usePaymentSocket";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -57,10 +56,6 @@ export default function RecentPayments({ showSkeleton = false }: { showSkeleton?
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -106,64 +101,10 @@ export default function RecentPayments({ showSkeleton = false }: { showSkeleton?
 
   usePaymentSocket(merchantId, handleConfirmed);
 
-  const fetchPayments = async (signal?: AbortSignal) => {
-    try {
-      if (!apiKey) {
-        setError("API key not found. Please register or log in.");
-        setLoading(false);
-        return;
-      }
-
-      if (page !== 1) setIsFetchingMore(true);
-
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: LIMIT.toString(),
-      });
-
-      if (filters.search) params.append("search", filters.search);
-      if (filters.status !== "all") params.append("status", filters.status);
-      if (filters.asset !== "all") params.append("asset", filters.asset);
-      if (filters.dateFrom) params.append("date_from", filters.dateFrom);
-      if (filters.dateTo) params.append("date_to", filters.dateTo);
-
-      const response = await fetch(
-        `${apiUrl}/api/payments?${params.toString()}`,
-        {
-          headers: { "x-api-key": apiKey },
-          signal,
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to fetch payments");
-
-      const data: PaginatedResponse = await response.json();
-
-      setPayments((prev) =>
-        page === 1 ? data.payments ?? [] : [...prev, ...(data.payments ?? [])]
-      );
-
-      setTotalPages(data.total_pages ?? 1);
-      setTotalCount(data.total_count ?? 0);
-      setHasMore(page < (data.total_pages ?? 1));
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Failed to load payments");
-    } finally {
-      setLoading(false);
-      setIsFetchingMore(false);
-    }
-  };
-
-
   useEffect(() => {
     if (!hydrated) return;
 
     const controller = new AbortController();
-    fetchPayments(controller.signal);
 
     const fetchPayments = async () => {
       try {
@@ -212,17 +153,16 @@ export default function RecentPayments({ showSkeleton = false }: { showSkeleton?
       } finally {
         setLoading(false);
       }
-    });
+    };
 
-    observer.observe(loadMoreRef.current);
+    fetchPayments();
 
     return () => controller.abort();
   }, [apiKey, page, hydrated, filters, t]);
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
-    setPayments([]);
+    setPage(1); // Reset to first page when filters change
   };
 
   const clearFilter = (key: keyof FilterState) => {
@@ -243,7 +183,6 @@ export default function RecentPayments({ showSkeleton = false }: { showSkeleton?
       dateTo: "",
     });
     setPage(1);
-    setPayments([]);
   };
 
   const hasActiveFilters =
@@ -692,97 +631,9 @@ export default function RecentPayments({ showSkeleton = false }: { showSkeleton?
                 {t("clearAll")}
               </button>
             </div>
-
-            {/* Filter Chips and Clear All */}
-            {hasActiveFilters && (
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <span className="text-xs text-slate-400">Active filters:</span>
-
-                {filters.search && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                    Search: &quot;{filters.search}&quot;
-                    <button
-                      onClick={() => clearFilter("search")}
-                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                      aria-label="Clear search filter"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </span>
-                )}
-
-                {filters.status !== "all" && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                    Status: {filters.status}
-                    <button
-                      onClick={() => clearFilter("status")}
-                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                      aria-label="Clear status filter"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </span>
-                )}
-
-                {filters.asset !== "all" && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                    Asset: {filters.asset}
-                    <button
-                      onClick={() => clearFilter("asset")}
-                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                      aria-label="Clear asset filter"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </span>
-                )}
-
-                {filters.dateFrom && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                    From: {filters.dateFrom}
-                    <button
-                      onClick={() => clearFilter("dateFrom")}
-                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                      aria-label="Clear from date filter"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </span>
-                )}
-
-                {filters.dateTo && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                    To: {filters.dateTo}
-                    <button
-                      onClick={() => clearFilter("dateTo")}
-                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                      aria-label="Clear to date filter"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </span>
-                )}
-
-                <button
-                  onClick={clearAllFilters}
-                  className="ml-auto text-xs font-medium text-slate-400 underline underline-offset-4 hover:text-white"
-                >
-                  Clear all
-                </button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
+      </div>
 
       {/* Results count */}
       <div className="flex items-center justify-between">
@@ -861,7 +712,12 @@ export default function RecentPayments({ showSkeleton = false }: { showSkeleton?
           </tbody>
         </table>
       </div>
-    </PullToRefresh>
 
+      <PaymentDetailModal
+        paymentId={selectedPayment || ""}
+        isOpen={isModalOpen}
+        onClose={closeModal}
+      />
+    </div>
   );
 }

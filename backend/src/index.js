@@ -121,6 +121,8 @@ app.use("/api/sessions", idempotencyMiddleware);
 app.use("/api/payments", requireApiKeyAuth());
 app.use("/api/rotate-key", requireApiKeyAuth());
 app.use("/api/merchant-branding", requireApiKeyAuth());
+app.use("/api/webhook-settings", requireApiKeyAuth());
+app.use("/api/regenerate-webhook-secret", requireApiKeyAuth());
 app.use("/api/audit-logs", requireApiKeyAuth());
 app.use("/api", authRouter);
 app.use("/api", createPaymentsRouter({ verifyPaymentRateLimit }));

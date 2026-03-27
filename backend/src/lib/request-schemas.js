@@ -172,6 +172,24 @@ export const paymentSessionZodSchema = paymentBaseSchema.extend({
   branding_overrides: sessionBrandingSchema,
 }).superRefine(applyPaymentValidationRules);
 
+export const webhookSettingsSchema = z.object({
+  webhook_url: z.preprocess((value) => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed === "" ? undefined : trimmed;
+    }
+    return value;
+  }, z
+    .string()
+    .url("webhook_url must be a valid URL")
+    .refine(
+      (val) => val.startsWith("https://"),
+      "webhook_url must use HTTPS"
+    )
+    .optional()),
+});
+
 export function formatZodError(error) {
   return error.issues?.[0]?.message || "Validation error";
 }

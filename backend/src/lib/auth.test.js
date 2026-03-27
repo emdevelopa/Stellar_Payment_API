@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiKeyAuth, hashPassword, verifyPassword } from "./auth.js";
+import { encryptSecret } from "./secret-crypto.js";
 
 function createResponse() {
   return {
@@ -51,6 +52,7 @@ describe("createApiKeyAuth", () => {
   let next;
 
   beforeEach(() => {
+    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
     maybeSingle = vi.fn();
     eq = vi.fn(() => ({ maybeSingle }));
     select = vi.fn(() => ({ eq }));
@@ -81,7 +83,7 @@ describe("createApiKeyAuth", () => {
 
     expect(from).toHaveBeenCalledWith("merchants");
     expect(select).toHaveBeenCalledWith(
-      "id, email, business_name, notification_email, branding_config, merchant_settings",
+      "id, email, business_name, notification_email, branding_config, merchant_settings, webhook_secret, payment_limits",
     );
     expect(eq).toHaveBeenCalledWith("api_key", "invalid-key");
     expect(res.status).toHaveBeenCalledWith(401);
@@ -94,7 +96,8 @@ describe("createApiKeyAuth", () => {
       id: "merchant-123",
       email: "merchant@example.com",
       business_name: "Merchant Co",
-      notification_email: "ops@example.com"
+      notification_email: "ops@example.com",
+      webhook_secret: encryptSecret("whsec_plain"),
     };
     maybeSingle.mockResolvedValue({ data: merchant, error: null });
     const req = createRequest({ "x-api-key": "  valid-key  " });
@@ -102,7 +105,10 @@ describe("createApiKeyAuth", () => {
     await middleware(req, res, next);
 
     expect(eq).toHaveBeenCalledWith("api_key", "valid-key");
-    expect(req.merchant).toEqual(merchant);
+    expect(req.merchant).toEqual({
+      ...merchant,
+      webhook_secret: "whsec_plain",
+    });
     expect(next).toHaveBeenCalledWith();
     expect(res.status).not.toHaveBeenCalled();
   });

@@ -1,3 +1,5 @@
+import { getWebhookSecretsEncryptionKey } from "./secret-crypto.js";
+
 function validateEnvironmentVariables() {
   const required = [
     'SUPABASE_URL',
@@ -5,6 +7,7 @@ function validateEnvironmentVariables() {
     'STELLAR_NETWORK',
     'DATABASE_URL',
     'REDIS_URL',
+    'WEBHOOK_SECRET_ENCRYPTION_KEY',
   ];
 
   const missing = required.filter(key => !process.env[key]);
@@ -46,6 +49,13 @@ function validateEnvironmentVariables() {
       console.error(`${key} must be a positive integer.`);
       process.exit(1);
     }
+  }
+
+  try {
+    getWebhookSecretsEncryptionKey();
+  } catch (error) {
+    console.error(`❌ ${error.message}`);
+    process.exit(1);
   }
 
   console.log('✅ Environment variables validated');

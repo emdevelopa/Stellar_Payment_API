@@ -1,6 +1,7 @@
 import express from "express";
 import { supabase } from "../lib/supabase.js";
 import { sendWebhook } from "../lib/webhooks.js";
+import { decryptSecret } from "../lib/secret-crypto.js";
 
 const router = express.Router();
 
@@ -71,7 +72,7 @@ router.post("/webhooks/test", async (req, res, next) => {
     const result = await sendWebhook(
       merchant.webhook_url,
       dummyPayload,
-      merchant.webhook_secret
+      decryptSecret(merchant.webhook_secret),
     );
 
     // 5. Return the result

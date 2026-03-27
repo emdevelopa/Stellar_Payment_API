@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { decryptSecret } from "./secret-crypto.js";
 
 const SALT_ROUNDS = 12;
 
@@ -49,6 +50,7 @@ export function createApiKeyAuth({ supabaseClient = null } = {}) {
         return res.status(401).json({ error: "Invalid API key" });
       }
 
+      merchant.webhook_secret = decryptSecret(merchant.webhook_secret);
       req.merchant = merchant;
       next();
     } catch (err) {

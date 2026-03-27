@@ -15,6 +15,7 @@ import {
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
 import { sendWebhook } from "../lib/webhooks.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
+import { decryptSecret } from "../lib/secret-crypto.js";
 
 const createPaymentRateLimit = createCreatePaymentRateLimit();
 
@@ -103,7 +104,7 @@ function createPaymentsRouter({
    *                 branding_config:
    *                   type: object
    *       200:
-   *         description: Duplicate request — cached response returned from idempotency key
+   *         description: Dry-run preview (when dry_run=true) or duplicate request response from idempotency cache
    *         content:
    *           application/json:
    *             schema:
@@ -123,6 +124,7 @@ function createPaymentsRouter({
   async function createSession(req, res, next) {
     try {
       const body = parseVersionedPaymentBody(req);
+      const isDryRun = String(req.query?.dry_run || "").toLowerCase() === "true";
 
       // Per-asset payment limit validation (#153)
       const limits = req.merchant.payment_limits;
@@ -178,6 +180,17 @@ function createPaymentsRouter({
         metadata,
         created_at: now,
       };
+
+      if (isDryRun) {
+        return res.status(200).json({
+          dry_run: true,
+          payment_id: paymentId,
+          payment_link: paymentLink,
+          status: "pending",
+          branding_config: resolvedBrandingConfig,
+          payment: payload,
+        });
+      }
 
       const { error: insertError } = await supabase
         .from("payments")
@@ -352,7 +365,7 @@ function createPaymentsRouter({
           throw updateError;
         }
 
-        const merchantSecret = data.merchants?.webhook_secret;
+        const merchantSecret = decryptSecret(data.merchants?.webhook_secret);
 
         const webhookResult = await sendWebhook(
           data.webhook_url,

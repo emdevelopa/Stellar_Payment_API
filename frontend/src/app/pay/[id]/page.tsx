@@ -188,6 +188,7 @@ export default function PaymentPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [walletReady, setWalletReady] = useState(false);
+  const [showRawIntent, setShowRawIntent] = useState(false);
 
   const { activeProvider } = useWallet();
   const { isProcessing, status: txStatus, error: paymentError, processPayment } = usePayment(activeProvider);

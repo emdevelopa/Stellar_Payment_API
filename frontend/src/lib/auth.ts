@@ -1,8 +1,9 @@
 const TOKEN_KEY = "merchant_token";
 
 export interface MerchantSession {
-  id: string;
-  email: string;
+  merchant_id: string;
+  stellar_address?: string;
+  email?: string;
   exp: number;
 }
 
@@ -25,7 +26,8 @@ export interface Merchant {
  */
 function parseJwtPayload(token: string): MerchantSession | null {
   try {
-    const [, payloadB64] = token.split(".");
+    const tokenParts = token.split(".");
+    const payloadB64 = tokenParts.length >= 2 ? tokenParts[1] : tokenParts[0];
     const json = atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/"));
     return JSON.parse(json) as MerchantSession;
   } catch {
@@ -108,10 +110,10 @@ export async function registerMerchant(
   email: string,
   business_name: string,
   notification_email: string
-): Promise<{ message: string; merchant: Merchant }> {
+): Promise<{ message: string; token?: string; merchant: Merchant }> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-  const res = await fetch(`${apiUrl}/api/merchants/register`, {
+  const res = await fetch(`${apiUrl}/api/register-merchant`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, business_name, notification_email }),
@@ -122,7 +124,11 @@ export async function registerMerchant(
     throw new Error(body.error ?? "Registration failed");
   }
 
-  return await res.json();
+  const payload = await res.json();
+  if (payload?.token) {
+    saveToken(payload.token);
+  }
+  return payload;
 }
 
 export function logout(): void {

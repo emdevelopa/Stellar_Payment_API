@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { registerMerchant, type Merchant } from "../lib/auth";
-import CopyButton from "./CopyButton";
+import { useRouter } from "next/navigation";
+import { registerMerchant } from "../lib/auth";
 import toast from "react-hot-toast";
 import {
   useSetMerchantApiKey,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/merchant-store";
 
 export default function RegistrationForm() {
+  const router = useRouter();
   const setApiKey = useSetMerchantApiKey();
   const setMerchant = useSetMerchantMetadata();
   const [email, setEmail] = useState("");
@@ -17,9 +18,6 @@ export default function RegistrationForm() {
   const [notificationEmail, setNotificationEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [registeredMerchant, setRegisteredMerchant] = useState<Merchant | null>(
-    null,
-  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,10 +30,12 @@ export default function RegistrationForm() {
         businessName,
         notificationEmail,
       );
-      setRegisteredMerchant(data.merchant);
       setApiKey(data.merchant.api_key);
       setMerchant(data.merchant);
-      toast.success("Merchant registered successfully!");
+      toast.success(
+        `Welcome to Stellar Pay, ${data.merchant.business_name}! Create your first payment to get started.`,
+      );
+      router.push("/dashboard");
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to register merchant";
@@ -45,58 +45,6 @@ export default function RegistrationForm() {
       setLoading(false);
     }
   };
-
-  if (registeredMerchant) {
-    return (
-      <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="rounded-2xl border border-mint/30 bg-mint/5 p-6 backdrop-blur">
-          <div className="flex flex-col gap-2">
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-mint">
-              Registration Success
-            </p>
-            <h2 className="text-xl font-semibold text-white">
-              Welcome, {registeredMerchant.business_name}!
-            </h2>
-            <p className="text-sm text-slate-400">
-              Your merchant account is ready. Save your API key below—you
-              won&apos;t be able to see it again.
-            </p>
-          </div>
-
-          <div className="mt-6 flex flex-col gap-3">
-            <label className="text-xs font-medium text-slate-300">
-              Your API Key
-            </label>
-            <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
-              <code className="flex-1 truncate font-mono text-sm text-mint">
-                {registeredMerchant.api_key}
-              </code>
-              <CopyButton text={registeredMerchant.api_key} />
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-3">
-            <label className="text-xs font-medium text-slate-300">
-              Webhook Secret
-            </label>
-            <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
-              <code className="flex-1 truncate font-mono text-sm text-mint">
-                {registeredMerchant.webhook_secret}
-              </code>
-              <CopyButton text={registeredMerchant.webhook_secret} />
-            </div>
-          </div>
-        </div>
-
-        <a
-          href="/"
-          className="text-center text-sm font-medium text-slate-400 hover:text-white transition-colors underline underline-offset-4"
-        >
-          Go to Dashboard
-        </a>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">

@@ -7,6 +7,7 @@ import {
   registerMerchantZodSchema,
   sessionBrandingSchema,
 } from "../lib/request-schemas.js";
+import { generateSessionToken } from "../lib/sep10-auth.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
 import { resolveMerchantSettings } from "../lib/merchant-settings.js";
 import { sendWebhook } from "../lib/webhooks.js";
@@ -96,8 +97,12 @@ router.post("/register-merchant", async (req, res, next) => {
       throw insertError;
     }
 
+    // Issue a session token so the frontend can seamlessly continue to dashboard.
+    const token = generateSessionToken(merchant.id, merchant.email);
+
     res.status(201).json({
       message: "Merchant registered successfully",
+      token,
       merchant: {
         id: merchant.id,
         email: merchant.email,

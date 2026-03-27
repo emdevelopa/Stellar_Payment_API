@@ -11,6 +11,7 @@ import merchantsRouter from "./routes/merchants.js";
 import metricsRouter from "./routes/metrics.js";
 import webhooksRouter from "./routes/webhooks.js";
 import prometheusRouter from "./routes/prometheus.js";
+import sep0001Router from "./routes/sep0001.js";
 
 import { requireApiKeyAuth } from "./lib/auth.js";
 import { isHorizonReachable } from "./lib/stellar.js";
@@ -135,6 +136,9 @@ export async function createApp({ redisClient }) {
   app.use("/api", createMerchantsRouter({ merchantRegistrationRateLimit }));
   app.use("/api", metricsRouter);
   app.use("/api", webhooksRouter);
+
+  // SEP-0001 stellar.toml endpoint (public, no auth required)
+  app.use("/", sep0001Router);
 
   // Prometheus Metrics endpoint
   app.use("/", prometheusRouter);

@@ -5,6 +5,7 @@ create table if not exists merchants (
   notification_email text not null,
   api_key text unique not null,
   webhook_secret text not null,
+  webhook_version text not null default 'v1',
   recipient text,
   branding_config jsonb,
   merchant_settings jsonb not null default '{"send_success_emails": true}'::jsonb,

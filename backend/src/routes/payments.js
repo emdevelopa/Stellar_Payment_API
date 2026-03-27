@@ -7,6 +7,10 @@ import {
   createRefundTransaction,
 } from "../lib/stellar.js";
 import { supabase } from "../lib/supabase.js";
+import { findMatchingPayment } from "../lib/stellar.js";
+import { sendWebhook } from "../lib/webhooks.js";
+import { getPayloadForVersion } from "../webhooks/versions/index.js";
+import rateLimit from "express-rate-limit";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import {
   paymentSessionZodSchema,
@@ -837,6 +841,51 @@ function createPaymentsRouter({
     return match[1]; // The base URL of the anchor's SEP-0024 API
   }
 
+/**
+ * @swagger
+ * /api/verify-payment/{id}:
+ *   post:
+ *     summary: Verify a payment on the Stellar network
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Payment ID
+ *     responses:
+ *       200:
+ *         description: Verification result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: [pending, confirmed]
+ *                 tx_id:
+ *                   type: string
+ *                 webhook:
+ *                   type: object
+ *       404:
+ *         description: Payment not found
+ */
+router.post("/verify-payment/:id", verifyPaymentRateLimit, validateUuidParam(), async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from("payments")
+      .select(
+        "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version)"
+      )
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (error) {
+      error.status = 500;
+      throw error;
+    }
   /**
    * @swagger
    * /api/anchor/sep24/deposit:
@@ -1156,6 +1205,22 @@ function createPaymentsRouter({
         });
       }
 
+    const merchantSecret = data.merchants?.webhook_secret;
+    const merchantVersion = data.merchants?.webhook_version || "v1";
+
+    const internalEventData = {
+      event: "payment.confirmed",
+      payment_id: data.id,
+      amount: data.amount,
+      asset: data.asset,
+      asset_issuer: data.asset_issuer,
+      recipient: data.recipient,
+      tx_id: match.transaction_hash
+    };
+
+    const payload = getPayloadForVersion(merchantVersion, internalEventData);
+
+    const webhookResult = await sendWebhook(data.webhook_url, payload, merchantSecret);
       // Discover the anchor's SEP-0024 server
       const transferServer = await fetchAnchorToml(domain);
 

@@ -81,6 +81,7 @@ router.post("/register-merchant", async (req, res, next) => {
       notification_email,
       api_key: apiKey,
       webhook_secret: webhookSecret,
+      webhook_version: "v1",
       merchant_settings: resolveMerchantSettings(body.merchant_settings),
       created_at: new Date().toISOString()
     };
@@ -106,6 +107,7 @@ router.post("/register-merchant", async (req, res, next) => {
         merchant_settings: resolveMerchantSettings(merchant.merchant_settings),
         api_key: merchant.api_key,
         webhook_secret: merchant.webhook_secret,
+        webhook_version: merchant.webhook_version,
         created_at: merchant.created_at
       }
     });

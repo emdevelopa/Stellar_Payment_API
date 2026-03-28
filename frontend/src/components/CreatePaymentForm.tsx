@@ -278,15 +278,19 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
 
 export default function CreatePaymentForm() {
   const t = useTranslations("createPaymentForm");
-  const [amount, setAmount] = useState("");
-  const [asset, setAsset] = useState<"XLM" | "USDC">("XLM");
-  const [recipient, setRecipient] = useState("");
-  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useLocalStorage("payment_amount", "");
+  const [asset, setAsset] = useLocalStorage<"XLM" | "USDC">(
+    "payment_asset",
+    "XLM",
+  );
+  const [recipient, setRecipient] = useLocalStorage("payment_recipient", "");
+  const [description, setDescription] = useLocalStorage(
+    "payment_description",
+    "",
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedPayment | null>(null);
-
-
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const trustedAddresses = useMerchantTrustedAddresses();
@@ -302,8 +306,6 @@ export default function CreatePaymentForm() {
     "payment_trusted_address",
     "",
   );
-
-
   useHydrateMerchantStore();
 
   // ── Rate-limit countdown ──────────────────────────────────

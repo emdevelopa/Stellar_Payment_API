@@ -213,6 +213,8 @@ export const paymentSessionZodSchema = paymentBaseSchema
 
 export const v2PaymentSessionSchema = paymentSessionZodSchema;
 
+const SAFE_HEADER_NAME_RE = /^[a-zA-Z0-9\-_]+$/;
+
 export const webhookSettingsSchema = z.object({
   webhook_url: z.preprocess(
     (value) => {
@@ -229,6 +231,14 @@ export const webhookSettingsSchema = z.object({
       .refine((val) => val.startsWith("https://"), "webhook_url must use HTTPS")
       .optional(),
   ),
+  custom_headers: z
+    .record(z.string(), z.string().min(1, "Header value must not be empty"))
+    .refine(
+      (obj) => Object.keys(obj).every((k) => SAFE_HEADER_NAME_RE.test(k)),
+      "Header names must contain only alphanumeric characters, hyphens, or underscores",
+    )
+    .optional()
+    .nullable(),
 });
 
 

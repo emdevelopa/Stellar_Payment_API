@@ -1,0 +1,54 @@
+# Webhook Event Schema Catalog
+
+This document outlines the schema for webhook events sent by the Stellar Payment API. Each event includes a unique `id`, a `type`, and a `data` payload specific to the event type.
+
+## Event Types
+
+### `payment.created`
+- **Description**: Triggered when a payment is created.
+- **Schema**:
+  ```json
+  {
+    "id": "string",
+    "type": "payment.created",
+    "created_at": "ISO 8601 timestamp",
+    "data": {
+      "payment_id": "string",
+      "amount": "number",
+      "currency": "string",
+      "merchant_id": "string"
+    }
+  }
+  ```
+
+### `payment.failed`
+- **Description**: Triggered when a payment fails.
+- **Schema**:
+  ```json
+  {
+    "id": "string",
+    "type": "payment.failed",
+    "created_at": "ISO 8601 timestamp",
+    "data": {
+      "payment_id": "string",
+      "reason": "string",
+      "merchant_id": "string"
+    }
+  }
+  ```
+
+### `payment.confirmed`
+- **Description**: Triggered when a payment is confirmed.
+- **Schema**:
+  ```json
+  {
+    "id": "string",
+    "type": "payment.confirmed",
+    "created_at": "ISO 8601 timestamp",
+    "data": {
+      "payment_id": "string",
+      "confirmed_at": "ISO 8601 timestamp",
+      "merchant_id": "string"
+    }
+  }
+  ```

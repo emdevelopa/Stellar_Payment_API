@@ -182,15 +182,54 @@ function scheduleRetries(url, payload, headers, paymentId) {
 }
 
 /**
- * Sends a signed webhook POST request to `url`.
+ * Validate and sanitise a merchant-supplied custom headers object.
+ *
+ * Accepted: plain object whose keys are safe ASCII header names and whose
+ * values are non-empty strings.
+ * Reserved system headers (Content-Type, User-Agent, Stellar-Signature) are
+ * silently dropped to prevent merchants from overriding security controls.
+ *
+ * @param {unknown} raw  The value stored in merchants.webhook_custom_headers.
+ * @returns {Record<string, string>} A safe subset of the supplied headers.
  */
-export async function sendWebhook(url, payload, secret, paymentId = null) {
+export function sanitizeCustomHeaders(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+
+  const SAFE_HEADER_NAME = /^[a-zA-Z0-9\-_]+$/;
+  const RESERVED = new Set([
+    "content-type",
+    "user-agent",
+    "stellar-signature",
+  ]);
+
+  const result = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!SAFE_HEADER_NAME.test(key)) continue;
+    if (RESERVED.has(key.toLowerCase())) continue;
+    if (typeof value !== "string" || value.trim() === "") continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+/**
+ * Sends a signed webhook POST request to `url`.
+ *
+ * @param {string}  url           Destination URL.
+ * @param {object}  payload       JSON body to send.
+ * @param {string}  secret        HMAC signing secret.
+ * @param {string|null} paymentId For delivery logging.
+ * @param {object}  [customHeaders={}] Merchant-defined extra headers.
+ */
+export async function sendWebhook(url, payload, secret, paymentId = null, customHeaders = {}) {
   if (!url) return { ok: false, skipped: true };
 
   const signingSecret = secret || process.env.WEBHOOK_SECRET || "";
   const rawBody = JSON.stringify(payload);
 
   const headers = {
+    // Merchant custom headers first so system headers always take precedence.
+    ...sanitizeCustomHeaders(customHeaders),
     "Content-Type": "application/json",
     "User-Agent": "stellar-payment-api/0.1"
   };

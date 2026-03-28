@@ -12,7 +12,7 @@ export default async function CreatePaymentPage() {
   const t = await getTranslations("createPaymentPage");
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-10 px-6 py-16">
+    <main className="mx-auto flex min-h-screen w-full min-w-0 max-w-lg flex-col justify-center gap-10 px-6 py-16">
       <header className="flex flex-col gap-3 text-center">
         <p className="font-mono text-xs uppercase tracking-[0.3em] text-mint">
           {t("eyebrow")}
@@ -25,7 +25,7 @@ export default async function CreatePaymentPage() {
         </p>
       </header>
 
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
+      <div className="min-w-0 rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
         <CreatePaymentForm />
       </div>
 

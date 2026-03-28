@@ -16,13 +16,18 @@
     "toggleMenu": "Abrir menu"
   },
   "sidebar": {
-    "dashboard": "Painel",
+    "overview": "Visao geral",
     "payments": "Pagamentos",
     "webhookLogs": "Logs de Webhook",
     "apiKeys": "Chaves API",
     "settings": "Configuracoes",
-    "status": "Status",
-    "network": "Mainnet-testnet"
+    "workspace": "Area autenticada",
+    "shortcuts": "Atalhos",
+    "createPayment": "Criar pagamento",
+    "network": "Mainnet-testnet",
+    "collapse": "Recolher barra lateral",
+    "expand": "Expandir barra lateral",
+    "close": "Fechar navegacao"
   },
   "breadcrumbs": {
     "home": "Inicio",
@@ -37,7 +42,8 @@
   },
   "copyButton": {
     "ariaLabel": "Copiar para a area de transferencia",
-    "copied": "Copiado"
+    "copied": "Copiado",
+    "copiedState": "Copiado"
   },
   "dashboardPage": {
     "title": "Visao geral do lojista",
@@ -204,6 +210,12 @@
     "recipient": "Destinatario",
     "scanToPay": "Escanear para pagar",
     "scanDescription": "Escaneie com o Freighter ou qualquer carteira Stellar",
+    "openQrModal": "Pagar com codigo QR",
+    "qrModalTitle": "Pagar com codigo QR",
+    "qrModalDescription": "Escaneie este codigo em outro dispositivo ou compartilhe com seu app de carteira.",
+    "downloadQr": "Baixar PNG",
+    "downloadQrSuccess": "Codigo QR baixado.",
+    "downloadQrError": "Nao foi possivel baixar o codigo QR.",
     "viewRawIntent": "Ver link bruto de intent",
     "hideRawIntent": "Ocultar link bruto de intent",
     "created": "Criado",
@@ -211,6 +223,15 @@
     "paymentSent": "Pagamento enviado",
     "paymentFailed": "O pagamento falhou. Tente novamente.",
     "connectedVia": "Conectado via {provider}",
+    "payInXlm": "Pagar em XLM",
+    "standardAssetOption": "Pagar a fatura em {asset}",
+    "pathPaymentOption": "Pagar em XLM",
+    "approximateCost": "Custo aproximado em XLM",
+    "merchantReceives": "O lojista recebe {amount} {asset}",
+    "quoteLoading": "Buscando rotas de pagamento em XLM...",
+    "quoteUnavailable": "O roteamento em XLM nao esta disponivel para esta fatura agora.",
+    "quoteBuffer": "Voce pode enviar ate {amount} XLM para cobrir variacoes de preco.",
+    "pathPaymentHint": "Usa Stellar path payments pela carteira conectada.",
     "approximateCostLabel": "Custo aproximado em XLM",
     "approximateCostHelp": "Valor estimado para entregar {amount} {asset} ao lojista.",
     "slippageBuffer": "Inclui margem de seguranca de {percent}%. Envio maximo: {sendMax} {asset}",

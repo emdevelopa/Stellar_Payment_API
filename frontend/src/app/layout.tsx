@@ -8,11 +8,10 @@ import ToastProvider from "@/components/ToastProvider";
 import CommandPalette from "@/components/CommandPalette";
 import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import { WalletContextProvider } from "@/lib/wallet-context";
+import { Metadata, Viewport } from "next";
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const spaceMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-mono", display: "swap" });
-
-import { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "Stellar Payment Dashboard",

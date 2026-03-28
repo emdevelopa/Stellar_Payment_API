@@ -16,13 +16,18 @@
     "toggleMenu": "Toggle menu"
   },
   "sidebar": {
-    "dashboard": "Dashboard",
+    "overview": "Overview",
     "payments": "Payments",
     "webhookLogs": "Webhook Logs",
     "apiKeys": "API Keys",
     "settings": "Settings",
-    "status": "Status",
-    "network": "Mainnet-testnet"
+    "workspace": "Authenticated workspace",
+    "shortcuts": "Shortcuts",
+    "createPayment": "Create Payment",
+    "network": "Mainnet-testnet",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "close": "Close navigation"
   },
   "breadcrumbs": {
     "home": "Home",
@@ -37,7 +42,8 @@
   },
   "copyButton": {
     "ariaLabel": "Copy to clipboard",
-    "copied": "Copied!"
+    "copied": "Copied!",
+    "copiedState": "Copied"
   },
   "dashboardPage": {
     "title": "Merchant Overview",
@@ -204,6 +210,12 @@
     "recipient": "Recipient",
     "scanToPay": "Scan to Pay",
     "scanDescription": "Scan with Freighter or any Stellar wallet",
+    "openQrModal": "Pay with QR code",
+    "qrModalTitle": "Pay with QR code",
+    "qrModalDescription": "Scan this code on another device or share it with your wallet app.",
+    "downloadQr": "Download PNG",
+    "downloadQrSuccess": "QR code downloaded.",
+    "downloadQrError": "Could not download QR code.",
     "viewRawIntent": "View raw intent link",
     "hideRawIntent": "Hide raw intent link",
     "created": "Created",
@@ -211,6 +223,15 @@
     "paymentSent": "Payment sent!",
     "paymentFailed": "Payment failed. Please try again.",
     "connectedVia": "Connected via {provider}",
+    "payInXlm": "Pay in XLM",
+    "standardAssetOption": "Pay the invoice in {asset}",
+    "pathPaymentOption": "Pay in XLM",
+    "approximateCost": "Approximate cost in XLM",
+    "merchantReceives": "Merchant receives {amount} {asset}",
+    "quoteLoading": "Checking XLM path payment routes...",
+    "quoteUnavailable": "XLM payment routing is unavailable for this invoice right now.",
+    "quoteBuffer": "You may send up to {amount} XLM to cover price movement.",
+    "pathPaymentHint": "Uses Stellar path payments under the hood through your connected wallet.",
     "approximateCostLabel": "Approximate cost in XLM",
     "approximateCostHelp": "Estimated amount to deliver {amount} {asset} to the merchant.",
     "slippageBuffer": "{percent}% safety buffer included. Max send: {sendMax} {asset}",

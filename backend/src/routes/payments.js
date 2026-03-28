@@ -12,6 +12,7 @@ import {
 } from "../lib/request-schemas.js";
 import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
+import { recaptchaMiddleware } from "../lib/recaptcha.js";
 import { sendWebhook } from "../lib/webhooks.js";
 import { sendReceiptEmail } from "../lib/email.js";
 import { renderReceiptEmail } from "../lib/email-templates.js";
@@ -264,7 +265,7 @@ function createPaymentsRouter({
     }
   }
 
-  router.post("/create-payment", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
+  router.post("/create-payment", createPaymentRateLimit, recaptchaMiddleware(), validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
   router.post("/sessions", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
 
   /**
@@ -409,7 +410,7 @@ function createPaymentsRouter({
         let query = supabase
           .from("payments")
           .select(
-            "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version, notification_email, email)"
+            "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version, webhook_custom_headers, notification_email, email)"
           );
 
         if (req.merchant?.id) {
@@ -515,7 +516,9 @@ function createPaymentsRouter({
         const webhookResult = await sendWebhook(
           data.webhook_url,
           webhookPayload,
-          merchantSecret
+          merchantSecret,
+          data.id,
+          data.merchants?.webhook_custom_headers ?? {}
         );
 
         if (!webhookResult.ok && !webhookResult.skipped) {

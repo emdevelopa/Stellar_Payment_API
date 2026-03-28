@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: light;
+  --font-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
 }
 
 :root.dark {
@@ -11,12 +13,22 @@
 }
 
 body {
-  background: radial-gradient(1200px circle at 10% -10%, #d9e8ff 0%, #f5f8ff 45%, #eef3ff 100%);
+  background: radial-gradient(
+    1200px circle at 10% -10%,
+    #d9e8ff 0%,
+    #f5f8ff 45%,
+    #eef3ff 100%
+  );
   color: #0f172a;
 }
 
 .dark body {
-  background: radial-gradient(1200px circle at 10% -10%, #15233b 0%, #0b0c10 45%, #050608 100%);
+  background: radial-gradient(
+    1200px circle at 10% -10%,
+    #15233b 0%,
+    #0b0c10 45%,
+    #050608 100%
+  );
   color: #f3f5f7;
 }
 
@@ -44,12 +56,6 @@ body {
 
 :root:not(.dark) .hover\:bg-white\/10:hover {
   background-color: rgba(15, 23, 42, 0.08);
-}
-
-@media (max-width: 767px) {
-  body.dashboard-mobile-nav {
-    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
-  }
 }
 
 .docs-prose {

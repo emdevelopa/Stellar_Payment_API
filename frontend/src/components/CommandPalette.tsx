@@ -82,6 +82,30 @@ const RegisterIcon = (
 
 const commands: Command[] = [
   {
+    id: "dashboard",
+    label: "Dashboard",
+    description: "View payments, metrics and activity",
+    href: "/dashboard",
+    icon: HomeIcon,
+    keywords: ["dashboard", "home", "overview", "payments", "activity"],
+  },
+  {
+    id: "api-keys",
+    label: "API Keys",
+    description: "Manage and rotate your API keys",
+    href: "/settings#api-keys",
+    icon: SettingsIcon,
+    keywords: ["api", "keys", "key", "rotate", "secret", "token"],
+  },
+  {
+    id: "webhooks",
+    label: "Webhooks",
+    description: "Configure webhook URL and view delivery logs",
+    href: "/settings#webhooks",
+    icon: SettingsIcon,
+    keywords: ["webhook", "webhooks", "delivery", "logs", "url", "endpoint"],
+  },
+  {
     id: "settings",
     label: "Settings",
     description: "API keys, webhook URL & merchant config",

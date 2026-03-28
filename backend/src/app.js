@@ -25,6 +25,7 @@ import {
   createVerifyPaymentRateLimit,
   createMerchantRegistrationRateLimit,
 } from "./lib/rate-limit.js";
+import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
 
 export async function createApp({ redisClient }) {
   const app = express();
@@ -183,6 +184,8 @@ export async function createApp({ redisClient }) {
       error: err.message || "Internal Server Error",
     });
   });
+
+  app.use(versionDeprecationMiddleware);
 
   return { app, io };
 }

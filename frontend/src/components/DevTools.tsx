@@ -57,8 +57,8 @@ export default function DevTools() {
       const parsed = JSON.parse(requestBody);
       setRequestBody(JSON.stringify(parsed, null, 2));
       setJsonError(null);
-    } catch (err: any) {
-      setJsonError(err.message || "Invalid JSON");
+    } catch (err: unknown) {
+      setJsonError(err instanceof Error ? err.message : "Invalid JSON");
     }
   };
 
@@ -77,8 +77,8 @@ export default function DevTools() {
             JSON.parse(requestBody);
             bodyData = requestBody;
           }
-        } catch (err: any) {
-          throw new Error(`Invalid JSON body: ${err.message}`);
+        } catch (err: unknown) {
+          throw new Error(`Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -115,9 +115,9 @@ export default function DevTools() {
       setResponseTime(Math.round(finishedAt - startedAt));
       setResponseBody(formattedBody);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       setResponseStatus(0);
-      setResponseBody(error.message || "Request failed to send. Check network or CORS.");
+      setResponseBody(error instanceof Error ? error.message : "Request failed to send. Check network or CORS.");
     } finally {
       setIsRunning(false);
     }

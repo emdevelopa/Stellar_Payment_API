@@ -13,7 +13,7 @@ import {
   useMerchantHydrated,
   useMerchantTrustedAddresses,
 } from "@/lib/merchant-store";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -284,6 +284,11 @@ export default function CreatePaymentForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedPayment | null>(null);
+  
+  const [useSessionBranding, setUseSessionBranding] = useState(false);
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  const [selectedTrustedAddress, setSelectedTrustedAddress] = useState("");
+
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const trustedAddresses = useMerchantTrustedAddresses();

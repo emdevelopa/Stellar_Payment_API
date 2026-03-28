@@ -1,6 +1,7 @@
 import HeroSection from "@/components/login/HeroSection";
 import LoginForm from "@/components/login/LoginForm";
 import Link from "next/link";
+import GuestGuard from "@/components/GuestGuard";
 
 export const metadata = {
   title: "Login - Stellar Pay",
@@ -9,6 +10,7 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
+    <GuestGuard>
     <main 
         className="relative min-h-screen flex flex-col text-[#f3f5f7] overflow-x-hidden font-sans bg-[#0b0c10] md:bg-gradient-to-r md:from-[#0b0c10] md:from-50% md:to-[#10131a] md:to-50%"
     >
@@ -46,5 +48,6 @@ export default function LoginPage() {
          </div>
       </footer>
     </main>
+    </GuestGuard>
   );
 }

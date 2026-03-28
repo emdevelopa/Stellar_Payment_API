@@ -1,5 +1,6 @@
 "use client";
 
+import GuestGuard from "@/components/GuestGuard";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useState } from "react";
@@ -541,6 +542,7 @@ function Footer() {
 
 export default function Home() {
   return (
+    <GuestGuard>
     <main className="relative min-h-screen overflow-x-hidden">
       {/* subtle grid texture */}
       <div
@@ -561,5 +563,6 @@ export default function Home() {
         <Footer />
       </div>
     </main>
+    </GuestGuard>
   );
 }

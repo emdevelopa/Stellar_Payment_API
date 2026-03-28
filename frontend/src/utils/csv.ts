@@ -1,4 +1,4 @@
-export const convertToCSV = (data: any[]) => {
+export const convertToCSV = (data: Record<string, unknown>[]) => {
   if (!data.length) return "";
 
   const headers = Object.keys(data[0]);

@@ -24,7 +24,7 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
       setApiKey(newKey);
       setStoreApiKey(newKey);
       toast.success("API Key generated successfully!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to generate API Key";
       toast.error(message);
     } finally {
@@ -40,7 +40,7 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
             <div className="flex flex-col gap-2">
               <h3 className="text-xl font-bold text-white">Generate your first API key</h3>
               <p className="text-slate-400 text-sm">
-                To start accepting payments, you'll need an API key to authenticate your server-side requests.
+                To start accepting payments, you&apos;ll need an API key to authenticate your server-side requests.
               </p>
             </div>
             
@@ -57,7 +57,7 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
             <div className="flex flex-col gap-2">
               <h3 className="text-xl font-bold text-mint">Your API Key is ready!</h3>
               <p className="text-slate-400 text-sm">
-                Copy this key and save it somewhere secure. You won't be able to see it again after closing this window.
+                Copy this key and save it somewhere secure. You won&apos;t be able to see it again after closing this window.
               </p>
             </div>
 

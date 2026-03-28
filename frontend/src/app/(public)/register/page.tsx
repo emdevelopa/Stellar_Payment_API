@@ -1,8 +1,10 @@
 import RegistrationForm from "@/components/RegistrationForm";
 import Link from "next/link";
+import GuestGuard from "@/components/GuestGuard";
 
 export default function RegisterPage() {
   return (
+    <GuestGuard>
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-10 px-6 py-16">
       <header className="flex flex-col gap-3 text-center">
         <p className="font-mono text-xs uppercase tracking-[0.3em] text-mint">Onboarding</p>
@@ -25,5 +27,6 @@ export default function RegisterPage() {
         </p>
       </footer>
     </main>
+    </GuestGuard>
   );
 }

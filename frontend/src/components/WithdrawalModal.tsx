@@ -2,9 +2,14 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAnchorServices, authenticateWithAnchor, initiateWithdrawal } from "@/lib/stellar";
+import {
+  getAnchorServices,
+  authenticateWithAnchor,
+  initiateWithdrawal,
+} from "@/lib/stellar";
 import { signWithFreighter, getFreighterPublicKey } from "@/lib/freighter";
 import toast from "react-hot-toast";
+import { Spinner } from "./ui/Spinner";
 
 interface WithdrawalModalProps {
   isOpen: boolean;
@@ -13,11 +18,20 @@ interface WithdrawalModalProps {
 
 const DEFAULT_ANCHOR = "testanchor.stellar.org";
 const SUPPORTED_ASSETS = [
-  { code: "USDC", issuer: "GBBD67V63DU7D3SXXF4SOT5O7GNCGYL65B66S3YUKG6VCH3TFRZ7I7YQ" }, // Testnet USDC
-  { code: "SRT", issuer: "GCDGUC3OCYLAU7XIK7EUBTWSOT3N4XALR6IRLKEW3V3AEL3Z5W5SOT4F" }, // Testnet SRT (Stellar Resource Token)
+  {
+    code: "USDC",
+    issuer: "GBBD67V63DU7D3SXXF4SOT5O7GNCGYL65B66S3YUKG6VCH3TFRZ7I7YQ",
+  }, // Testnet USDC
+  {
+    code: "SRT",
+    issuer: "GCDGUC3OCYLAU7XIK7EUBTWSOT3N4XALR6IRLKEW3V3AEL3Z5W5SOT4F",
+  }, // Testnet SRT (Stellar Resource Token)
 ];
 
-export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProps) {
+export default function WithdrawalModal({
+  isOpen,
+  onClose,
+}: WithdrawalModalProps) {
   const [step, setStep] = useState<"SELECT" | "AUTH" | "INTERACTIVE">("SELECT");
   const [loading, setLoading] = useState(false);
   const [interactiveUrl, setInteractiveUrl] = useState<string | null>(null);
@@ -28,7 +42,7 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
     setLoading(true);
     try {
       const publicKey = await getFreighterPublicKey();
-      
+
       // 1. Discovery
       const services = await getAnchorServices(anchorDomain);
       if (!services.webAuthEndpoint || !services.transferServer) {
@@ -41,9 +55,12 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
         publicKey,
         services.webAuthEndpoint,
         async (xdr) => {
-          const res = await signWithFreighter(xdr, "Test SDF Network ; September 2015");
+          const res = await signWithFreighter(
+            xdr,
+            "Test SDF Network ; September 2015",
+          );
           return res.signedXDR;
-        }
+        },
       );
 
       // 3. Initiate (SEP-0024)
@@ -51,7 +68,7 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
         services.transferServer,
         jwt,
         selectedAsset.code,
-        publicKey
+        publicKey,
       );
 
       setInteractiveUrl(url);
@@ -79,7 +96,10 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={() => { reset(); onClose(); }}
+          onClick={() => {
+            reset();
+            onClose();
+          }}
           className="absolute inset-0 bg-black/80 backdrop-blur-sm"
         />
 
@@ -93,14 +113,29 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
           <div className="flex items-center justify-between border-b border-white/5 p-6">
             <div>
               <h2 className="text-xl font-bold text-white">Withdraw Funds</h2>
-              <p className="text-sm text-slate-400">Via Stellar SEP-0024 Anchor</p>
+              <p className="text-sm text-slate-400">
+                Via Stellar SEP-0024 Anchor
+              </p>
             </div>
             <button
-              onClick={() => { reset(); onClose(); }}
+              onClick={() => {
+                reset();
+                onClose();
+              }}
               className="rounded-full p-2 text-slate-400 hover:bg-white/5 hover:text-white"
             >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -124,8 +159,12 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
                             : "border-white/10 bg-white/5 hover:border-white/20"
                         }`}
                       >
-                        <span className="text-lg font-bold text-white">{asset.code}</span>
-                        <span className="text-[10px] text-slate-500">{asset.issuer.slice(0, 8)}...</span>
+                        <span className="text-lg font-bold text-white">
+                          {asset.code}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {asset.issuer.slice(0, 8)}...
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -151,7 +190,7 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
                 >
                   {loading ? (
                     <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                      <Spinner size="sm" className="text-black" />
                       Processing...
                     </>
                   ) : (
@@ -171,7 +210,8 @@ export default function WithdrawalModal({ isOpen, onClose }: WithdrawalModalProp
                 </div>
                 <h3 className="text-lg font-bold text-white">Authenticating</h3>
                 <p className="mt-2 text-sm text-slate-400">
-                  Please sign the challenge transaction in your wallet to securely connect to {anchorDomain}.
+                  Please sign the challenge transaction in your wallet to
+                  securely connect to {anchorDomain}.
                 </p>
               </div>
             )}

@@ -91,7 +91,7 @@ const DEFAULT_CHECKOUT_THEME: Required<
  * Only well-formed values from the backend override defaults.
  */
 function resolveBranding(
-  config: BrandingConfig | null | undefined
+  config: BrandingConfig | null | undefined,
 ): BrandingConfig & typeof DEFAULT_CHECKOUT_THEME {
   return {
     ...DEFAULT_CHECKOUT_THEME,
@@ -110,7 +110,7 @@ function resolveBranding(
  * single application point drives the entire page palette.
  */
 function buildThemeStyle(
-  branding: ReturnType<typeof resolveBranding>
+  branding: ReturnType<typeof resolveBranding>,
 ): CSSProperties {
   return {
     "--checkout-primary": branding.primary_color,
@@ -207,7 +207,11 @@ function AssetBadge({
         className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logo} alt={name ?? asset} className="h-8 w-8 object-contain" />
+        <img
+          src={logo}
+          alt={name ?? asset}
+          className="h-8 w-8 object-contain"
+        />
       </span>
     );
   }
@@ -378,14 +382,14 @@ export default function PaymentPage() {
 
   const { activeProvider } = useWallet();
   const {
-   isProcessing,
-   status: txStatus,
-   error: paymentError,
-   processPayment,
-   processPathPayment,
- } = usePayment(activeProvider);
+    isProcessing,
+    status: txStatus,
+    error: paymentError,
+    processPayment,
+    processPathPayment,
+  } = usePayment(activeProvider);
 
-const { assets: assetMetadata } = useAssetMetadata();
+  const { assets: assetMetadata } = useAssetMetadata();
 
   // ── Fetch payment details ──────────────────────────────────────────────────
   useEffect(() => {
@@ -403,7 +407,7 @@ const { assets: assetMetadata } = useAssetMetadata();
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") return;
         setFetchError(
-          err instanceof Error ? err.message : t("loadPaymentFailed")
+          err instanceof Error ? err.message : t("loadPaymentFailed"),
         );
       } finally {
         setLoading(false);
@@ -418,7 +422,7 @@ const { assets: assetMetadata } = useAssetMetadata();
   useEffect(() => {
     if (loading || !payment) return;
     const settled = ["confirmed", "completed", "failed"].includes(
-      payment.status
+      payment.status,
     );
     if (settled) return;
 
@@ -458,7 +462,7 @@ const { assets: assetMetadata } = useAssetMetadata();
           source_account: pubKey,
         });
         const res = await fetch(
-          `${API_URL}/api/path-payment-quote/${paymentId}?${qs}`
+          `${API_URL}/api/path-payment-quote/${paymentId}?${qs}`,
         );
         if (!res.ok) {
           if (!cancelled) {
@@ -575,7 +579,7 @@ const { assets: assetMetadata } = useAssetMetadata();
       {/* ── Full-screen processing overlay ── */}
       {isProcessing && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-black/85 backdrop-blur-sm">
-          <div className="h-14 w-14 animate-spin rounded-full border-4 border-white/15 border-t-[var(--checkout-primary)]" />
+          <Spinner size="xl" />
           <div className="flex flex-col items-center gap-1 text-center">
             <p className="text-base font-semibold text-white">
               {txStatus ?? t("processingFallback")}
@@ -598,8 +602,16 @@ const { assets: assetMetadata } = useAssetMetadata();
           <div className="flex flex-col items-center gap-3 border-b border-white/10 px-8 py-10">
             <AssetBadge
               asset={payment.asset}
-              logo={assetMetadata.find((a) => a.code === payment.asset.toUpperCase())?.logo}
-              name={assetMetadata.find((a) => a.code === payment.asset.toUpperCase())?.name}
+              logo={
+                assetMetadata.find(
+                  (a) => a.code === payment.asset.toUpperCase(),
+                )?.logo
+              }
+              name={
+                assetMetadata.find(
+                  (a) => a.code === payment.asset.toUpperCase(),
+                )?.name
+              }
             />
             <div className="flex items-baseline gap-2">
               <span className="text-5xl font-bold tracking-tight text-white">

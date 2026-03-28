@@ -292,9 +292,18 @@ export default function CreatePaymentForm() {
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const trustedAddresses = useMerchantTrustedAddresses();
-  const [useSessionBranding, setUseSessionBranding] = useLocalStorage("payment_use_branding", false);
-  const [branding, setBranding] = useLocalStorage("payment_branding", DEFAULT_BRANDING);
-  const [selectedTrustedAddress, setSelectedTrustedAddress] = useLocalStorage("payment_trusted_address", "");
+  const [useSessionBranding, setUseSessionBranding] = useLocalStorage(
+    "payment_use_branding",
+    false,
+  );
+  const [branding, setBranding] = useLocalStorage(
+    "payment_branding",
+    DEFAULT_BRANDING,
+  );
+  const [selectedTrustedAddress, setSelectedTrustedAddress] = useLocalStorage(
+    "payment_trusted_address",
+    "",
+  );
 
   // localStorage-backed state (preserved from original)
   const [useSessionBranding, setUseSessionBranding] = useLocalStorage(

@@ -27,12 +27,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { localeToLanguageTag } from "@/i18n/config";
 import MetricsSkeleton from "@/components/MetricsSkeleton";
+import DensityGrid from "@/components/DensityGrid";
 
 type TimeRange = "7D" | "30D" | "1Y";
 type ExportFormat = "png" | "svg";
 
 interface VolumeDataPoint {
   date: string;
+  count: number;
   [asset: string]: number | string;
 }
 
@@ -138,8 +140,10 @@ async function exportChart(
   format: ExportFormat,
   filename: string
 ) {
-  const svg = containerRef.current?.querySelector("svg");
-  if (!svg) {
+  const svg =
+    containerRef.current?.querySelector("[data-export-chart] svg") ??
+    containerRef.current?.querySelector("svg");
+  if (!(svg instanceof SVGSVGElement)) {
     throw new Error(
       "Chart export is unavailable until the chart finishes rendering."
     );
@@ -390,6 +394,16 @@ export default function PaymentMetrics({
       assets.map((asset) => [`${asset}_ma`, maAverages[asset]?.[i] ?? 0])
     ),
   }));
+  const densityData =
+    range === "1Y"
+      ? chartData.map((dataPoint) => ({
+          date: dataPoint.date,
+          count:
+            typeof dataPoint.count === "number"
+              ? dataPoint.count
+              : Number(dataPoint.count) || 0,
+        }))
+      : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -530,82 +544,86 @@ export default function PaymentMetrics({
           </div>
         )}
 
+        {densityData.length > 0 && <DensityGrid data={densityData} />}
+
         {assets.length === 0 ? (
           <p className="py-12 text-center text-sm text-slate-500">
             {t("noPayments")}
           </p>
         ) : (
-          <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-            <LineChart
-              data={chartData}
-              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#1e293b"
-                horizontal
-                vertical={false}
-              />
-              <XAxis
-                dataKey="dateShort"
-                stroke="#64748b"
-                style={{ fontSize: "12px" }}
-              />
-              <YAxis
-                stroke="#64748b"
-                style={{ fontSize: "12px" }}
-                tickFormatter={(value) => value.toLocaleString()}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#0f172a",
-                  border: "1px solid #334155",
-                  borderRadius: "8px",
-                  padding: "8px 12px",
-                }}
-                labelStyle={{ color: "#e2e8f0", fontSize: "12px" }}
-                formatter={(value: number, name: string) => [
-                  `${value.toLocaleString()} ${name}`,
-                  name,
-                ]}
-              />
-              <Legend wrapperStyle={{ display: "none" }} />
-              {assets.map((asset, index) =>
-                hiddenAssets.has(asset) ? null : (
-                  <Line
-                    key={asset}
-                    type="monotone"
-                    dataKey={asset}
-                    name={asset}
-                    stroke={colorForAsset(asset, index)}
-                    strokeWidth={2}
-                    dot={{ fill: colorForAsset(asset, index), r: 3 }}
-                    activeDot={{ r: 5 }}
-                    isAnimationActive
-                    animationDuration={400}
-                  />
-                )
-              )}
-              {assets.map((asset, index) =>
-                hiddenAssets.has(asset) ? null : (
-                  <Line
-                    key={`${asset}_ma`}
-                    type="monotone"
-                    dataKey={`${asset}_ma`}
-                    name={`${asset} ${t("weeklyAvgLabel")}`}
-                    stroke={colorForAsset(asset, index)}
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    dot={false}
-                    activeDot={false}
-                    isAnimationActive
-                    animationDuration={400}
-                    connectNulls
-                  />
-                )
-              )}
-            </LineChart>
-          </ResponsiveContainer>
+          <div data-export-chart>
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+              <LineChart
+                data={chartData}
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#1e293b"
+                  horizontal
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="dateShort"
+                  stroke="#64748b"
+                  style={{ fontSize: "12px" }}
+                />
+                <YAxis
+                  stroke="#64748b"
+                  style={{ fontSize: "12px" }}
+                  tickFormatter={(value) => value.toLocaleString()}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#0f172a",
+                    border: "1px solid #334155",
+                    borderRadius: "8px",
+                    padding: "8px 12px",
+                  }}
+                  labelStyle={{ color: "#e2e8f0", fontSize: "12px" }}
+                  formatter={(value: number, name: string) => [
+                    `${value.toLocaleString()} ${name}`,
+                    name,
+                  ]}
+                />
+                <Legend wrapperStyle={{ display: "none" }} />
+                {assets.map((asset, index) =>
+                  hiddenAssets.has(asset) ? null : (
+                    <Line
+                      key={asset}
+                      type="monotone"
+                      dataKey={asset}
+                      name={asset}
+                      stroke={colorForAsset(asset, index)}
+                      strokeWidth={2}
+                      dot={{ fill: colorForAsset(asset, index), r: 3 }}
+                      activeDot={{ r: 5 }}
+                      isAnimationActive
+                      animationDuration={400}
+                    />
+                  )
+                )}
+                {assets.map((asset, index) =>
+                  hiddenAssets.has(asset) ? null : (
+                    <Line
+                      key={`${asset}_ma`}
+                      type="monotone"
+                      dataKey={`${asset}_ma`}
+                      name={`${asset} ${t("weeklyAvgLabel")}`}
+                      stroke={colorForAsset(asset, index)}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive
+                      animationDuration={400}
+                      connectNulls
+                    />
+                  )
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
     </div>

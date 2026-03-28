@@ -57,17 +57,16 @@ router.get("/metrics/volume", requireApiKeyAuth(), validateRequest({ query: metr
   try {
     const pool = req.app.locals.pool;
     const merchantId = req.merchant.id;
-
     const VALID_RANGES = { "7D": 7, "30D": 30, "1Y": 365 };
     const range = req.query.range;
-
     const days = VALID_RANGES[range];
 
     const query = `
       SELECT
         date_trunc('day', created_at) AS date,
         asset,
-        SUM(amount) AS volume
+        SUM(amount) AS volume,
+        COUNT(*) AS count
       FROM payments
       WHERE merchant_id = $1
         AND status = 'completed'
@@ -77,30 +76,32 @@ router.get("/metrics/volume", requireApiKeyAuth(), validateRequest({ query: metr
     `;
 
     const { rows } = await pool.query(query, [merchantId]);
-
-    // Collect all distinct assets across the result set
-    const assetSet = new Set(rows.map((r) => r.asset));
+    const assetSet = new Set(rows.map((row) => row.asset));
     const assets = Array.from(assetSet);
 
-    // Build a date-keyed map: { "2026-03-01": { XLM: 5.0, USDC: 100.0 } }
     const byDate = {};
     for (const row of rows) {
       const dateStr = row.date.toISOString().split("T")[0];
-      if (!byDate[dateStr]) byDate[dateStr] = { date: dateStr };
+      if (!byDate[dateStr]) {
+        byDate[dateStr] = { date: dateStr, count: 0 };
+      }
+
       byDate[dateStr][row.asset] = parseFloat(row.volume) || 0;
+      byDate[dateStr].count += parseInt(row.count, 10) || 0;
     }
 
-    // Fill gaps so every date in the range has an entry (0 for missing assets)
     const now = new Date();
     const result = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      const entry = byDate[dateStr] || { date: dateStr };
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const day = new Date(now);
+      day.setDate(day.getDate() - i);
+      const dateStr = day.toISOString().split("T")[0];
+      const entry = byDate[dateStr] || { date: dateStr, count: 0 };
+
       for (const asset of assets) {
         if (entry[asset] === undefined) entry[asset] = 0;
       }
+
       result.push(entry);
     }
 

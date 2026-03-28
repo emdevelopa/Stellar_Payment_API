@@ -4,7 +4,7 @@ export interface WebhookEvent {
   id: string;
   type: string; // e.g., "payment.created", "payment.failed"
   created_at: string; // ISO timestamp
-  data: Record<string, any>; // Event-specific payload
+  data: Record<string, unknown>; // Event-specific payload
 }
 
 export interface PaymentCreatedEvent extends WebhookEvent {

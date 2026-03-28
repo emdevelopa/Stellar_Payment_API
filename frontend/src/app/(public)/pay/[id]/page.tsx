@@ -17,6 +17,27 @@ import "react-loading-skeleton/dist/skeleton.css";
 import { QRCodeSVG } from "qrcode.react";
 import { localeToLanguageTag } from "@/i18n/config";
 import Confetti from "react-confetti";
+import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
+
+function ActiveViewersBadge({
+  activeViewers,
+  t,
+}: {
+  activeViewers: number;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  if (activeViewers <= 1) return null;
+
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full border border-orange-400/25 bg-orange-400/10 px-3 py-1.5 text-xs font-medium text-orange-200">
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-300/75" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-orange-300" />
+      </span>
+      {t("activeViewers", { count: activeViewers })}
+    </div>
+  );
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -403,6 +424,7 @@ export default function PaymentPage() {
   } = usePayment(activeProvider);
 
   const { assets: assetMetadata } = useAssetMetadata();
+  const activeViewers = useCheckoutPresence(paymentId);
 
   // ── Fetch payment details ──────────────────────────────────────────────────
   useEffect(() => {
@@ -696,6 +718,9 @@ export default function PaymentPage() {
       >
         {/* ── Page header — merchant logo / name ── */}
         <MerchantHeader branding={branding} paymentId={payment.id} t={t} />
+        {payment.status === "pending" && (
+          <ActiveViewersBadge activeViewers={activeViewers} t={t} />
+        )}
 
         {/* ── Main card ── */}
         <div className="rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur">

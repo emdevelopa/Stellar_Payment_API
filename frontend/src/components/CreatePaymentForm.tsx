@@ -173,10 +173,34 @@ interface SuccessCardProps {
 }
 
 function SuccessCard({ created, onReset, t }: SuccessCardProps) {
+  const [canShare, setCanShare] = useState(false);
+
   // Fire confetti once on mount
   useEffect(() => {
     fireConfetti();
+    setCanShare(
+      typeof navigator !== "undefined" &&
+        typeof navigator.share === "function",
+    );
   }, []);
+
+  const handleShare = async () => {
+    if (!canShare) return;
+
+    try {
+      await navigator.share({
+        title: t("shareTitle"),
+        text: t("shareText"),
+        url: created.payment_link,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+
+      toast.error(t("shareFailed"));
+    }
+  };
 
   return (
     <motion.div
@@ -259,6 +283,41 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
             </p>
           </div>
         </motion.div>
+
+        <motion.div variants={childVariants} className="mt-4 flex flex-wrap gap-2">
+          {canShare && (
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-mint/30 bg-mint/10 px-4 py-2 text-sm font-semibold text-mint transition-colors hover:bg-mint/15"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+              >
+                <path
+                  d="M7 12v7a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 16V4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="m8.5 7.5 3.5-3.5 3.5 3.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {t("shareLink")}
+            </button>
+          )}
+        </motion.div>
       </motion.div>
 
       {/* Reset link */}
@@ -307,6 +366,20 @@ export default function CreatePaymentForm() {
     "",
   );
   useHydrateMerchantStore();
+  const selectedTrustedAddressLabel =
+    trustedAddresses.find((address) => address.id === selectedTrustedAddress)
+      ?.label ?? null;
+  const amountPlaceholder = t("amountPlaceholder", {
+    asset,
+    exampleAmount: asset === "USDC" ? "50.00" : "15.00",
+  });
+  const recipientPlaceholder = selectedTrustedAddressLabel
+    ? t("recipientPlaceholderSelected", {
+        asset,
+        label: selectedTrustedAddressLabel,
+      })
+    : t("recipientPlaceholder", { asset });
+  const descriptionPlaceholder = t("descriptionPlaceholder", { asset });
 
   // ── Rate-limit countdown ──────────────────────────────────
   const [retryAfter, setRetryAfter] = useState(0);
@@ -500,7 +573,7 @@ export default function CreatePaymentForm() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                placeholder="0.00"
+                placeholder={amountPlaceholder}
               />
             </div>
 
@@ -580,7 +653,7 @@ export default function CreatePaymentForm() {
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
                 className="rounded-xl border border-white/10 bg-white/5 p-3 font-mono text-sm text-white placeholder:font-sans placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-                placeholder="GABC…XYZ"
+                placeholder={recipientPlaceholder}
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -603,7 +676,7 @@ export default function CreatePaymentForm() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-                placeholder="e.g. Invoice #42"
+                placeholder={descriptionPlaceholder}
               />
             </div>
 

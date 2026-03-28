@@ -12,7 +12,7 @@ export function useWebhook(url: string) {
       try {
         const parsedEvent: WebhookPayload = JSON.parse(event.data);
         setEvents((prev) => [...prev, parsedEvent]);
-      } catch (err) {
+      } catch {
         setError("Failed to parse webhook event");
       }
     };

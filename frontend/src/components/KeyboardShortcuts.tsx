@@ -69,7 +69,7 @@ export default function KeyboardShortcuts() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-black/90 p-6 shadow-2xl"
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-black/80 p-6 shadow-2xl backdrop-blur-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-6 flex items-center justify-between">
@@ -85,7 +85,7 @@ export default function KeyboardShortcuts() {
         </div>
         
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <span className="text-sm text-slate-300">New Payment</span>
             <kbd className="flex items-center gap-1 rounded border border-white/20 bg-white/5 px-2 py-1 font-mono text-xs text-slate-300 shadow-sm">
               <span>Alt</span>
@@ -94,7 +94,7 @@ export default function KeyboardShortcuts() {
             </kbd>
           </div>
           
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <span className="text-sm text-slate-300">Settings</span>
             <kbd className="flex items-center gap-1 rounded border border-white/20 bg-white/5 px-2 py-1 font-mono text-xs text-slate-300 shadow-sm">
               <span>Alt</span>
@@ -103,14 +103,14 @@ export default function KeyboardShortcuts() {
             </kbd>
           </div>
           
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <span className="text-sm text-slate-300">Focus Search</span>
             <kbd className="flex items-center gap-1 rounded border border-white/20 bg-white/5 px-2 py-1 font-mono text-xs text-slate-300 shadow-sm">
               /
             </kbd>
           </div>
           
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <span className="text-sm text-slate-300">Command Palette</span>
             <kbd className="flex items-center gap-1 rounded border border-white/20 bg-white/5 px-2 py-1 font-mono text-xs text-slate-300 shadow-sm">
               <span>Cmd/Ctrl</span>

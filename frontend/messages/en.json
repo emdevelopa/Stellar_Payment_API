@@ -110,7 +110,9 @@
     "generating": "Generating...",
     "generate": "Generate Payment Link",
     "rateLimitError": "You're creating links too quickly. Try again in {seconds} seconds.",
-    "retryWait": "Wait {seconds}s…"
+    "retryWait": "Wait {seconds}s…",
+    "integrationCode": "Integration Code",
+    "snippetsHelper": "Code snippets update automatically with your form values."
   },
   "paymentMetrics": {
     "downloadImage": "Download Image",

@@ -247,7 +247,7 @@ export default function CommandPalette() {
       <div
         role="dialog"
         aria-label="Command palette"
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-white/10 bg-night/95 shadow-2xl shadow-mint/5"
+        className="w-full max-w-lg overflow-hidden rounded-xl border border-white/10 bg-black/90 shadow-2xl shadow-mint/5 backdrop-blur-xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handlePaletteKeydown}
       >

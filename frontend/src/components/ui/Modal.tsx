@@ -32,7 +32,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
       
       {/* Modals are generally center or sliding sheet in this app. Let's make a center modal for the VRT component itself. */}
       {/* However, the PaymentDetail was a right sliding sheet. We'll build a standard modal dialog. */}
-      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl transition-all" data-testid="modal-content">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-black/80 p-6 shadow-2xl backdrop-blur-xl transition-all" data-testid="modal-content">
         <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
           <p className="font-mono text-xs uppercase tracking-[0.3em] text-mint">{title}</p>
           <button

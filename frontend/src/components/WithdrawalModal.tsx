@@ -107,10 +107,10 @@ export default function WithdrawalModal({
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-[#0A0A0A] shadow-2xl"
+          className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-black/80 shadow-2xl backdrop-blur-xl"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/5 p-6">
+          <div className="flex items-center justify-between border-b border-white/10 p-6">
             <div>
               <h2 className="text-xl font-bold text-white">Withdraw Funds</h2>
               <p className="text-sm text-slate-400">

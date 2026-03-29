@@ -161,7 +161,7 @@ export default function DensityGrid({ data }: { data: DensityPoint[] }) {
         {CELL_COLORS.map((color, index) => (
           <span
             key={color}
-            className="h-3 w-3 rounded-[3px] border border-white/5"
+            className="h-3 w-3 rounded-[3px] border border-white/10"
             style={{
               backgroundColor: color,
               boxShadow: index === CELL_COLORS.length - 1 ? "0 0 12px rgba(94, 242, 192, 0.2)" : undefined,

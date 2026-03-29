@@ -110,7 +110,9 @@
     "generating": "Generando...",
     "generate": "Generar enlace de pago",
     "rateLimitError": "Estás creando enlaces demasiado rápido. Inténtalo de nuevo en {seconds} segundos.",
-    "retryWait": "Espera {seconds}s…"
+    "retryWait": "Espera {seconds}s…",
+    "integrationCode": "Código de Integración",
+    "snippetsHelper": "Los fragmentos de código se actualizan automáticamente con los valores del formulario."
   },
   "paymentMetrics": {
     "downloadImage": "Descargar imagen",

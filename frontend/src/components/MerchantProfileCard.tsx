@@ -1,6 +1,6 @@
 "use client";
 
-import Avatar from "boring-avatars";
+import { Avatar } from "@/components/ui/Avatar";
 import Link from "next/link";
 import {
   useMerchantMetadata,
@@ -23,7 +23,8 @@ export default function MerchantProfileCard() {
   // If no merchant data, show anonymous profile
   const displayName = merchant?.business_name || merchant?.email || "Merchant";
   const email = merchant?.email || "";
-  const avatarSeed = email || "anonymous";
+  const avatarName = merchant?.business_name || merchant?.email || "Merchant";
+  const logoUrl = merchant?.logo_url || null;
 
   const handleLogout = () => {
     logout();
@@ -41,10 +42,8 @@ export default function MerchantProfileCard() {
       >
         <Avatar
           size={36}
-          name={avatarSeed}
-          variant="beam"
-          colors={["#5ef2c0", "#b8ffe2", "#0f1a2b", "#0b0c10", "#ffffff"]}
-          square={false}
+          name={avatarName}
+          src={logoUrl}
         />
         <div className="hidden text-left sm:block">
           <p className="truncate text-sm font-medium text-white">
@@ -77,21 +76,13 @@ export default function MerchantProfileCard() {
             onClick={() => setShowDropdown(false)}
           />
           
-          <div className="absolute right-0 z-50 mt-2 w-64 origin-top-right rounded-2xl border border-white/10 bg-slate-900 p-4 shadow-2xl backdrop-blur">
+          <div className="absolute right-0 z-50 mt-2 w-64 origin-top-right rounded-2xl border border-white/10 bg-black/80 p-4 shadow-2xl backdrop-blur-xl">
             {/* Profile Header */}
             <div className="mb-4 flex items-center gap-3 border-b border-white/10 pb-4">
               <Avatar
                 size={48}
-                name={avatarSeed}
-                variant="beam"
-                colors={[
-                  "#5ef2c0",
-                  "#b8ffe2",
-                  "#0f1a2b",
-                  "#0b0c10",
-                  "#ffffff",
-                ]}
-                square={false}
+                name={avatarName}
+                src={logoUrl}
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-white">

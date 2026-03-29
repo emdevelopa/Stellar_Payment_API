@@ -78,7 +78,7 @@ export default function ApiHealthBadge() {
       </span>
 
       {/* Tooltip */}
-      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-black/80 px-3 py-2 text-xs text-white opacity-0 shadow-xl backdrop-blur-xl transition-opacity group-hover:opacity-100">
         <p className="font-semibold text-center">{config.label}</p>
         {(status === "error" && errorMsg) && (
           <p className="mt-0.5 text-[10px] text-slate-400 text-center">{errorMsg}</p>

@@ -211,7 +211,7 @@ export default function Sidebar({
 
       <div className="border-t border-white/10 p-4">
         <div
-          className={`rounded-2xl border border-white/5 bg-black/40 p-4 transition-all ${isCollapsed ? "px-3" : ""}`}
+          className={`rounded-2xl border border-white/10 bg-black/40 p-4 transition-all ${isCollapsed ? "px-3" : ""}`}
         >
           {!isCollapsed && (
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -266,7 +266,7 @@ export default function Sidebar({
         initial={false}
         animate={{ x: mobileOpen ? 0 : "-100%" }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        className="fixed inset-y-0 left-0 z-[60] flex w-[86vw] max-w-[320px] flex-col border-r border-white/10 bg-[#050608]/95 backdrop-blur-xl lg:hidden"
+        className="fixed inset-y-0 left-0 z-[60] flex w-[86vw] max-w-[320px] flex-col border-r border-white/10 bg-black/90 backdrop-blur-xl lg:hidden"
       >
         {chrome}
       </motion.aside>

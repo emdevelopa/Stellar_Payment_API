@@ -34,7 +34,7 @@ export default function LoginPage() {
       </div>
 
       {/* Footer */}
-      <footer className="w-full max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between px-8 md:px-12 py-8 mt-auto z-50 text-[10px] font-bold tracking-[0.08em] text-slate-500 uppercase border-t border-white/5 md:border-t-0">
+      <footer className="w-full max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between px-8 md:px-12 py-8 mt-auto z-50 text-[10px] font-bold tracking-[0.08em] text-slate-500 uppercase border-t border-white/10 md:border-t-0">
          <div className="text-white mb-4 md:mb-0">
             Stellar Pay
          </div>

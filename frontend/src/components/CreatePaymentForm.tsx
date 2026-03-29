@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import confetti from "canvas-confetti";
 import CopyButton from "./CopyButton";
+import IntegrationCodeSnippets from "./IntegrationCodeSnippets";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import {
@@ -338,6 +339,7 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
 
 export default function CreatePaymentForm() {
   const t = useTranslations("createPaymentForm");
+  const [view, setView] = useState<"form" | "code">("form");
   const [amount, setAmount] = useLocalStorage("payment_amount", "");
   const [asset, setAsset] = useLocalStorage<"XLM" | "USDC">(
     "payment_asset",
@@ -545,15 +547,67 @@ export default function CreatePaymentForm() {
           t={t}
         />
       ) : (
-        <motion.form
+        <motion.div
           key="form"
           variants={formVariants}
           initial="visible"
           exit="exit"
-          onSubmit={handleSubmit}
           className="flex flex-col gap-6"
-          noValidate
         >
+          {/* Tab bar */}
+          <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+            <button
+              type="button"
+              onClick={() => setView("form")}
+              className={`relative flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                view === "form" ? "text-black" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {view === "form" && (
+                <motion.div
+                  layoutId="view-tab-bg"
+                  className="absolute inset-0 rounded-lg bg-mint"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{t("generate")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("code")}
+              className={`relative flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                view === "code" ? "text-black" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {view === "code" && (
+                <motion.div
+                  layoutId="view-tab-bg"
+                  className="absolute inset-0 rounded-lg bg-mint"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{t("integrationCode")}</span>
+            </button>
+          </div>
+
+          {view === "code" ? (
+            <IntegrationCodeSnippets
+              apiKey={apiKey!}
+              amount={amount}
+              asset={asset}
+              recipient={recipient}
+              description={description}
+              usdcIssuer={USDC_ISSUER}
+            />
+          ) : (
+          <motion.form
+            key="payment-form"
+            variants={formVariants}
+            initial="visible"
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-6"
+            noValidate
+          >
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
@@ -834,7 +888,9 @@ export default function CreatePaymentForm() {
             )}
             <div className="absolute inset-0 -z-10 bg-mint/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
           </button>
-        </motion.form>
+          </motion.form>
+          )}
+        </motion.div>
       )}
     </AnimatePresence>
   );

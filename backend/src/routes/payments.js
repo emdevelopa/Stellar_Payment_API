@@ -17,8 +17,7 @@ import { sendWebhook } from "../lib/webhooks.js";
 import { sendReceiptEmail } from "../lib/email.js";
 import { renderReceiptEmail } from "../lib/email-templates.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
-
-import { sendReceiptEmail } from "../lib/email.js";
+import { generatePaginationLinks } from "../lib/pagination-links.js";
 
 import {
   connectRedisClient,
@@ -420,11 +419,7 @@ function createPaymentsRouter({
         let query = supabase
           .from("payments")
           .select(
-
-            "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, notification_email, business_name)",
-          )
-
-            "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version, webhook_custom_headers, notification_email, email)"
+            "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version, webhook_custom_headers, notification_email, email, business_name)"
           );
 
         if (req.merchant?.id) {
@@ -629,6 +624,15 @@ function createPaymentsRouter({
    *                   type: integer
    *                 limit:
    *                   type: integer
+   *                 links:
+   *                   type: object
+   *                   properties:
+   *                     next:
+   *                       type: string
+   *                       description: URL to the next page
+   *                     previous:
+   *                       type: string
+   *                       description: URL to the previous page
    *       401:
    *         description: Missing or invalid API key
    */
@@ -679,6 +683,7 @@ function createPaymentsRouter({
         total_pages: totalPages,
         page,
         limit,
+        ...generatePaginationLinks(req, page, limit, totalPages),
       });
     } catch (err) {
       next(err);

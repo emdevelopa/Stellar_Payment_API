@@ -109,9 +109,28 @@ export default function PaymentHistoryPage() {
   const page = 1;
   const [totalCount, setTotalCount] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
+  const [hoveredPayment, setHoveredPayment] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [flashedIds, setFlashedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+C (Mac) or Ctrl+C (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+        if (hoveredPayment) {
+          e.preventDefault();
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          const link = `${origin}/pay/${hoveredPayment}`;
+          navigator.clipboard.writeText(link);
+          toast.success(t("linkCopied"));
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hoveredPayment, t]);
 
   const updateFilters = useCallback(
     (nextFilters: FilterState) => {
@@ -845,15 +864,31 @@ export default function PaymentHistoryPage() {
               <tr
                 key={payment.id}
                 onClick={() => handlePaymentClick(payment.id)}
-                className={`cursor-pointer transition-colors hover:bg-white/5 ${flashedIds.has(payment.id)
+                onMouseEnter={() => setHoveredPayment(payment.id)}
+                onMouseLeave={() => setHoveredPayment(null)}
+                className={`group relative cursor-pointer transition-colors hover:bg-white/5 ${flashedIds.has(payment.id)
                   ? "animate-payment-confirmed bg-green-500/10"
                   : ""
                   }`}
               >
                 <td className="px-4 py-3">
-                  <code className="text-xs text-slate-400">
-                    {payment.id.slice(0, 8)}...
-                  </code>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs text-slate-400">
+                      {payment.id.slice(0, 8)}...
+                    </code>
+                    {hoveredPayment === payment.id && (
+                      <span className="animate-in fade-in zoom-in duration-200 pointer-events-none absolute left-2 top-1 z-10 hidden rounded-md border border-white/10 bg-black/80 px-2 py-0.5 text-[10px] font-medium text-slate-300 shadow-xl lg:flex items-center gap-1.5 backdrop-blur-sm">
+                        <kbd className="rounded border border-white/20 bg-white/5 px-1 font-sans text-[9px] text-white">
+                          ⌘
+                        </kbd>{" "}
+                        +{" "}
+                        <kbd className="rounded border border-white/20 bg-white/5 px-1 font-sans text-[9px] text-white">
+                          C
+                        </kbd>{" "}
+                        to copy link
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <span

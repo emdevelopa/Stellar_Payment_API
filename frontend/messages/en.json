@@ -198,6 +198,7 @@
     "clearFromDateFilter": "Clear from date filter",
     "clearToDateFilter": "Clear to date filter",
     "clearAll": "Clear all",
+    "linkCopied": "Payment link copied to clipboard!",
     "showingResults": "Showing {shown} of {total} payments",
     "filteredSuffix": "(filters applied)",
     "tableStatus": "Status",

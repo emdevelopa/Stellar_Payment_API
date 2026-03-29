@@ -198,6 +198,7 @@
     "clearFromDateFilter": "Borrar filtro de fecha inicial",
     "clearToDateFilter": "Borrar filtro de fecha final",
     "clearAll": "Borrar todo",
+    "linkCopied": "¡Enlace de pago copiado al portapapeles!",
     "showingResults": "Mostrando {shown} de {total} pagos",
     "filteredSuffix": "(con filtros)",
     "tableStatus": "Estado",

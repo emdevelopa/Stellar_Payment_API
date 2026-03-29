@@ -16,15 +16,15 @@ function Section({
   delay?: number;
 }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 40 }}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1], delay }}
       className={className}
     >
       {children}
-    </motion.section>
+    </motion.div>
   );
 }
 
@@ -39,9 +39,9 @@ function FadeUp({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 28 }}
+      initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
+      viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay }}
       className={className}
     >
@@ -164,7 +164,7 @@ const CODE_RESPONSE = `{
 
 function HeroSection() {
   return (
-    <div className="relative flex flex-col items-center px-6 pb-24 pt-28 text-center sm:pt-36 lg:pt-44">
+    <Section className="relative flex flex-col items-center px-6 pb-24 pt-28 text-center sm:pt-36 lg:pt-44">
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-mint/[0.06] blur-[120px]" />
 
       <motion.div
@@ -230,7 +230,7 @@ function HeroSection() {
           )
         )}
       </motion.div>
-    </div>
+    </Section>
   );
 }
 
@@ -547,7 +547,7 @@ function Footer() {
 export default function Home() {
   return (
     <GuestGuard>
-    <main className="relative min-h-screen overflow-x-hidden">
+    <main className="relative min-h-screen overflow-x-hidden scroll-smooth">
       {/* subtle grid texture */}
       <div
         className="pointer-events-none absolute inset-0 z-0 opacity-[0.03]"

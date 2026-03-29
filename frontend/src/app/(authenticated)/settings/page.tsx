@@ -155,6 +155,7 @@ export default function SettingsPage() {
   const [regeneratingSecret, setRegeneratingSecret] = useState(false);
   const [confirmRegenSecret, setConfirmRegenSecret] = useState(false);
   const [webhookRevealedSecret, setWebhookRevealedSecret] = useState(false);
+  const [testingWebhook, setTestingWebhook] = useState(false);
   const [webhookVerification, setWebhookVerification] =
     useState<WebhookDomainVerification | null>(null);
   const [verifyingWebhookDomain, setVerifyingWebhookDomain] = useState(false);
@@ -240,7 +241,7 @@ export default function SettingsPage() {
     setBrandingError(null);
 
     for (const [key, color] of Object.entries(branding)) {
-      if (!HEX_COLOR_REGEX.test(color)) {
+      if (!HEX_COLOR_REGEX.test(color as string)) {
         setBrandingError(`${key} must be a valid hex color`);
         return;
       }
@@ -409,6 +410,35 @@ export default function SettingsPage() {
       toast.error(msg);
     } finally {
       setRegeneratingSecret(false);
+    }
+  };
+
+  // ── Webhook: test endpoint ────────────────────────────────────────────────
+  const testWebhook = async () => {
+    if (!apiKey) return;
+    setTestingWebhook(true);
+    setWebhookSaveError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/webhooks/test`, {
+        method: "POST",
+        headers: { "x-api-key": apiKey },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Test webhook request failed");
+      
+      const statusClass = data.status >= 200 && data.status < 300 ? "text-green-400" : "text-red-400";
+      toast.success(
+        <div className="flex flex-col">
+          <span>Test webhook sent!</span>
+          <span className="text-xs text-slate-400 mt-1">Status: <span className={statusClass}>{data.status}</span></span>
+        </div>
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to test webhook";
+      toast.error(msg);
+      setWebhookSaveError(msg);
+    } finally {
+      setTestingWebhook(false);
     }
   };
 
@@ -824,18 +854,28 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={saveWebhookUrl}
-                disabled={savingWebhook || loadingWebhook || !!webhookUrlError}
-                className="h-11 rounded-xl bg-mint font-semibold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingWebhook
-                  ? "Saving…"
-                  : loadingWebhook
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={saveWebhookUrl}
+                  disabled={savingWebhook || loadingWebhook || !!webhookUrlError}
+                  className="h-11 flex-1 rounded-xl bg-mint font-semibold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingWebhook
+                    ? "Saving…"
+                    : loadingWebhook
                     ? "Loading…"
-                  : "Save Webhook URL"}
-              </button>
+                    : "Save Webhook URL"}
+                </button>
+                <button
+                  type="button"
+                  onClick={testWebhook}
+                  disabled={testingWebhook || !webhookUrl}
+                  className="h-11 flex-1 rounded-xl border border-white/10 bg-white/5 font-semibold text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {testingWebhook ? "Testing…" : "Send Test Webhook"}
+                </button>
+              </div>
 
               {webhookUrl && webhookVerification && (
                 <div className="rounded-2xl border border-white/10 bg-black/30 p-4">

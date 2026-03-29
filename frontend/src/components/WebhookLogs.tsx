@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import WebhookLogSkeleton from "./WebhookLogSkeleton";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
 import {
@@ -172,13 +173,7 @@ export default function WebhookLogs() {
   };
 
   if (loading) {
-    return (
-      <div className="animate-pulse space-y-3">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-12 w-full rounded-lg bg-white/5" />
-        ))}
-      </div>
-    );
+    return <WebhookLogSkeleton />;
   }
 
   if (error) {

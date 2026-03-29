@@ -4,6 +4,7 @@ import { useState } from "react";
 import AuthGuard from "@/components/AuthGuard";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
+import NotificationCenter from "@/components/NotificationCenter";
 import PaymentToastListener from "@/components/PaymentToastListener";
 import Sidebar from "@/components/Sidebar";
 import { useHydrateMerchantStore } from "@/lib/merchant-store";
@@ -54,7 +55,10 @@ export default function AuthenticatedLayout({
                   </button>
                   <Breadcrumbs />
                 </div>
-                <LocaleSwitcher className="w-fit self-start sm:self-auto" />
+                <div className="flex items-center gap-4">
+                  <NotificationCenter />
+                  <LocaleSwitcher className="w-fit self-start sm:self-auto" />
+                </div>
               </div>
               <div className="h-px w-full bg-gradient-to-r from-white/10 to-transparent" />
             </header>

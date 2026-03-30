@@ -16,7 +16,7 @@ import FirstApiKeyModal from "@/components/FirstApiKeyModal";
 import FirstPaymentCelebration from "@/components/FirstPaymentCelebration";
 
 export default function DashboardPage() {
-  const t = useTranslations("dashboardPage");
+  const t = useTranslations("Dashboard");
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isFirstKeyModalOpen, setIsFirstKeyModalOpen] = useState(false);
   const hydrated = useMerchantHydrated();
@@ -27,16 +27,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (hydrated) {
-      // Give it a moment to show the skeleton before transitioning to content
-      // this avoids layout shifts between different loading states
       const timer = setTimeout(() => setLoading(false), 1000);
       return () => clearTimeout(timer);
     }
   }, [hydrated]);
 
   useEffect(() => {
-    // Show the "First Key" onboarding modal if the merchant has 0 keys
-    // We wait for the dashboard to finish initial loading first.
     if (hydrated && !loading && !apiKey) {
       const timer = setTimeout(() => {
         setIsFirstKeyModalOpen(true);
@@ -57,30 +53,27 @@ export default function DashboardPage() {
       </header>
 
       <div className="grid gap-10 lg:grid-cols-3">
-        {/* Left Column: Metrics and Activity */}
         <div className="flex flex-col gap-10 lg:col-span-2">
           <section className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold text-white">Business Overview</h2>
+            <h2 className="text-xl font-semibold text-white">
+              {t("businessOverview")}
+            </h2>
             <AnalyticsCards />
           </section>
 
           <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-white">
-                Recent Activity
+                {t("liveConfirmations")}
               </h2>
-              <Link
-                href="/payment-history"
-                className="text-sm text-mint hover:text-glow"
-              >
-                {t("viewAllPayments")} →
+              <Link href="/payments" className="text-sm text-mint hover:text-glow">
+                {t("viewAllPayments")}
               </Link>
             </div>
             <ActivityFeed />
           </section>
         </div>
 
-        {/* Right Column: Quick Actions & Guides */}
         <aside className="flex flex-col gap-8">
           <section className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
             <h3 className="mb-4 text-lg font-semibold text-white">
@@ -107,6 +100,7 @@ export default function DashboardPage() {
                 </svg>
                 {t("createPaymentLink")}
               </Link>
+
               <button
                 type="button"
                 onClick={() => setIsWithdrawOpen(true)}
@@ -129,6 +123,7 @@ export default function DashboardPage() {
                 </svg>
                 {t("withdrawFunds")}
               </button>
+
               <Link
                 href="/settings"
                 className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-300 transition-all hover:bg-white/10 hover:text-white"
@@ -153,8 +148,9 @@ export default function DashboardPage() {
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                Settings
+                {t("settings")}
               </Link>
+
               <a
                 href="/api-docs"
                 target="_blank"
@@ -176,7 +172,7 @@ export default function DashboardPage() {
                     d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                   />
                 </svg>
-                View Docs
+                {t("viewDocs")}
               </a>
             </div>
           </section>

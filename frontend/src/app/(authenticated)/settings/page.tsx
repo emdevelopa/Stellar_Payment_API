@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
+import toast from "react-hot-toast";
+import DangerZone from "@/components/DangerZone";
+import {useTranslations} from "next-intl";
 import { toast } from "sonner";
 import {
   useHydrateMerchantStore,
@@ -18,6 +21,7 @@ import EmailReceiptPreview from "@/components/EmailReceiptPreview";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+const t = useTranslations("Settings");
 const DEFAULT_BRANDING = {
   primary_color: "#5ef2c0",
   secondary_color: "#b8ffe2",
@@ -467,11 +471,9 @@ export default function SettingsPage() {
           : "text-red-400";
       toast.success(
         <div className="flex flex-col">
-          <span>Test webhook sent!</span>
-          <span className="text-xs text-slate-400 mt-1">
-            Status: <span className={statusClass}>{data.status}</span>
-          </span>
-        </div>,
+          <span>{t("testWebhookSent")}</span>
+          <span className="text-xs text-slate-400 mt-1">Status: <span className={statusClass}>{data.status}</span></span>
+        </div>
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to test webhook";

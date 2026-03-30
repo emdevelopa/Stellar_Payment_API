@@ -6,11 +6,27 @@
   },
   "localeSwitcher": {
     "label": "Idioma",
+    "ariaLabel": "Seleccionar idioma",
     "options": {
       "en": "Inglés",
       "es": "Español",
       "pt": "Portugués",
       "fr": "Francés"
     }
+  },
+  "nav": {
+    "home": "Inicio",
+    "dashboard": "Panel",
+    "payments": "Pagos",
+    "paymentHistory": "Historial de pagos",
+    "Settings": {
+  "testWebhookSent": "¡Webhook de prueba enviado!"
+},
+    "apiKeys": "Claves API",
+    "webhookLogs": "Registros de webhooks",
+    "login": "Iniciar sesión",
+    "register": "Registrarse",
+    "docs": "Documentación",
+    "toggleMenu": "Alternar menú"
   }
 }

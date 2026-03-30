@@ -5,7 +5,7 @@ import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
 import toast from "react-hot-toast";
 import DangerZone from "@/components/DangerZone";
-import {useTranslations} from "next-intl";
+import { useTranslations } from "next-intl";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
@@ -15,7 +15,6 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-const t = useTranslations("Settings");
 const DEFAULT_BRANDING = {
   primary_color: "#5ef2c0",
   secondary_color: "#b8ffe2",
@@ -130,6 +129,7 @@ function mask(key: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  const t = useTranslations("Settings");
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const setApiKey = useSetMerchantApiKey();

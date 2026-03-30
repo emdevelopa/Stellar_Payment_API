@@ -19,7 +19,9 @@
     "dashboard": "Tableau de bord",
     "payments": "Paiements",
     "paymentHistory": "Historique des paiements",
-    "settings": "Paramètres",
+    "Settings": {
+  "testWebhookSent": "Webhook de test envoyé !"
+},
     "apiKeys": "Clés API",
     "webhookLogs": "Journaux de webhooks",
     "login": "Connexion",

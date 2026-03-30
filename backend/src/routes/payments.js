@@ -6,9 +6,9 @@ import { paymentService } from "../services/paymentService.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import {
   paymentSessionZodSchema,
-  paginationQuerySchema,
   refundConfirmSchema,
-  pathPaymentQuoteQuerySchema
+  pathPaymentQuoteQuerySchema,
+  paymentsListQuerySchema
 } from "../lib/request-schemas.js";
 import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
@@ -56,6 +56,7 @@ const defaultVerifyPaymentRateLimit = rateLimit({
 
 function applyPaymentFilters(query, req) {
   const { status, asset, date_from: dateFrom, date_to: dateTo, search } = req.query || {};
+  const { created_after: createdAfter, created_before: createdBefore } = req.query || {};
 
   if (typeof status === "string" && status.length > 0) {
     query = query.eq("status", status);
@@ -68,6 +69,14 @@ function applyPaymentFilters(query, req) {
   }
   if (typeof dateTo === "string" && dateTo.length > 0) {
     query = query.lte("created_at", `${dateTo}T23:59:59.999Z`);
+  }
+
+  if (typeof createdAfter === "string" && createdAfter.length > 0) {
+    query = query.gte("created_at", createdAfter);
+  }
+
+  if (typeof createdBefore === "string" && createdBefore.length > 0) {
+    query = query.lte("created_at", createdBefore);
   }
   if (typeof search === "string" && search.trim().length > 0) {
     const term = search.trim().replaceAll(",", "\\,");
@@ -101,32 +110,6 @@ function applyMetadataFilters(query, rawQuery) {
   for (const [key, value] of Object.entries(metadataParam)) {
     if (!SAFE_METADATA_KEY_RE.test(key)) continue;
     if (typeof value !== "string") continue;
-    query = query.filter("metadata", "cs", JSON.stringify({ [key]: value }));
-  }
-  return query;
-}
-
-/**
- * Parse `metadata[key]=value` query params and apply JSONB equality filters.
- *
- * Each `metadata[key]` entry is translated to a Supabase `.filter()` call
- * using the `cs` (contains) operator against a single-key JSON object, which
- * maps to the Postgres `@>` operator on a JSONB column.
- *
- * Only safe key names (alphanumeric + _ + -) are accepted to guard against
- * SQL injection.
- */
-const SAFE_METADATA_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
-
-function applyMetadataFilters(query, rawQuery) {
-  const metadataParam = rawQuery.metadata;
-  if (!metadataParam || typeof metadataParam !== "object" || Array.isArray(metadataParam)) {
-    return query;
-  }
-  for (const [key, value] of Object.entries(metadataParam)) {
-    if (!SAFE_METADATA_KEY_RE.test(key)) continue;
-    if (typeof value !== "string") continue;
-    // Use JSONB containment: metadata @> '{"key": "value"}'
     query = query.filter("metadata", "cs", JSON.stringify({ [key]: value }));
   }
   return query;
@@ -704,7 +687,7 @@ function createPaymentsRouter({
    *       401:
    *         description: Missing or invalid API key
    */
-  router.get("/payments", validateRequest({ query: paginationQuerySchema }), async (req, res, next) => {
+  router.get("/payments", validateRequest({ query: paymentsListQuerySchema }), async (req, res, next) => {
     try {
       let page = parseInt(req.query.page, 10) || 1;
       let limit = parseInt(req.query.limit, 10) || 10;

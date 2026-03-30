@@ -67,7 +67,11 @@ CREATE_PAYMENT_RATE_LIMIT_WINDOW_MS=60000
 ```
 
 4. Apply schema in Supabase:
-- Use `backend/sql/schema.sql` in Supabase SQL editor.
+- Run database migrations:
+```bash
+cd backend
+npm run migrate
+```
 
 5. Run the API:
 ```bash

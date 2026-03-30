@@ -282,6 +282,43 @@ export const paginationQuerySchema = z.object({
   ),
 });
 
+export const paymentsListQuerySchema = paginationQuerySchema
+  .extend({
+    client_id: optionalTrimmedString(),
+    status: optionalTrimmedString(),
+    asset: optionalTrimmedString(),
+    search: optionalTrimmedString(),
+    date_from: optionalTrimmedString(),
+    date_to: optionalTrimmedString(),
+    created_after: optionalTrimmedString().refine(
+      (value) => {
+        if (!value) return true;
+        return z.string().datetime({ offset: true }).safeParse(value).success ||
+          z.string().datetime().safeParse(value).success;
+      },
+      "created_after must be a valid ISO8601 datetime",
+    ),
+    created_before: optionalTrimmedString().refine(
+      (value) => {
+        if (!value) return true;
+        return z.string().datetime({ offset: true }).safeParse(value).success ||
+          z.string().datetime().safeParse(value).success;
+      },
+      "created_before must be a valid ISO8601 datetime",
+    ),
+    metadata: z.unknown().optional(),
+  })
+  .refine(
+    (val) => {
+      if (!val.created_after || !val.created_before) return true;
+      return new Date(val.created_after).getTime() <= new Date(val.created_before).getTime();
+    },
+    {
+      message: "created_after must be before or equal to created_before",
+      path: ["created_after"],
+    },
+  );
+
 // ─── Authentication Schemas ────────────────────────────────────────────────
 
 export const authChallengeSchema = z.object({

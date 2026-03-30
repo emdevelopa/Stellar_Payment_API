@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import CopyButton from "@/components/CopyButton";
 import { useMerchantApiKey } from "@/lib/merchant-store";
+import ApiUsageChart from "@/components/ApiUsageChart";
+import { InfoTooltip } from "@/components/InfoTooltip";
 
 type SandboxExample = {
   id: string;
@@ -220,9 +222,27 @@ export default function DevSandbox() {
         </p>
       </div>
 
+      <ApiUsageChart />
+
       <div className="grid gap-4 rounded-xl border border-white/10 bg-black/20 p-4 lg:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-xs uppercase tracking-wider text-slate-400">
           API Base URL
+          <InfoTooltip
+            className="normal-case"
+            content={
+              <span>
+                Use your backend origin for local or deployed testing.
+                <br />
+                Example:
+                <br />
+                <code className="text-[11px] text-mint">
+                  https://api.yourdomain.com
+                </code>
+              </span>
+            }
+          >
+            <span tabIndex={0}>help</span>
+          </InfoTooltip>
           <input
             value={apiBaseUrl}
             onChange={(event) => setApiBaseUrl(event.target.value)}
@@ -232,6 +252,17 @@ export default function DevSandbox() {
 
         <label className="flex flex-col gap-1.5 text-xs uppercase tracking-wider text-slate-400">
           API Key (Optional)
+          <InfoTooltip
+            className="normal-case"
+            content={
+              <span>
+                Required for protected endpoints like create payment, metrics, and
+                list payments.
+              </span>
+            }
+          >
+            <span tabIndex={0}>when needed</span>
+          </InfoTooltip>
           <input
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}

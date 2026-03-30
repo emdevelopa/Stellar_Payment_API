@@ -132,9 +132,10 @@ export default function CopyButton({ text, className = "" }: CopyButtonProps) {
   return (
     <div className="relative inline-flex items-center">
       <motion.button
+        type="button"
         onClick={handleCopy}
         aria-label={t("ariaLabel")}
-        className={`relative overflow-hidden rounded-lg border border-white/10 bg-black/20 p-1.5 text-slate-400 transition-all hover:border-mint/40 hover:text-mint active:scale-95 ${className}`}
+        className={`relative overflow-hidden rounded-lg border border-white/10 bg-black/20 p-1.5 text-slate-300 transition-all hover:border-mint/40 hover:text-mint active:scale-95 ${className}`}
         whileTap={{ scale: 0.95 }}
         whileHover={{ scale: 1.05 }}
         variants={glitchButtonVariants}
@@ -181,6 +182,7 @@ export default function CopyButton({ text, className = "" }: CopyButtonProps) {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2.5}
+                aria-hidden="true"
                 initial={{ scale: 0, rotate: -180, opacity: 0 }}
                 animate={{ scale: 1, rotate: 0, opacity: 1 }}
                 exit={{ scale: 0, rotate: 180, opacity: 0 }}
@@ -213,6 +215,7 @@ export default function CopyButton({ text, className = "" }: CopyButtonProps) {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2}
+                aria-hidden="true"
                 initial={{ scale: 1, opacity: 1 }}
                 animate={{ scale: copied ? 0 : 1, opacity: copied ? 0 : 1 }}
                 exit={{ scale: 0, opacity: 0 }}

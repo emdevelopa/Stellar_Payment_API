@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "next-intl";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
   useMerchantHydrated,
 } from "@/lib/merchant-store";
+import {
+  useDisplayPreferences,
+  formatAmount,
+} from "@/lib/display-preferences";
 
 interface MetricsResponse {
   total_volume: number;
@@ -28,6 +33,8 @@ export default function AnalyticsCards() {
   
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
+  const locale = useLocale();
+  const { hideCents } = useDisplayPreferences();
 
   useHydrateMerchantStore();
 
@@ -93,7 +100,9 @@ export default function AnalyticsCards() {
           Total Volume (7D)
         </p>
         <div className="mt-4 flex items-baseline gap-2">
-          <p className="text-4xl font-bold text-mint">{totalVolume.toLocaleString()}</p>
+          <p className="text-4xl font-bold text-mint">
+            {formatAmount(totalVolume, locale, hideCents)}
+          </p>
           <p className="text-sm text-slate-400">XLM/USDC</p>
         </div>
       </div>

@@ -217,6 +217,7 @@ function ChartExportButton({
           type="button"
           disabled={exporting}
           className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-mint/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={exporting ? t("exporting") : t("downloadImage")}
         >
           <svg
             viewBox="0 0 24 24"
@@ -224,6 +225,7 @@ function ChartExportButton({
             fill="none"
             stroke="currentColor"
             strokeWidth={1.8}
+            aria-hidden="true"
           >
             <path d="M12 4v10" strokeLinecap="round" strokeLinejoin="round" />
             <path
@@ -373,6 +375,7 @@ export default function PaymentMetrics({
       <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-6 text-center">
         <p className="text-sm text-yellow-400">{error}</p>
         <button
+          type="button"
           onClick={() => setError(null)}
           className="mt-3 text-xs text-slate-400 underline"
         >
@@ -410,54 +413,54 @@ export default function PaymentMetrics({
       {summary && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
               {t("sevenDayVolume")}
             </p>
             <div className="mt-2 flex items-baseline gap-2">
               <p className="text-3xl font-bold text-mint">
                 {summary.total_volume.toLocaleString()}
               </p>
-              <p className="text-sm text-slate-400">XLM</p>
+              <p className="text-sm text-slate-300">XLM</p>
             </div>
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
               {t("totalPayments")}
             </p>
             <div className="mt-2 flex items-baseline gap-2">
               <p className="text-3xl font-bold text-mint">
                 {summary.total_payments}
               </p>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-300">
                 {t("paymentsCount", { count: summary.total_payments })}
               </p>
             </div>
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
               Confirmed
             </p>
             <div className="mt-2 flex items-baseline gap-2">
               <p className="text-3xl font-bold text-green-400">
                 {summary.confirmed_count}
               </p>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-300">
                 {summary.confirmed_count === 1 ? "intent" : "intents"}
               </p>
             </div>
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
+            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
               Success Rate
             </p>
             <div className="mt-2 flex items-baseline gap-2">
               <p className="text-3xl font-bold text-green-400">
                 {summary.success_rate}
               </p>
-              <p className="text-sm text-slate-400">%</p>
+              <p className="text-sm text-slate-300">%</p>
             </div>
           </div>
         </div>
@@ -470,7 +473,7 @@ export default function PaymentMetrics({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="font-semibold text-white">{t("chartTitle")}</h3>
-            <p className="text-xs text-slate-400">{t("chartSubtitle")}</p>
+            <p className="text-xs text-slate-300">{t("chartSubtitle")}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -478,11 +481,12 @@ export default function PaymentMetrics({
               {TIME_RANGES.map((nextRange) => (
                 <button
                   key={nextRange}
+                  type="button"
                   onClick={() => setRange(nextRange)}
                   className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                     range === nextRange
                       ? "bg-white/10 text-white"
-                      : "text-slate-400 hover:text-white"
+                      : "text-slate-300 hover:text-white"
                   }`}
                   aria-pressed={range === nextRange}
                   aria-label={t("showRange", {
@@ -518,8 +522,9 @@ export default function PaymentMetrics({
               return (
                 <button
                   key={asset}
+                  type="button"
                   onClick={() => toggleAsset(asset)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-opacity ${
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-opacity focus-visible:opacity-100 ${
                     hidden ? "opacity-40" : "opacity-100"
                   }`}
                   style={{ borderColor: color, color }}

@@ -7,6 +7,7 @@ import LocaleSwitcher from "@/components/LocaleSwitcher";
 import NotificationCenter from "@/components/NotificationCenter";
 import PaymentToastListener from "@/components/PaymentToastListener";
 import Sidebar from "@/components/Sidebar";
+import SupportOverlay from "@/components/SupportOverlay";
 import { useHydrateMerchantStore } from "@/lib/merchant-store";
 import { motion } from "framer-motion";
 
@@ -21,7 +22,7 @@ export default function AuthenticatedLayout({
 
   return (
     <AuthGuard>
-      <div className="flex min-h-screen overflow-x-hidden bg-black">
+      <div className="dashboard-shell flex min-h-screen overflow-x-hidden bg-black">
         <Sidebar
           mobileOpen={mobileSidebarOpen}
           onMobileOpenChange={setMobileSidebarOpen}
@@ -38,12 +39,15 @@ export default function AuthenticatedLayout({
                     onClick={() => setMobileSidebarOpen(true)}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
                     aria-label="Open navigation menu"
+                    aria-controls="dashboard-sidebar-mobile"
+                    aria-expanded={mobileSidebarOpen}
                   >
                     <svg
                       className="h-5 w-5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -73,6 +77,7 @@ export default function AuthenticatedLayout({
             </motion.section>
           </div>
         </main>
+        <SupportOverlay />
       </div>
     </AuthGuard>
   );

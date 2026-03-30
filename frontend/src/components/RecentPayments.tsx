@@ -7,6 +7,7 @@ import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import toast from "react-hot-toast";
 import PaymentDetailModal from "@/components/PaymentDetailModal";
+import PaymentDetailsSheet from "@/components/PaymentDetailsSheet";
 import ExportCsvButton from "@/components/ExportCsvButton";
 import { localeToLanguageTag } from "@/i18n/config";
 import {
@@ -181,6 +182,7 @@ export default function RecentPayments({
   const [totalCount, setTotalCount] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [flashedIds, setFlashedIds] = useState<Set<string>>(new Set());
 
   const updateFilters = useCallback(
@@ -356,7 +358,7 @@ export default function RecentPayments({
 
   const handlePaymentClick = (paymentId: string) => {
     setSelectedPayment(paymentId);
-    setIsModalOpen(true);
+    setIsSheetOpen(true);
   };
 
   const handleDownloadCSV = () => {
@@ -381,6 +383,11 @@ export default function RecentPayments({
 
   const closeModal = () => {
     setIsModalOpen(false);
+    setSelectedPayment(null);
+  };
+
+  const closeSheet = () => {
+    setIsSheetOpen(false);
     setSelectedPayment(null);
   };
 
@@ -1113,6 +1120,12 @@ export default function RecentPayments({
         paymentId={selectedPayment}
         isOpen={isModalOpen}
         onClose={closeModal}
+      />
+
+      <PaymentDetailsSheet
+        paymentId={selectedPayment}
+        isOpen={isSheetOpen}
+        onClose={closeSheet}
       />
     </div>
   );

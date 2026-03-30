@@ -8,6 +8,7 @@ import ToastProvider from "@/components/ToastProvider";
 import CommandPalette from "@/components/CommandPalette";
 import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import { WalletContextProvider } from "@/lib/wallet-context";
+import { DisplayPreferencesProvider } from "@/lib/display-preferences";
 import { Metadata, Viewport } from "next";
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -60,14 +61,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={`${spaceGrotesk.variable} ${spaceMono.variable} min-h-screen font-sans`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
-            <WalletContextProvider>
-              <ToastProvider />
-              <CommandPalette />
-              <KeyboardShortcuts />
-              <ErrorBoundary>
-                {children}
-              </ErrorBoundary>
-            </WalletContextProvider>
+            <DisplayPreferencesProvider>
+              <WalletContextProvider>
+                <ToastProvider />
+                <CommandPalette />
+                <KeyboardShortcuts />
+                <ErrorBoundary>
+                  {children}
+                </ErrorBoundary>
+              </WalletContextProvider>
+            </DisplayPreferencesProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

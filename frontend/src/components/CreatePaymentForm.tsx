@@ -5,9 +5,10 @@ import { useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import confetti from "canvas-confetti";
 import CopyButton from "./CopyButton";
+import { toast } from "sonner";
 import IntegrationCodeSnippets from "./IntegrationCodeSnippets";
-import toast from "react-hot-toast";
 import Link from "next/link";
+import { InfoTooltip } from "./InfoTooltip";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
@@ -354,6 +355,7 @@ export default function CreatePaymentForm() {
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [webhookUrlError, setWebhookUrlError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedPayment | null>(null);
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
@@ -384,7 +386,41 @@ export default function CreatePaymentForm() {
         label: selectedTrustedAddressLabel,
       })
     : t("recipientPlaceholder", { asset });
-  const descriptionPlaceholder = t("descriptionPlaceholder", { asset });
+  const validateAmount = (value: string) => {
+    const numAmount = parseFloat(value);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return "Amount must be greater than 0.";
+    }
+    return null;
+  };
+
+  const validateRecipient = (value: string) => {
+    if (!STELLAR_ADDRESS_RE.test(value.trim())) {
+      return "Must be a valid Stellar public key (56 characters, starts with G).";
+    }
+    return null;
+  };
+
+  const validateWebhookUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return "Webhook URL must start with http:// or https://";
+      }
+    } catch {
+      return "Enter a valid webhook URL.";
+    }
+    return null;
+  };
+
+  const isFormValid =
+    !validateAmount(amount) &&
+    !validateRecipient(recipient) &&
+    !validateWebhookUrl(description) &&
+    amount.trim().length > 0 &&
+    recipient.trim().length > 0;
 
   // ── Rate-limit countdown ──────────────────────────────────
   const [retryAfter, setRetryAfter] = useState(0);
@@ -419,19 +455,15 @@ export default function CreatePaymentForm() {
     setError(null);
 
     // Client-side validation
-    let hasError = false;
+    const nextAmountError = validateAmount(amount);
+    const nextRecipientError = validateRecipient(recipient);
+    const nextWebhookUrlError = validateWebhookUrl(description);
+    setAmountError(nextAmountError);
+    setRecipientError(nextRecipientError);
+    setWebhookUrlError(nextWebhookUrlError);
+    if (nextAmountError || nextRecipientError || nextWebhookUrlError) return;
+
     const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      setAmountError("Amount must be greater than 0.");
-      hasError = true;
-    }
-    if (!STELLAR_ADDRESS_RE.test(recipient.trim())) {
-      setRecipientError(
-        "Must be a valid Stellar public key (56 characters, starts with G).",
-      );
-      hasError = true;
-    }
-    if (hasError) return;
 
     setLoading(true);
     try {
@@ -495,6 +527,7 @@ export default function CreatePaymentForm() {
     setError(null);
     setAmountError(null);
     setRecipientError(null);
+    setWebhookUrlError(null);
     setRetryAfter(0);
   };
 
@@ -637,7 +670,7 @@ export default function CreatePaymentForm() {
                 value={amount}
                 onChange={(e) => {
                   setAmount(e.target.value);
-                  setAmountError(null);
+                  setAmountError(validateAmount(e.target.value));
                 }}
                 aria-invalid={!!amountError}
                 aria-describedby={amountError ? "amount-error" : undefined}
@@ -724,6 +757,21 @@ export default function CreatePaymentForm() {
                 className="text-xs font-medium uppercase tracking-wider text-slate-400"
               >
                 {t("recipientAddress")}
+                <InfoTooltip
+                  className="ml-2"
+                  content={
+                    <span>
+                      Use a valid Stellar public key that starts with G and is 56
+                      characters long. Example:
+                      <br />
+                      <code className="text-[11px] text-mint">
+                        GDQP2KPQGKIH...MBCQ4MMR
+                      </code>
+                    </span>
+                  }
+                >
+                  <span tabIndex={0}>What is this?</span>
+                </InfoTooltip>
               </label>
               <input
                 id="recipient"
@@ -732,7 +780,7 @@ export default function CreatePaymentForm() {
                 value={recipient}
                 onChange={(e) => {
                   setRecipient(e.target.value);
-                  setRecipientError(null);
+                  setRecipientError(validateRecipient(e.target.value));
                 }}
                 aria-invalid={!!recipientError}
                 aria-describedby={
@@ -764,15 +812,39 @@ export default function CreatePaymentForm() {
                 <span className="normal-case text-slate-600">
                   ({t("optional")})
                 </span>
+                <InfoTooltip
+                  className="ml-2"
+                  content={
+                    <span>
+                      If you add a webhook URL here, use a full URL like
+                      <br />
+                      <code className="text-[11px] text-mint">
+                        https://example.com/api/webhooks/stellar
+                      </code>
+                    </span>
+                  }
+                >
+                  <span tabIndex={0}>Webhook URL help</span>
+                </InfoTooltip>
               </label>
               <input
                 id="description"
                 type="text"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-                placeholder={descriptionPlaceholder}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setWebhookUrlError(validateWebhookUrl(e.target.value));
+                }}
+                aria-invalid={Boolean(webhookUrlError)}
+                aria-describedby={webhookUrlError ? "webhook-url-error" : undefined}
+                className={`rounded-xl border bg-white/5 p-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 ${webhookUrlError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-mint/50 focus:ring-mint/50"}`}
+                placeholder="Optional memo or webhook URL (https://...)"
               />
+              {webhookUrlError && (
+                <p id="webhook-url-error" className="text-xs text-red-400" role="alert">
+                  {webhookUrlError}
+                </p>
+              )}
             </div>
 
             {/* Branding panel */}
@@ -860,7 +932,7 @@ export default function CreatePaymentForm() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !isFormValid}
             className="group relative flex h-12 items-center justify-center rounded-xl bg-mint px-6 font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? (

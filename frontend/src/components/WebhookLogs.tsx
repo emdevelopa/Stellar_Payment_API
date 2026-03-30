@@ -4,20 +4,14 @@ import { useEffect, useState } from "react";
 import WebhookLogSkeleton from "./WebhookLogSkeleton";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
+import WebhookDetailModal, { WebhookLog } from "./WebhookDetailModal";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
   useMerchantHydrated,
 } from "@/lib/merchant-store";
 
-interface WebhookLog {
-  id: string;
-  payment_id: string;
-  status_code: number;
-  event: string | null;
-  url: string;
-  created_at: string;
-}
+
 
 function statusClasses(statusCode: number) {
   if (statusCode >= 200 && statusCode < 300) {
@@ -41,6 +35,7 @@ export default function WebhookLogs() {
 
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
+  const [viewingLog, setViewingLog] = useState<WebhookLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +167,8 @@ export default function WebhookLogs() {
     }
   };
 
+
+
   if (loading) {
     return <WebhookLogSkeleton />;
   }
@@ -258,8 +255,12 @@ export default function WebhookLogs() {
               const selected = selectedLogIds.includes(log.id);
 
               return (
-                <tr key={log.id} className="transition-colors hover:bg-white/5">
-                  <td className="px-4 py-3">
+                <tr 
+                  key={log.id} 
+                  className="group transition-colors hover:bg-white/5 cursor-pointer"
+                  onClick={() => setViewingLog(log)}
+                >
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-white/20 bg-transparent text-mint focus:ring-mint disabled:cursor-not-allowed disabled:opacity-40"
@@ -286,7 +287,7 @@ export default function WebhookLogs() {
                     {log.url}
                   </td>
                   <td className="hidden px-4 py-3 text-slate-400 md:table-cell">
-                    {new Date(log.created_at).toLocaleString()}
+                    {new Date(log.timestamp).toLocaleString()}
                   </td>
                 </tr>
               );
@@ -294,6 +295,12 @@ export default function WebhookLogs() {
           </tbody>
         </table>
       </div>
+
+      <WebhookDetailModal
+        isOpen={!!viewingLog}
+        onClose={() => setViewingLog(null)}
+        log={viewingLog}
+      />
     </div>
   );
 }

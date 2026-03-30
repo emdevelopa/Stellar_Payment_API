@@ -6,10 +6,14 @@ import { BellIcon } from "@heroicons/react/24/outline";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+interface Notification {
+  message: string;
+}
+
 export default function NotificationCenter() {
   const apiKey = useMerchantApiKey();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -23,7 +27,7 @@ export default function NotificationCenter() {
         const data = await res.json();
         setUnreadCount(data.unreadCount || 0);
         setNotifications(data.notifications || []);
-      } catch (err) {
+      } catch {
         // silently fail
       }
     };

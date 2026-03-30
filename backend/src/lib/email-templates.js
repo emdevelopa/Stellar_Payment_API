@@ -5,7 +5,8 @@
  * @returns {string} HTML string
  */
 export function renderReceiptEmail({ payment, merchant }) {
-  const merchantName = merchant?.name || "Merchant";
+  const merchantName = merchant?.business_name || "Merchant";
+  const logoUrl = merchant?.branding_config?.logo_url;
   const amount = payment?.amount ?? "—";
   const asset = payment?.asset ?? "—";
   const recipient = payment?.recipient ?? "—";
@@ -30,7 +31,12 @@ export function renderReceiptEmail({ payment, merchant }) {
 
           <!-- Header -->
           <tr>
-            <td style="background:#0f172a;padding:28px 32px;">
+            <td style="background:#0f172a;padding:28px 32px;text-align:center;">
+              ${
+                logoUrl
+                  ? `<img src="${logoUrl}" alt="${merchantName}" style="height:48px;width:auto;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />`
+                  : ""
+              }
               <p style="margin:0;font-size:18px;font-weight:700;color:#f8fafc;letter-spacing:0.5px;">
                 ${merchantName}
               </p>

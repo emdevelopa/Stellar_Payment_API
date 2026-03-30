@@ -32,7 +32,7 @@ export default function FirstPaymentCelebration() {
         if (paymentsCount === 1) {
           triggerCelebration();
         }
-      } catch (err) {
+      } catch {
         // silent fail
       }
     };
@@ -110,7 +110,7 @@ export default function FirstPaymentCelebration() {
             onClick={() => setShowModal(false)}
             className="flex items-center justify-center rounded-xl border border-white/10 px-6 py-3 font-semibold text-slate-300 transition-all hover:bg-white/5"
           >
-            I'll do it later
+            I&apos;ll do it later
           </button>
         </div>
       </div>

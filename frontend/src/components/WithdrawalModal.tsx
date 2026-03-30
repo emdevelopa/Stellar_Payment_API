@@ -8,8 +8,8 @@ import {
   initiateWithdrawal,
 } from "@/lib/stellar";
 import { signWithFreighter, getFreighterPublicKey } from "@/lib/freighter";
-import toast from "react-hot-toast";
-import { Spinner } from "./ui/Spinner";
+import { toast } from "sonner";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface WithdrawalModalProps {
   isOpen: boolean;

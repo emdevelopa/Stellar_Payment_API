@@ -45,6 +45,7 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
             </div>
             
             <button
+              type="button"
               onClick={handleGenerate}
               disabled={loading}
               className="w-full rounded-xl bg-mint py-3 font-bold text-black transition-all hover:bg-glow disabled:opacity-50"
@@ -72,15 +73,17 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-white transition-all hover:bg-white/10"
+                aria-label="View API documentation in a new tab"
               >
                 View API Documentation
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
               </a>
               <button
+                type="button"
                 onClick={onClose}
-                className="w-full text-center text-sm text-slate-500 hover:text-white transition-colors"
+                className="w-full text-center text-sm text-slate-400 transition-colors hover:text-white"
               >
                 Done
               </button>

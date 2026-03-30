@@ -3,7 +3,7 @@
 import { useMerchantApiKey } from "@/lib/merchant-store";
 import { useState } from "react";
 import CopyButton from "@/components/CopyButton";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 
 export default function ApiKeysPage() {
   const storedApiKey = useMerchantApiKey();

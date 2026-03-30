@@ -1,17 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useDropzone } from "react-dropzone";
 import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
 import toast from "react-hot-toast";
 import DangerZone from "@/components/DangerZone";
 import {useTranslations} from "next-intl";
+import { toast } from "sonner";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
   useMerchantHydrated,
   useSetMerchantApiKey,
 } from "@/lib/merchant-store";
+import { useDisplayPreferences } from "@/lib/display-preferences";
+import WebhookHealthIndicator from "@/components/WebhookHealthIndicator";
+import DangerZone from "@/components/DangerZone";
+import EmailReceiptPreview from "@/components/EmailReceiptPreview";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
@@ -20,9 +26,10 @@ const DEFAULT_BRANDING = {
   primary_color: "#5ef2c0",
   secondary_color: "#b8ffe2",
   background_color: "#050608",
+  logo_url: null as string | null,
 };
 
-type SettingsTab = "api" | "branding" | "webhooks" | "danger";
+type SettingsTab = "api" | "branding" | "display" | "webhooks" | "danger";
 
 interface WebhookDomainVerification {
   status: "verified" | "unverified";
@@ -44,9 +51,9 @@ function hexToRgb(hex: string) {
   const full =
     clean.length === 3
       ? clean
-        .split("")
-        .map((c) => `${c}${c}`)
-        .join("")
+          .split("")
+          .map((c) => `${c}${c}`)
+          .join("")
       : clean;
   const int = Number.parseInt(full, 16);
 
@@ -141,10 +148,12 @@ export default function SettingsPage() {
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("api");
+  const { hideCents, setHideCents } = useDisplayPreferences();
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
   const [brandingError, setBrandingError] = useState<string | null>(null);
   const [loadingBranding, setLoadingBranding] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Webhook state
   const [webhookUrl, setWebhookUrl] = useState("");
@@ -230,20 +239,48 @@ export default function SettingsPage() {
 
   const updateBrandingField = (
     key: keyof typeof DEFAULT_BRANDING,
-    value: string,
+    value: string | null,
   ) => {
     setBranding((current) => ({
       ...current,
-      [key]: normalizeHexInput(value),
+      [key]: key === "logo_url" ? value : normalizeHexInput(value as string),
     }));
   };
+
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image size must be less than 2MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateBrandingField("logo_url", reader.result as string);
+      toast.success("Logo uploaded!");
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/png": [".png"],
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/svg+xml": [".svg"],
+    },
+    multiple: false,
+  });
 
   const saveBranding = async () => {
     if (!apiKey) return;
     setBrandingError(null);
 
-    for (const [key, color] of Object.entries(branding)) {
-      if (!HEX_COLOR_REGEX.test(color as string)) {
+    for (const [key, value] of Object.entries(branding)) {
+      if (key === "logo_url") continue;
+      if (!HEX_COLOR_REGEX.test(value as string)) {
         setBrandingError(`${key} must be a valid hex color`);
         return;
       }
@@ -427,8 +464,11 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Test webhook request failed");
-      
-      const statusClass = data.status >= 200 && data.status < 300 ? "text-green-400" : "text-red-400";
+
+      const statusClass =
+        data.status >= 200 && data.status < 300
+          ? "text-green-400"
+          : "text-red-400";
       toast.success(
         <div className="flex flex-col">
           <span>{t("testWebhookSent")}</span>
@@ -512,40 +552,55 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={() => setActiveTab("api")}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${activeTab === "api"
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "api"
                 ? "bg-white text-black"
                 : "text-slate-300 hover:bg-white/10"
-              }`}
+            }`}
           >
             API Keys
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("branding")}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${activeTab === "branding"
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "branding"
                 ? "bg-white text-black"
                 : "text-slate-300 hover:bg-white/10"
-              }`}
+            }`}
           >
             Branding
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("webhooks")}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${activeTab === "webhooks"
+            onClick={() => setActiveTab("display")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "display"
                 ? "bg-white text-black"
                 : "text-slate-300 hover:bg-white/10"
-              }`}
+            }`}
+          >
+            Display
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("webhooks")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "webhooks"
+                ? "bg-white text-black"
+                : "text-slate-300 hover:bg-white/10"
+            }`}
           >
             Webhooks
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("danger")}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${activeTab === "danger"
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
+              activeTab === "danger"
                 ? "bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]"
                 : "text-red-400/70 hover:bg-red-500/10"
-              }`}
+            }`}
           >
             Danger
           </button>
@@ -572,8 +627,9 @@ export default function SettingsPage() {
 
               <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
                 <code
-                  className={`flex-1 truncate font-mono text-sm transition-colors ${revealed ? "text-mint" : "text-slate-500"
-                    }`}
+                  className={`flex-1 truncate font-mono text-sm transition-colors ${
+                    revealed ? "text-mint" : "text-slate-500"
+                  }`}
                 >
                   {displayKey}
                 </code>
@@ -686,9 +742,78 @@ export default function SettingsPage() {
                 Checkout Branding
               </h2>
               <p className="text-sm text-slate-500">
-                Set default checkout colors. These values are exposed as CSS
-                variables and can be overridden per session.
+                Set default checkout branding. Upload your logo and set colors.
               </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Store Logo
+              </span>
+              <div
+                {...getRootProps()}
+                className={`relative flex min-h-[120px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all ${
+                  isDragActive
+                    ? "border-mint bg-mint/5"
+                    : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-black/30"
+                }`}
+              >
+                <input {...getInputProps()} />
+                {branding.logo_url ? (
+                  <div className="group relative flex flex-col items-center gap-3 p-4">
+                    <img
+                      src={branding.logo_url}
+                      alt="Logo preview"
+                      className="h-16 w-16 object-contain"
+                    />
+                    <span className="text-xs text-slate-500 group-hover:text-slate-300">
+                      Click or drag to change logo
+                    </span>
+                    {isDragActive && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/60 backdrop-blur-sm">
+                        <p className="text-sm font-bold text-mint">
+                          Drop to upload
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 p-6 text-center">
+                    <div className="rounded-full bg-white/5 p-3 text-slate-400">
+                      <svg
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-medium text-slate-300">
+                        {isDragActive ? "Drop your logo here" : "Upload logo"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        PNG, JPG or SVG up to 2MB
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {branding.logo_url && (
+                <button
+                  type="button"
+                  onClick={() => updateBrandingField("logo_url", null)}
+                  className="self-start text-xs text-red-400 hover:text-red-300"
+                >
+                  Remove logo
+                </button>
+              )}
             </div>
 
             {brandingError && (
@@ -754,6 +879,15 @@ export default function SettingsPage() {
                 <p style={{ color: branding.secondary_color }}>
                   Sample checkout card
                 </p>
+                {branding.logo_url && (
+                  <div className="mb-4 flex justify-center">
+                    <img
+                      src={branding.logo_url}
+                      alt="Logo preview"
+                      className="h-12 w-auto object-contain"
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
                   className="mt-3 rounded-lg px-4 py-2 font-semibold"
@@ -782,6 +916,64 @@ export default function SettingsPage() {
                   ? "Loading..."
                   : "Save Branding"}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setIsPreviewOpen(true)}
+              disabled={!apiKey}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 font-semibold text-white transition-all hover:bg-white/10 disabled:opacity-50"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                />
+              </svg>
+              Preview Receipt
+            </button>
+          </section>
+        )}
+
+        {activeTab === "display" && (
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Display Preferences
+              </h2>
+              <p className="text-sm text-slate-500">
+                Adjust how currency values appear in the dashboard.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={hideCents}
+                  onChange={(event) => setHideCents(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border border-white/15 bg-black/40 text-mint focus:ring-mint"
+                />
+                <div className="space-y-1">
+                  <p className="font-semibold text-white">Hide trailing cents</p>
+                  <p className="text-sm text-slate-400">
+                    Whole amounts such as 50 will display without the .00 suffix.
+                  </p>
+                </div>
+              </label>
+            </div>
           </section>
         )}
 
@@ -794,15 +986,20 @@ export default function SettingsPage() {
                   <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     Webhook Endpoint
                   </h2>
-                  {webhookUrl && (
-                    <span
-                      className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${webhookStatusTone}`}
-                    >
-                      {webhookVerification?.status === "verified"
-                        ? "Verified"
-                        : "Unverified"}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {webhookUrl && (
+                      <WebhookHealthIndicator webhookUrl={webhookUrl} />
+                    )}
+                    {webhookUrl && (
+                      <span
+                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${webhookStatusTone}`}
+                      >
+                        {webhookVerification?.status === "verified"
+                          ? "Verified"
+                          : "Unverified"}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className="text-sm text-slate-500">
                   Events like payment confirmations will be sent as POST
@@ -829,10 +1026,11 @@ export default function SettingsPage() {
                   aria-describedby={
                     webhookUrlError ? "webhook-url-error" : undefined
                   }
-                  className={`w-full rounded-xl border bg-black/40 p-3 font-mono text-sm text-white placeholder-slate-600 outline-none transition-colors focus:ring-1 ${webhookUrlError
+                  className={`w-full rounded-xl border bg-black/40 p-3 font-mono text-sm text-white placeholder-slate-600 outline-none transition-colors focus:ring-1 ${
+                    webhookUrlError
                       ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/30"
                       : "border-white/10 focus:border-mint/50 focus:ring-mint/20"
-                    }`}
+                  }`}
                 />
                 {webhookUrlError && (
                   <p
@@ -860,14 +1058,16 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={saveWebhookUrl}
-                  disabled={savingWebhook || loadingWebhook || !!webhookUrlError}
+                  disabled={
+                    savingWebhook || loadingWebhook || !!webhookUrlError
+                  }
                   className="h-11 flex-1 rounded-xl bg-mint font-semibold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {savingWebhook
                     ? "Saving…"
                     : loadingWebhook
-                    ? "Loading…"
-                    : "Save Webhook URL"}
+                      ? "Loading…"
+                      : "Save Webhook URL"}
                 </button>
                 <button
                   type="button"
@@ -899,7 +1099,9 @@ export default function SettingsPage() {
                       {webhookVerification.verification_token ?? "—"}
                     </code>
                     {webhookVerification.verification_token && (
-                      <CopyButton text={webhookVerification.verification_token} />
+                      <CopyButton
+                        text={webhookVerification.verification_token}
+                      />
                     )}
                   </div>
 
@@ -1074,6 +1276,14 @@ export default function SettingsPage() {
 
         {activeTab === "danger" && <DangerZone apiKey={apiKey} />}
       </div>
+
+      <EmailReceiptPreview
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        branding={branding}
+        apiKey={apiKey}
+        apiUrl={API_URL}
+      />
 
       {/* Footer nav */}
       <footer className="flex justify-center gap-6 text-xs text-slate-500">

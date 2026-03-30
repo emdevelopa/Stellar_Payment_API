@@ -94,7 +94,7 @@ export default function MaskedValue({
     <section className={`flex flex-col gap-3 ${className}`.trim()}>
       <div className="flex items-center justify-between">
         {label ? (
-          <h2 className="text-xs font-medium uppercase tracking-wider text-slate-400">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-slate-300">
             {label}
           </h2>
         ) : (
@@ -104,7 +104,7 @@ export default function MaskedValue({
           type="button"
           onClick={toggle}
           aria-label={ariaLabel}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:bg-white/10 focus-visible:text-white"
         >
           <EyeIcon open={isRevealed} />
           {isRevealed ? hideLabel : showLabel}
@@ -114,7 +114,7 @@ export default function MaskedValue({
       <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4">
         <code
           className={`flex-1 truncate font-mono text-sm transition-colors ${
-            isRevealed ? "text-mint" : "text-slate-500"
+            isRevealed ? "text-mint" : "text-slate-300"
           }`}
         >
           {displayValue}
@@ -123,7 +123,7 @@ export default function MaskedValue({
       </div>
 
       {helperText ? (
-        <p className="text-[11px] text-slate-600">{helperText}</p>
+        <p className="text-[11px] text-slate-400">{helperText}</p>
       ) : null}
     </section>
   );

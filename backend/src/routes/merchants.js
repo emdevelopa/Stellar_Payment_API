@@ -11,8 +11,10 @@ import {
   sessionBrandingSchema,
   webhookSettingsSchema,
   testWebhookSchema,
+  VALID_WEBHOOK_EVENTS,
 } from "../lib/request-schemas.js";
 import { merchantService } from "../services/merchantService.js";
+import { renderReceiptEmail } from "../lib/email-templates.js";
 import {
   createWebhookDomainVerificationState,
   readWebhookDomainVerification,
@@ -360,6 +362,62 @@ function createMerchantsRouter({
       }
     },
   );
+
+  /**
+   * @swagger
+   * /api/preview-receipt:
+   *   post:
+   *     summary: Generate a preview HTML of the email receipt with custom branding
+   *     tags: [Merchants]
+   *     security:
+   *       - ApiKeyAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/BrandingConfig'
+   *     responses:
+   *       200:
+   *         description: HTML preview of the receipt
+   *         content:
+   *           text/html:
+   *             schema:
+   *               type: string
+   */
+  router.post(
+    "/preview-receipt",
+    requireApiKeyAuth(),
+    validateRequest({ body: sessionBrandingSchema }),
+    async (req, res) => {
+      try {
+        const brandingConfig = req.body;
+        
+        // Mock payment details for preview
+        const mockPayment = {
+          id: "preview_12345",
+          amount: 100.5,
+          asset: "USDC",
+          recipient: "GC7H...PREVIEW",
+          tx_id: "tx_preview_hash",
+          created_at: new Date().toISOString(),
+        };
+
+        const html = renderReceiptEmail({
+          payment: mockPayment,
+          merchant: {
+            business_name: req.merchant.business_name,
+            branding_config: brandingConfig,
+          },
+        });
+
+        res.setHeader("Content-Type", "text/html");
+        res.send(html);
+      } catch (err) {
+        res.status(500).json({ error: "Failed to generate preview" });
+      }
+    },
+  );
   // ─── Webhook Settings ────────────────────────────────────────────────────────
 
   router.get("/merchant-profile", async (req, res, next) => {
@@ -460,7 +518,7 @@ function createMerchantsRouter({
     try {
       const { data, error } = await supabase
         .from("merchants")
-        .select("webhook_url, webhook_secret, metadata")
+        .select("webhook_url, webhook_secret, subscribed_events, metadata")
         .eq("id", req.merchant.id)
         .single();
 
@@ -479,6 +537,8 @@ function createMerchantsRouter({
       res.json({
         webhook_url: data.webhook_url || "",
         webhook_secret_masked: maskedSecret,
+        subscribed_events: data.subscribed_events ?? null,
+        available_events: VALID_WEBHOOK_EVENTS,
         webhook_domain_verification: readWebhookDomainVerification(
           data.metadata,
           data.webhook_url || "",
@@ -523,6 +583,9 @@ function createMerchantsRouter({
         const updatePayload = { webhook_url: body.webhook_url || null };
         if ("custom_headers" in body) {
           updatePayload.webhook_custom_headers = body.custom_headers ?? null;
+        }
+        if ("subscribed_events" in body) {
+          updatePayload.subscribed_events = body.subscribed_events ?? null;
         }
         const { data: existing, error: existingError } = await supabase
           .from("merchants")

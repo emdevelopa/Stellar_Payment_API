@@ -357,6 +357,8 @@ export const merchantService = {
         id,
         payment_id,
         status_code,
+        request_payload,
+        request_headers,
         response_body,
         timestamp,
         payments!inner(merchant_id, amount, asset, status)
@@ -410,6 +412,8 @@ export const merchantService = {
       payment_id: log.payment_id,
       status_code: log.status_code,
       success: log.status_code >= 200 && log.status_code < 300,
+      request_payload: log.request_payload,
+      request_headers: log.request_headers,
       response_body: log.response_body,
       timestamp: log.timestamp,
       payment: {

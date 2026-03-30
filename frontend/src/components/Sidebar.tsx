@@ -106,7 +106,10 @@ function NavLinks({
   const navItems = getNavItems(t);
 
   return (
-    <nav className="flex flex-1 flex-col gap-2 px-3 py-6">
+    <nav
+      aria-label="Dashboard navigation"
+      className="flex flex-1 flex-col gap-2 px-3 py-6"
+    >
       {navItems.map((item) => {
         const isActive =
           pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -119,10 +122,10 @@ function NavLinks({
             className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-all ${
               isActive
                 ? "bg-mint text-black font-semibold shadow-[0_0_20px_rgba(45,212,191,0.2)]"
-                : "text-slate-300 hover:bg-white/5 hover:text-white"
+                : "text-slate-200 hover:bg-white/5 hover:text-white focus-visible:bg-white/10 focus-visible:text-white"
             }`}
           >
-            <span className={isActive ? "text-black" : "text-slate-400"}>
+            <span className={isActive ? "text-black" : "text-slate-300"}>
               {item.icon}
             </span>
             {!isCollapsed && <span className="text-sm">{item.label}</span>}
@@ -163,14 +166,17 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => setIsCollapsed((value) => !value)}
-          className="hidden rounded-xl p-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white lg:inline-flex"
+          className="hidden rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:bg-white/10 focus-visible:text-white lg:inline-flex"
           aria-label={isCollapsed ? t("expand") : t("collapse")}
+          aria-controls="dashboard-sidebar-navigation"
+          aria-expanded={!isCollapsed}
         >
           <svg
             className={`h-5 w-5 transition-transform ${isCollapsed ? "rotate-180" : ""}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"
@@ -183,7 +189,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => onMobileOpenChange(false)}
-          className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-white/5 hover:text-white lg:hidden"
+          className="rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:bg-white/10 focus-visible:text-white lg:hidden"
           aria-label={t("close")}
         >
           <svg
@@ -191,6 +197,7 @@ export default function Sidebar({
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"
@@ -214,9 +221,9 @@ export default function Sidebar({
           className={`rounded-2xl border border-white/10 bg-black/40 p-4 transition-all ${isCollapsed ? "px-3" : ""}`}
         >
           {!isCollapsed && (
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-              {t("shortcuts")}
-            </p>
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-300">
+                {t("shortcuts")}
+              </p>
           )}
           <div
             className={`mt-3 flex ${isCollapsed ? "flex-col gap-2" : "flex-col gap-3"}`}
@@ -226,7 +233,7 @@ export default function Sidebar({
                 key={link.href}
                 href={link.href}
                 onClick={() => onMobileOpenChange(false)}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white"
               >
                 {isCollapsed ? link.label.slice(0, 1) : link.label}
               </Link>
@@ -248,6 +255,7 @@ export default function Sidebar({
       <motion.aside
         initial={false}
         animate={{ width: isCollapsed ? 96 : 280 }}
+        id="dashboard-sidebar-navigation"
         className="sticky top-0 hidden h-screen shrink-0 border-r border-white/10 bg-black/40 backdrop-blur-xl lg:flex"
       >
         {chrome}
@@ -255,6 +263,7 @@ export default function Sidebar({
 
       <motion.div
         initial={false}
+        id="dashboard-sidebar-mobile"
         animate={{
           opacity: mobileOpen ? 1 : 0,
           pointerEvents: mobileOpen ? "auto" : "none",

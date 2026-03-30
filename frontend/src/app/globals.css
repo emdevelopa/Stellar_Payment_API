@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Remove default browser focus outlines */
+*:focus {
+  outline: none;
+}
+
+/* Global focus-visible styling for keyboard navigation */
+*:focus-visible {
+  @apply ring-2 ring-mint ring-offset-2 ring-offset-night;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -70,6 +80,68 @@ body {
 
 :root:not(.dark) .hover\:bg-white\/10:hover {
   background-color: rgba(15, 23, 42, 0.08);
+}
+
+/*
+ * Authenticated screens intentionally use a dark dashboard chrome even when the
+ * app is otherwise in light mode. These overrides preserve readable muted text
+ * and panel contrast inside that shell.
+ */
+:root:not(.dark) .dashboard-shell {
+  color: #f8fafc;
+}
+
+:root:not(.dark) .dashboard-shell .text-white,
+:root:not(.dark) .dashboard-shell .text-slate-100,
+:root:not(.dark) .dashboard-shell .text-slate-200,
+:root:not(.dark) .dashboard-shell .text-slate-300 {
+  color: #e2e8f0;
+}
+
+:root:not(.dark) .dashboard-shell .text-slate-400 {
+  color: #cbd5e1;
+}
+
+:root:not(.dark) .dashboard-shell .text-slate-500,
+:root:not(.dark) .dashboard-shell .text-slate-600 {
+  color: #94a3b8;
+}
+
+:root:not(.dark) .dashboard-shell .placeholder\:text-slate-600::placeholder {
+  color: #94a3b8;
+}
+
+:root:not(.dark) .dashboard-shell .border-white\/10,
+:root:not(.dark) .dashboard-shell .border-white\/20 {
+  border-color: rgba(226, 232, 240, 0.14);
+}
+
+:root:not(.dark) .dashboard-shell .bg-black\/30,
+:root:not(.dark) .dashboard-shell .bg-black\/40,
+:root:not(.dark) .dashboard-shell .bg-black\/50,
+:root:not(.dark) .dashboard-shell .bg-black\/60,
+:root:not(.dark) .dashboard-shell .bg-black\/70,
+:root:not(.dark) .dashboard-shell .bg-white\/5 {
+  background-color: rgba(15, 23, 42, 0.72);
+}
+
+:root:not(.dark) .dashboard-shell .hover\:bg-white\/10:hover,
+:root:not(.dark) .dashboard-shell .hover\:bg-white\/5:hover {
+  background-color: rgba(148, 163, 184, 0.16);
+}
+
+@layer base {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible,
+  [role="dialog"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #5ef2c0;
+    outline-offset: 2px;
+  }
 }
 
 .docs-prose {
@@ -239,4 +311,75 @@ body {
 .docs-prose hr {
   border-color: rgba(255, 255, 255, 0.08);
   margin: 2rem 0;
+}
+
+/* ─── Sonner Toast Theme ─────────────────────────────── */
+[data-sonner-toaster] {
+  --width: 360px;
+}
+
+[data-sonner-toaster][data-theme="dark"] {
+  --normal-bg: #0d1c2e;
+  --normal-border: rgba(255, 255, 255, 0.08);
+  --normal-text: #f3f5f7;
+  --success-bg: #0d1c2e;
+  --success-border: rgba(94, 242, 192, 0.28);
+  --success-text: #f3f5f7;
+  --error-bg: #0d1c2e;
+  --error-border: rgba(248, 113, 113, 0.28);
+  --error-text: #f3f5f7;
+  --warning-bg: #0d1c2e;
+  --warning-border: rgba(251, 191, 36, 0.28);
+  --warning-text: #f3f5f7;
+  --info-bg: #0d1c2e;
+  --info-border: rgba(96, 165, 250, 0.28);
+  --info-text: #f3f5f7;
+}
+
+[data-sonner-toast] {
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(20px);
+}
+
+[data-sonner-toast] [data-title] {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+[data-sonner-toast] [data-description] {
+  color: rgba(243, 245, 247, 0.65) !important;
+}
+
+/* Success icon color */
+[data-sonner-toast][data-type="success"] [data-icon] svg {
+  color: #5ef2c0;
+}
+
+/* Error icon color */
+[data-sonner-toast][data-type="error"] [data-icon] svg {
+  color: #f87171;
+}
+
+/* Warning icon color */
+[data-sonner-toast][data-type="warning"] [data-icon] svg {
+  color: #fbbf24;
+}
+
+/* Info icon color */
+[data-sonner-toast][data-type="info"] [data-icon] svg {
+  color: #60a5fa;
+}
+
+/* Close button */
+[data-sonner-toast] [data-close-button] {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(243, 245, 247, 0.5) !important;
+  transition: background 0.15s, color 0.15s;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #f3f5f7 !important;
 }

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import AssetConverter from "@/components/AssetConverter";
 
 /* ------------------------------------------------------------------ */
 /*  Command definitions                                                */
@@ -11,7 +12,8 @@ type Command = {
   id: string;
   label: string;
   description: string;
-  href: string;
+  href?: string;
+  action?: string;
   icon: React.ReactNode;
   keywords: string[];
 };
@@ -137,6 +139,19 @@ const commands: Command[] = [
     icon: RegisterIcon,
     keywords: ["register", "merchant", "signup", "account", "new"],
   },
+  {
+    id: "asset-converter",
+    label: "Asset Converter",
+    description: "Look up real-time Stellar conversion rates",
+    action: "converter",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8}>
+        <path d="M2 17 12 7l10 10" strokeLinecap="round" strokeLinejoin="round" opacity={0.4} />
+        <path d="M2 12 12 2l10 10" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    keywords: ["convert", "converter", "rate", "exchange", "swap", "xlm", "usdc", "path", "calculator", "asset"],
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -147,6 +162,7 @@ export default function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [view, setView] = useState<"commands" | "converter">("commands");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const router = useRouter();
@@ -182,6 +198,7 @@ export default function CommandPalette() {
     if (open) {
       setQuery("");
       setActiveIndex(0);
+      setView("commands");
       // Small delay so the DOM renders first
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -202,8 +219,12 @@ export default function CommandPalette() {
   /* ---------- select a command ---------- */
   const select = useCallback(
     (cmd: Command) => {
+      if (cmd.action === "converter") {
+        setView("converter");
+        return;
+      }
       setOpen(false);
-      router.push(cmd.href);
+      if (cmd.href) router.push(cmd.href);
     },
     [router],
   );
@@ -212,9 +233,16 @@ export default function CommandPalette() {
   function handlePaletteKeydown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
-      setOpen(false);
+      if (view === "converter") {
+        setView("commands");
+      } else {
+        setOpen(false);
+      }
       return;
     }
+
+    // Block arrow/enter handling when converter is active
+    if (view === "converter") return;
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -251,6 +279,10 @@ export default function CommandPalette() {
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handlePaletteKeydown}
       >
+        {view === "converter" ? (
+          <AssetConverter onBack={() => setView("commands")} />
+        ) : (
+        <>
         {/* search input */}
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
           <svg
@@ -358,6 +390,8 @@ export default function CommandPalette() {
             close
           </span>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

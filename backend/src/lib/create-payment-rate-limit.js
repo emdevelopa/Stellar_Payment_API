@@ -68,6 +68,25 @@ export function createCreatePaymentRateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: getCreatePaymentRateLimitKey,
+    requestWasSuccessful(req, res) {
+      if (typeof req.rateLimit?.limit === "number") {
+        res.set("X-RateLimit-Limit", String(req.rateLimit.limit));
+      }
+      if (typeof req.rateLimit?.remaining === "number") {
+        res.set("X-RateLimit-Remaining", String(req.rateLimit.remaining));
+      }
+      if (
+        req.rateLimit?.resetTime instanceof Date &&
+        !Number.isNaN(req.rateLimit.resetTime.getTime())
+      ) {
+        res.set(
+          "X-RateLimit-Reset",
+          String(Math.floor(req.rateLimit.resetTime.getTime() / 1000))
+        );
+      }
+
+      return res.statusCode < 400;
+    },
     handler(req, res) {
       const retryAfterSeconds = getRetryAfterSeconds(
         req.rateLimit?.resetTime,

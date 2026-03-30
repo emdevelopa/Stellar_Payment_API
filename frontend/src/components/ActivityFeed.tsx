@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { useLocale } from "next-intl";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
@@ -10,6 +11,10 @@ import {
   useMerchantId,
 } from "@/lib/merchant-store";
 import { usePaymentSocket } from "@/lib/usePaymentSocket";
+import {
+  useDisplayPreferences,
+  formatAmount,
+} from "@/lib/display-preferences";
 
 interface Payment {
   id: string;
@@ -28,10 +33,12 @@ export default function ActivityFeed() {
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const merchantId = useMerchantId();
+  const locale = useLocale();
+  const { hideCents } = useDisplayPreferences();
 
   useHydrateMerchantStore();
 
-  const handleConfirmed = useCallback((event: any) => {
+  const handleConfirmed = useCallback((event: { id: string; amount: number; asset: string; confirmed_at: string }) => {
     setPayments((prev) => {
       // If payment exists, update it to confirmed and move to top
       const exists = prev.find((p) => p.id === event.id);
@@ -181,7 +188,7 @@ export default function ActivityFeed() {
               </div>
               <div className="text-right">
                 <p className="font-bold text-white">
-                  {payment.amount} {payment.asset}
+                  {formatAmount(payment.amount, locale, hideCents)} {payment.asset}
                 </p>
                 <p className="text-xs font-mono text-slate-400 uppercase">{payment.status}</p>
               </div>

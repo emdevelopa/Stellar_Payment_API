@@ -69,6 +69,7 @@ const paymentBaseSchema = z.object({
     }, "webhook_url must be a valid URL"),
     client_id: optionalTrimmedString(),
     metadata: z.unknown().optional(),
+    sandbox: z.boolean().optional(),
   });
 
 function applyPaymentValidationRules(body, ctx) {
@@ -176,6 +177,7 @@ export const registerMerchantZodSchema = z.object({
         .trim()
         .regex(HEX_COLOR_REGEX, "background_color must be a valid hex color")
         .optional(),
+      logo_url: z.string().trim().optional(),
     })
     .optional(),
   merchant_settings: z
@@ -203,6 +205,7 @@ export const sessionBrandingSchema = z
       .trim()
       .regex(HEX_COLOR_REGEX, "background_color must be a valid hex color")
       .optional(),
+    logo_url: z.string().trim().optional(),
   })
   .optional();
 
@@ -215,6 +218,12 @@ export const paymentSessionZodSchema = paymentBaseSchema
 export const v2PaymentSessionSchema = paymentSessionZodSchema;
 
 const SAFE_HEADER_NAME_RE = /^[a-zA-Z0-9\-_]+$/;
+
+export const VALID_WEBHOOK_EVENTS = [
+  "payment.confirmed",
+  "payment.failed",
+  "payment.expired",
+];
 
 export const webhookSettingsSchema = z.object({
   webhook_url: z.preprocess(
@@ -237,6 +246,15 @@ export const webhookSettingsSchema = z.object({
     .refine(
       (obj) => Object.keys(obj).every((k) => SAFE_HEADER_NAME_RE.test(k)),
       "Header names must contain only alphanumeric characters, hyphens, or underscores",
+    )
+    .optional()
+    .nullable(),
+  subscribed_events: z
+    .array(
+      z.string().refine(
+        (e) => VALID_WEBHOOK_EVENTS.includes(e),
+        (e) => ({ message: `"${e}" is not a valid event type. Valid values: ${VALID_WEBHOOK_EVENTS.join(", ")}` }),
+      ),
     )
     .optional()
     .nullable(),
@@ -264,6 +282,43 @@ export const paginationQuerySchema = z.object({
   ),
 });
 
+export const paymentsListQuerySchema = paginationQuerySchema
+  .extend({
+    client_id: optionalTrimmedString(),
+    status: optionalTrimmedString(),
+    asset: optionalTrimmedString(),
+    search: optionalTrimmedString(),
+    date_from: optionalTrimmedString(),
+    date_to: optionalTrimmedString(),
+    created_after: optionalTrimmedString().refine(
+      (value) => {
+        if (!value) return true;
+        return z.string().datetime({ offset: true }).safeParse(value).success ||
+          z.string().datetime().safeParse(value).success;
+      },
+      "created_after must be a valid ISO8601 datetime",
+    ),
+    created_before: optionalTrimmedString().refine(
+      (value) => {
+        if (!value) return true;
+        return z.string().datetime({ offset: true }).safeParse(value).success ||
+          z.string().datetime().safeParse(value).success;
+      },
+      "created_before must be a valid ISO8601 datetime",
+    ),
+    metadata: z.unknown().optional(),
+  })
+  .refine(
+    (val) => {
+      if (!val.created_after || !val.created_before) return true;
+      return new Date(val.created_after).getTime() <= new Date(val.created_before).getTime();
+    },
+    {
+      message: "created_after must be before or equal to created_before",
+      path: ["created_after"],
+    },
+  );
+
 // ─── Authentication Schemas ────────────────────────────────────────────────
 
 export const authChallengeSchema = z.object({
@@ -273,7 +328,11 @@ export const authChallengeSchema = z.object({
       invalid_type_error: "Account must be a string",
     })
     .trim()
-    .min(1, "destination_address is required"),
+    .min(1, "destination_address is required")
+    .refine(
+      (val) => val.startsWith("G") && val.length === 56,
+      "Invalid Stellar address",
+    ),
   description: paymentBaseSchema.shape.description,
   memo: paymentBaseSchema.shape.memo,
   memo_type: paymentBaseSchema.shape.memo_type,
@@ -283,10 +342,6 @@ export const authChallengeSchema = z.object({
   }, "callback_url must be a valid URL"),
   client_id: paymentBaseSchema.shape.client_id,
   metadata: z.unknown().optional(),
-    .refine(
-      (val) => val.startsWith("G") && val.length === 56,
-      "Invalid Stellar address",
-    ),
 });
 
 export const authVerifySchema = z.object({

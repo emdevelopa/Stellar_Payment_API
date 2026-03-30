@@ -233,3 +233,40 @@ export async function initiateWithdrawal(
 
   return data.url;
 }
+
+export interface AssetBalance {
+  code: string;
+  issuer: string | null;
+  balance: string;
+}
+
+/**
+ * Fetch balances for a Stellar account and return them in a simplified format.
+ */
+export async function getAccountBalances(
+  publicKey: string,
+  horizonUrl: string
+): Promise<AssetBalance[]> {
+  try {
+    const server = new StellarSdk.Horizon.Server(horizonUrl);
+    const account = await server.loadAccount(publicKey);
+
+    return account.balances.map((b) => {
+      if (b.asset_type === "native") {
+        return {
+          code: "XLM",
+          issuer: null,
+          balance: b.balance,
+        };
+      }
+      return {
+        code: (b as { asset_code?: string }).asset_code || "UNKNOWN",
+        issuer: (b as { asset_issuer?: string }).asset_issuer || null,
+        balance: b.balance,
+      };
+    });
+  } catch (error) {
+    console.error("Failed to fetch account balances:", error);
+    return [];
+  }
+}

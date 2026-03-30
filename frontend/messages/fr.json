@@ -1,0 +1,30 @@
+{
+  "Dashboard": {
+    "title": "Tableau de bord",
+    "welcome": "Bon retour",
+    "overview": "Aperçu des paiements"
+  },
+  "localeSwitcher": {
+    "label": "Langue",
+    "ariaLabel": "Choisir la langue",
+    "options": {
+      "en": "Anglais",
+      "es": "Espagnol",
+      "pt": "Portugais",
+      "fr": "Français"
+    }
+  },
+  "nav": {
+    "home": "Accueil",
+    "dashboard": "Tableau de bord",
+    "payments": "Paiements",
+    "paymentHistory": "Historique des paiements",
+    "settings": "Paramètres",
+    "apiKeys": "Clés API",
+    "webhookLogs": "Journaux de webhooks",
+    "login": "Connexion",
+    "register": "Inscription",
+    "docs": "Documentation",
+    "toggleMenu": "Basculer le menu"
+  }
+}

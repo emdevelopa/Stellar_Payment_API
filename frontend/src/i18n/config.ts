@@ -1,4 +1,4 @@
-export const locales = ["en", "es", "pt"] as const;
+export const locales = ["en", "es", "pt", "fr"] as const;
 
 export type AppLocale = (typeof locales)[number];
 
@@ -21,6 +21,8 @@ export function localeToLanguageTag(locale: string): string {
       return "es-ES";
     case "pt":
       return "pt-BR";
+    case "fr":
+      return "fr-FR";
     case "en":
     default:
       return "en-US";

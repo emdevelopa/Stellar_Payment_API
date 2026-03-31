@@ -206,7 +206,7 @@ export async function createApp({ redisClient }) {
   app.use("/api/sessions", requireApiKeyAuth(), idempotencyMiddleware);
   app.use("/api/payments", requireApiKeyAuth(), idempotencyMiddleware);
   app.use("/api/rotate-key", requireApiKeyAuth(), idempotencyMiddleware);
-  app.use("/api/merchant-branding", requireApiKeyAuth(), idempotencyMiddleware);
+  app.use("/api/merchants/branding", requireApiKeyAuth(), idempotencyMiddleware);
   app.use("/api/webhooks", requireApiKeyAuth(), idempotencyMiddleware);
 
   app.use("/api", createPaymentsRouter({ verifyPaymentRateLimit }));

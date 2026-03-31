@@ -275,6 +275,7 @@ vi.mock("../../src/lib/webhooks.js", () => ({
   sendWebhook: (...args) => mockSendWebhook(...args),
   signPayload: vi.fn(() => "mocked-signature"),
   verifyWebhook: vi.fn(() => true),
+  isEventSubscribed: vi.fn(() => true),
 }));
 
 /*

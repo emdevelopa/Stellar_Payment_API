@@ -14,7 +14,7 @@ import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
 import { recaptchaMiddleware } from "../lib/recaptcha.js";
 import { sendWebhook, isEventSubscribed } from "../lib/webhooks.js";
-import { sendReceiptEmail } from "../lib/email.js";
+import { sendReceiptEmail, sendCustomReceiptEmail } from "../lib/email.js";
 import { renderReceiptEmail } from "../lib/email-templates.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
 import { generatePaginationLinks } from "../lib/pagination-links.js";
@@ -77,31 +77,6 @@ function applyPaymentFilters(query, req) {
       orQuery += `,amount.eq.${numTerm}`;
     }
     query = query.or(orQuery);
-  }
-  return query;
-}
-
-/**
- * Parse `metadata[key]=value` query params and apply JSONB equality filters.
- *
- * Each `metadata[key]` entry is translated to a Supabase `.filter()` call
- * using the `cs` (contains) operator against a single-key JSON object, which
- * maps to the Postgres `@>` operator on a JSONB column.
- *
- * Only safe key names (alphanumeric + _ + -) are accepted to guard against
- * SQL injection.
- */
-const SAFE_METADATA_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
-
-function applyMetadataFilters(query, rawQuery) {
-  const metadataParam = rawQuery.metadata;
-  if (!metadataParam || typeof metadataParam !== "object" || Array.isArray(metadataParam)) {
-    return query;
-  }
-  for (const [key, value] of Object.entries(metadataParam)) {
-    if (!SAFE_METADATA_KEY_RE.test(key)) continue;
-    if (typeof value !== "string") continue;
-    query = query.filter("metadata", "cs", JSON.stringify({ [key]: value }));
   }
   return query;
 }
@@ -618,7 +593,7 @@ function createPaymentsRouter({
           });
           Promise.resolve()
             .then(() =>
-              sendReceiptEmail({
+              sendCustomReceiptEmail({
                 to: receiptTo,
                 subject: `Payment Receipt – ${data.id}`,
                 html: receiptHtml,

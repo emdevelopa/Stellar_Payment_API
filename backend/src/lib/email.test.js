@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { sendReceiptEmail } from "./email.js";
+import { sendCustomReceiptEmail } from "./email.js";
 import { renderReceiptEmail } from "./email-templates.js";
 
 // ---------------------------------------------------------------------------
-// sendReceiptEmail
+// sendCustomReceiptEmail
 // ---------------------------------------------------------------------------
 
 vi.mock("resend", () => {
@@ -22,7 +22,7 @@ async function getMockSend() {
   return mod.__mockSend;
 }
 
-describe("sendReceiptEmail", () => {
+describe("sendCustomReceiptEmail", () => {
   beforeEach(async () => {
     const mockSend = await getMockSend();
     mockSend.mockReset();
@@ -32,7 +32,7 @@ describe("sendReceiptEmail", () => {
     const mockSend = await getMockSend();
     mockSend.mockResolvedValue({ data: { id: "abc" }, error: null });
 
-    const result = await sendReceiptEmail({
+    const result = await sendCustomReceiptEmail({
       to: "merchant@example.com",
       subject: "Receipt",
       html: "<p>hello</p>",
@@ -46,7 +46,7 @@ describe("sendReceiptEmail", () => {
     const apiError = { message: "Invalid API key", statusCode: 401 };
     mockSend.mockResolvedValue({ data: null, error: apiError });
 
-    const result = await sendReceiptEmail({
+    const result = await sendCustomReceiptEmail({
       to: "merchant@example.com",
       subject: "Receipt",
       html: "<p>hello</p>",
@@ -60,7 +60,7 @@ describe("sendReceiptEmail", () => {
     const mockSend = await getMockSend();
     mockSend.mockRejectedValue(new Error("Network error"));
 
-    const result = await sendReceiptEmail({
+    const result = await sendCustomReceiptEmail({
       to: "merchant@example.com",
       subject: "Receipt",
       html: "<p>hello</p>",
@@ -85,7 +85,7 @@ describe("renderReceiptEmail", () => {
     created_at: "2026-03-27T16:00:00.000Z",
   };
 
-  const merchant = { name: "Acme Corp" };
+  const merchant = { business_name: "Acme Corp" };
 
   it("returns a string", () => {
     expect(typeof renderReceiptEmail({ payment, merchant })).toBe("string");

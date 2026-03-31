@@ -177,7 +177,7 @@ export const registerMerchantZodSchema = z.object({
         .trim()
         .regex(HEX_COLOR_REGEX, "background_color must be a valid hex color")
         .optional(),
-      logo_url: z.string().trim().optional(),
+      logo_url: z.string().trim().url("logo_url must be a valid URL").optional(),
     })
     .optional(),
   merchant_settings: z
@@ -205,7 +205,7 @@ export const sessionBrandingSchema = z
       .trim()
       .regex(HEX_COLOR_REGEX, "background_color must be a valid hex color")
       .optional(),
-    logo_url: z.string().trim().optional(),
+    logo_url: z.string().trim().url("logo_url must be a valid URL").optional(),
   })
   .optional();
 

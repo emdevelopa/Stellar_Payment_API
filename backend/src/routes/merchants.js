@@ -311,7 +311,7 @@ function createMerchantsRouter({
     },
   );
 
-  router.get("/merchant-branding", async (req, res, next) => {
+  router.get("/merchants/branding", async (req, res, next) => {
     try {
       const { data, error } = await supabase
         .from("merchants")
@@ -335,7 +335,7 @@ function createMerchantsRouter({
   });
 
   router.put(
-    "/merchant-branding",
+    "/merchants/branding",
     validateRequest({ body: sessionBrandingSchema }),
     async (req, res, next) => {
       try {

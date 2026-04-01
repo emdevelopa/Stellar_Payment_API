@@ -3,6 +3,26 @@ import { RedisStore } from "rate-limit-redis";
 
 export const RATE_LIMIT_REDIS_PREFIX = "rl:";
 
+function setStandardRateLimitHeaders(res, rateLimitState) {
+  if (!res || !rateLimitState) {
+    return;
+  }
+
+  const limit = rateLimitState.limit;
+  const remaining = rateLimitState.remaining;
+  const resetTime = rateLimitState.resetTime;
+
+  if (typeof limit === "number") {
+    res.setHeader("X-RateLimit-Limit", String(limit));
+  }
+  if (typeof remaining === "number") {
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+  }
+  if (resetTime instanceof Date && !Number.isNaN(resetTime.getTime())) {
+    res.setHeader("X-RateLimit-Reset", String(Math.floor(resetTime.getTime() / 1000)));
+  }
+}
+
 export function createRedisRateLimitStore({
   client,
   StoreClass = RedisStore,
@@ -26,6 +46,10 @@ export function createVerifyPaymentRateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    requestWasSuccessful: (req, res) => {
+      setStandardRateLimitHeaders(res, req.rateLimit);
+      return res.statusCode < 400;
+    },
     store,
   });
 }
@@ -42,6 +66,10 @@ export function createMerchantRegistrationRateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    requestWasSuccessful: (req, res) => {
+      setStandardRateLimitHeaders(res, req.rateLimit);
+      return res.statusCode < 400;
+    },
     store,
     keyGenerator: (req) => {
       // Rate limit by IP address

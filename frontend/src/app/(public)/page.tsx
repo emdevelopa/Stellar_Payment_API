@@ -111,8 +111,8 @@ function IconArrow() {
 
 function IconCheck() {
   return (
-    <svg className="h-4 w-4 shrink-0 text-emerald-400" viewBox="0 0 16 16" fill="none">
-      <path d="M3.5 8.5L6.5 11.5L12.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="h-4 w-4 shrink-0 text-[#00F5D4]" viewBox="0 0 16 16" fill="none">
+      <path d="M3.5 8.5L6.5 11.5L12.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -121,35 +121,35 @@ function IconCheck() {
 const FEATURES = [
   {
     icon: <IconXLM />,
-    title: "XLM & USDC Native",
+    title: "Native Assets",
     description:
-      "Accept both tokens out of the box. Automatic asset routing, real-time exchange rates, and multi-currency settlement in a single integration.",
+      "Accept XLM and USDC with zero friction. Built-in routing and real-time settlement on the Stellar network.",
     tag: "Multi-Asset",
   },
   {
     icon: <IconWebhook />,
-    title: "Bulletproof Webhooks",
+    title: "Precision Webhooks",
     description:
-      "Signed payloads, automatic retries with exponential back-off, and a full event log. Never miss a payment confirmation again.",
+      "Signed payloads and automatic retries. Reliability engineered into every transaction event.",
     tag: "Reliability",
   },
   {
     icon: <IconFees />,
-    title: "Near-Zero Fees",
+    title: "Extreme Efficiency",
     description:
-      "Stellar\u2019s base fee is a fraction of a cent. No monthly minimums, no gateway surcharges\u00a0\u2014 keep more of every transaction.",
+      "Capitalize on Stellar's sub-cent fees. No monthly minimums—only pay for what you use.",
     tag: "Cost",
   },
 ];
 
-const CODE_REQUEST = `curl -X POST https://api.stellarpay.io/v1/create-payment \\
+const CODE_REQUEST = `curl -X POST https://api.pluto.io/v1/create-payment \\
   -H "Authorization: Bearer sk_live_4eC39HqLyjWDarjtT1z..." \\
   -H "Content-Type: application/json" \\
   -d '{
     "amount": "25.00",
     "asset": "USDC",
     "memo": "order-8842",
-    "webhook_url": "https://shop.example/hooks/stellar",
+    "webhook_url": "https://shop.example/hooks/pluto",
     "redirect_url": "https://shop.example/thanks"
   }'`;
 
@@ -158,73 +158,73 @@ const CODE_RESPONSE = `{
   "status": "pending",
   "amount": "25.00",
   "asset": "USDC",
-  "payment_url": "https://stellarpay.io/pay/pay_9xKp2mVbQw",
+  "payment_url": "https://pluto.io/pay/pay_9xKp2mVbQw",
   "expires_at": "2025-08-15T12:30:00Z"
 }`;
 
 function HeroSection() {
   return (
-    <Section className="relative flex flex-col items-center px-6 pb-24 pt-28 text-center sm:pt-36 lg:pt-44">
-      <div className="pointer-events-none absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-mint/[0.06] blur-[120px]" />
-
+    <Section className="relative flex flex-col items-center px-6 pb-24 pt-32 text-center lg:pt-48">
       <motion.div
-        initial={{ opacity: 0, y: 24 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
         className="relative z-10 flex flex-col items-center gap-6"
       >
-        <span className="inline-flex items-center gap-2 rounded-full border border-mint/20 bg-mint/[0.06] px-4 py-1.5 font-mono text-xs uppercase tracking-widest text-mint">
-          <span className="h-1.5 w-1.5 rounded-full bg-mint animate-pulse" />
-          Live on Stellar Testnet
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#E8E8E8] bg-[#F9F9F9] px-5 py-2 font-bold text-[10px] uppercase tracking-[0.2em] text-[#6B6B6B]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#0A0A0A]" />
+          Surgical Precision Payments
         </span>
 
-        <h1 className="max-w-4xl text-4xl font-bold leading-[1.08] tracking-tight text-white sm:text-6xl lg:text-7xl">
-          Seamless Stellar{" "}
-          <span className="bg-gradient-to-r from-mint via-emerald-300 to-cyan-400 bg-clip-text text-transparent">
-            Payments
-          </span>
+        <h1 className="max-w-5xl text-7xl font-bold leading-[0.9] tracking-tighter text-[#0A0A0A] sm:text-9xl lg:text-[12rem]">
+          PLUTO
         </h1>
+        
+        <h2 className="max-w-4xl text-4xl font-bold leading-tight tracking-tight text-[#0A0A0A] sm:text-6xl lg:text-7xl">
+          The Infrastructure for{" "}
+          <span className="text-[#6B6B6B]">
+             Modern Commerce
+          </span>
+        </h2>
 
-        <p className="max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg">
-          Ship a complete crypto checkout in minutes, not months. Generate
-          payment links, collect XLM &amp; USDC, and get instant webhook
-          confirmations&nbsp;&mdash; all through one clean API.
+        <p className="max-w-xl font-sans text-base font-medium leading-relaxed text-[#6B6B6B] sm:text-lg">
+          Build high-performance payment experiences on Stellar. 
+          Unmatched speed. Near-zero fees. Global scale.
         </p>
       </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
-        className="relative z-10 mt-10 flex flex-col items-center gap-4 sm:flex-row"
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
+        className="relative z-10 mt-12 flex flex-col items-center gap-6 sm:flex-row"
       >
         <Link
           href="/register"
-          className="group relative inline-flex items-center gap-2 rounded-full bg-mint px-8 py-4 text-base font-bold text-black transition-all hover:scale-[1.03] hover:bg-glow active:scale-[0.98]"
+          className="group relative inline-flex items-center gap-2 rounded-lg bg-[#0A0A0A] px-12 py-5 text-sm font-bold uppercase tracking-widest text-white transition-all hover:bg-black active:scale-[0.98]"
         >
           Get Started
           <IconArrow />
-          <div className="absolute inset-0 -z-10 rounded-full bg-mint/40 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
         </Link>
 
         <Link
           href="/login"
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-8 py-4 text-base font-medium text-white backdrop-blur transition-all hover:border-white/20 hover:bg-white/[0.08]"
+          className="inline-flex items-center gap-2 rounded-lg border border-[#E8E8E8] bg-white px-12 py-5 text-sm font-bold uppercase tracking-widest text-[#0A0A0A] transition-all hover:bg-[#F5F5F5]"
         >
-          Sign In to Dashboard
+          Sign In
         </Link>
       </motion.div>
 
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.8, delay: 0.4 }}
-        className="relative z-10 mt-14 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500"
+        transition={{ duration: 1, delay: 0.5 }}
+        className="relative z-10 mt-28 flex flex-wrap items-center justify-center gap-x-12 gap-y-4 text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B6B6B]"
       >
-        {["No credit card required", "5-minute integration", "Testnet sandbox included"].map(
+        {["Non-custodial", "5-minute integration", "Sandbox included"].map(
           (t) => (
-            <span key={t} className="flex items-center gap-1.5">
-              <IconCheck />
+            <span key={t} className="flex items-center gap-3">
+              <div className="h-1 w-1 rounded-full bg-[#0A0A0A]" />
               {t}
             </span>
           )
@@ -236,32 +236,29 @@ function HeroSection() {
 
 function FeaturesSection() {
   return (
-    <div className="mx-auto max-w-6xl px-6 py-24 lg:py-32">
-      <Section className="mb-16 text-center">
-        <p className="mb-3 font-mono text-xs uppercase tracking-widest text-mint">
-          Why Stellar Pay
+    <div className="mx-auto max-w-7xl px-6 py-32 lg:py-48">
+      <Section className="mb-24 text-center">
+        <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
+          Engineered for Performance
         </p>
-        <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-white sm:text-4xl">
-          Everything you need to accept crypto&nbsp;&mdash; nothing you don&apos;t
+        <h2 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">
+          Everything you need to scale
         </h2>
       </Section>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((f, i) => (
           <FadeUp key={f.title} delay={i * 0.1}>
-            <div className="group relative flex h-full flex-col gap-5 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 transition-colors duration-300 hover:border-mint/20 hover:bg-white/[0.04]">
-              {/* accent line */}
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-mint/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
+            <div className="group relative flex h-full flex-col gap-8 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-10 transition-all duration-500 hover:border-[#0A0A0A]">
               <div className="flex items-center justify-between">
-                <div className="text-mint">{f.icon}</div>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-0.5 font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                <div className="text-[#0A0A0A]">{f.icon}</div>
+                <span className="rounded-full border border-[#E8E8E8] px-4 py-1.5 font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B]">
                   {f.tag}
                 </span>
               </div>
 
-              <h3 className="text-xl font-bold text-white">{f.title}</h3>
-              <p className="text-sm leading-relaxed text-slate-400">
+              <h3 className="text-2xl font-bold text-[#0A0A0A]">{f.title}</h3>
+              <p className="font-sans text-sm font-medium leading-relaxed text-[#6B6B6B]">
                 {f.description}
               </p>
             </div>
@@ -276,34 +273,33 @@ function CodeSnippetSection() {
   const [tab, setTab] = useState<"request" | "response">("request");
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-24 lg:py-32">
+    <div className="mx-auto max-w-7xl px-6 py-32 lg:py-48">
       <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
         <Section>
-          <p className="mb-3 font-mono text-xs uppercase tracking-widest text-mint">
-            Developer Experience
+          <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
+            Developer First
           </p>
-          <h2 className="mb-5 text-3xl font-bold leading-tight text-white sm:text-4xl">
+          <h2 className="mb-8 text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">
             One endpoint.
             <br />
-            Five lines of config.
+            Total control.
           </h2>
-          <p className="mb-8 max-w-md text-sm leading-relaxed text-slate-400">
-            Create a payment link with a single POST request. We handle the
-            Stellar transaction lifecycle, memo matching, and webhook delivery
-            so you can focus on your product.
+          <p className="mb-12 max-w-md font-sans text-base font-medium leading-relaxed text-[#6B6B6B]">
+            Create a payment link with a single request. We manage the
+            Stellar lifecycle, memo matching, and webhook delivery.
           </p>
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-6">
             {[
-              "Idempotent requests \u2014 safe to retry",
-              "Signed webhook payloads (HMAC-SHA256)",
-              "Auto-expiring links with configurable TTL",
-              "Full Horizon explorer links in every response",
+              "Atomic transactions",
+              "HMAC-SHA256 signed webhooks",
+              "Customizable metadata",
+              "Scalable architecture",
             ].map((item) => (
               <li
                 key={item}
-                className="flex items-start gap-2.5 text-sm text-slate-300"
+                className="flex items-start gap-4 font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B]"
               >
-                <IconCheck />
+                <div className="mt-1 h-1 w-1 rounded-full bg-[#0A0A0A]" />
                 {item}
               </li>
             ))}
@@ -312,39 +308,27 @@ function CodeSnippetSection() {
 
         {/* code block */}
         <Section delay={0.1}>
-          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0e17] shadow-2xl shadow-black/40">
+          <div className="overflow-hidden rounded-lg border border-[#E8E8E8] bg-[#FAFAFA]">
             {/* tabs */}
-            <div className="flex items-center border-b border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center border-b border-[#E8E8E8] bg-[#F5F5F5]">
               {(["request", "response"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
-                  className={`relative px-5 py-3 font-mono text-xs uppercase tracking-wider transition-colors ${
+                  className={`relative px-8 py-5 font-bold text-[10px] uppercase tracking-widest transition-colors ${
                     tab === t
-                      ? "text-mint"
-                      : "text-slate-500 hover:text-slate-300"
+                      ? "bg-white text-[#0A0A0A]"
+                      : "text-[#6B6B6B] hover:text-[#0A0A0A]"
                   }`}
                 >
                   {t}
-                  {tab === t && (
-                    <motion.div
-                      layoutId="code-tab"
-                      className="absolute inset-x-0 bottom-0 h-px bg-mint"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
                 </button>
               ))}
-              <div className="ml-auto flex items-center gap-1.5 pr-4">
-                <div className="h-2.5 w-2.5 rounded-full bg-white/10" />
-                <div className="h-2.5 w-2.5 rounded-full bg-white/10" />
-                <div className="h-2.5 w-2.5 rounded-full bg-white/10" />
-              </div>
             </div>
 
             {/* code */}
-            <div className="overflow-x-auto p-5">
-              <pre className="font-mono text-[13px] leading-relaxed text-slate-300">
+            <div className="overflow-x-auto p-10">
+              <pre className="font-mono text-[13px] leading-relaxed text-[#0A0A0A]">
                 <code>{tab === "request" ? CODE_REQUEST : CODE_RESPONSE}</code>
               </pre>
             </div>
@@ -359,120 +343,85 @@ function PayWithLinkDemo() {
   const [paid, setPaid] = useState(false);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-24 lg:py-32">
-      <Section className="mb-16 text-center">
-        <p className="mb-3 font-mono text-xs uppercase tracking-widest text-mint">
-          Interactive Demo
+    <div className="mx-auto max-w-6xl px-6 py-32 lg:py-48">
+      <Section className="mb-24 text-center">
+        <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
+          User Experience
         </p>
-        <h2 className="mx-auto max-w-2xl text-3xl font-bold leading-tight text-white sm:text-4xl">
-          See what your customers experience
+        <h2 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">
+          Precision Checkout
         </h2>
-        <p className="mx-auto mt-4 max-w-lg text-sm text-slate-400">
-          A branded checkout card generated from a single API call. Try clicking
-          the button below.
+        <p className="mx-auto mt-8 max-w-lg font-sans text-base font-medium text-[#6B6B6B]">
+          A sleek, branded checkout experience generated instantly through the PLUTO API.
         </p>
       </Section>
 
       <FadeUp className="flex justify-center">
-        <div className="relative w-full max-w-sm">
-          {/* glow behind card */}
-          <div className="absolute -inset-4 rounded-3xl bg-mint/[0.05] blur-2xl" />
-
-          <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0e1525] to-[#0a0e17] p-8 shadow-2xl shadow-black/40">
-            {/* header */}
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-mint/10">
-                  <svg className="h-4 w-4 text-mint" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.884l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.116l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm-2 5V6a2 2 0 114 0v1H8z" />
-                  </svg>
+        <div className="relative w-full max-w-md px-4">
+          <div className="relative overflow-hidden rounded-[3rem] border border-[#E8E8E8] bg-white p-12 shadow-[0_20px_80px_rgb(0,0,0,0.06)]">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-[#0A0A0A]/5" />
+            
+            {/* Header */}
+            <div className="mb-10 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F9F9F9] border border-[#E8E8E8] text-[#0A0A0A]">
+                   <IconXLM />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Acme Store</p>
-                  <p className="text-[11px] text-slate-500">Order #8842</p>
+                  <p className="text-sm font-bold text-[#0A0A0A]">Acme Store</p>
+                  <p className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest">Order #8842</p>
                 </div>
               </div>
-              <span className="font-mono text-xs text-slate-600">
-                stellarpay.io
-              </span>
             </div>
 
-            {/* amount */}
-            <div className="mb-8 text-center">
-              <p className="text-xs uppercase tracking-wider text-slate-500">
+            {/* Amount */}
+            <div className="mb-12 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">
                 Amount Due
               </p>
-              <p className="mt-1 font-mono text-4xl font-bold text-white">
+              <p className="mt-2 text-6xl font-bold tracking-tight text-[#0A0A0A]">
                 25.00{" "}
-                <span className="text-lg font-normal text-slate-400">
+                <span className="text-xl font-medium text-[#6B6B6B]">
                   USDC
                 </span>
               </p>
             </div>
 
-            {/* payment details */}
-            <div className="mb-8 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">Network</span>
-                <span className="flex items-center gap-1.5 text-slate-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  Stellar Testnet
-                </span>
+            {/* Details Table */}
+            <div className="mb-12 space-y-3 rounded-2xl border border-[#E8E8E8] bg-[#F9F9F9] p-6 focus-within:border-[#0A0A0A] transition-colors">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
+                <span className="text-[#6B6B6B]">Network</span>
+                <span className="text-[#0A0A0A]">Stellar Mainnet</span>
               </div>
-              <div className="my-3 h-px bg-white/[0.04]" />
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">Expires</span>
-                <span className="text-slate-300">29 min 42 sec</span>
-              </div>
-              <div className="my-3 h-px bg-white/[0.04]" />
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">Fee</span>
-                <span className="text-emerald-400">0.00001 XLM</span>
+              <div className="h-px bg-[#E8E8E8]" />
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
+                <span className="text-[#6B6B6B]">Expires In</span>
+                <span className="text-[#0A0A0A]">29:42</span>
               </div>
             </div>
 
-            {/* pay button */}
+            {/* Action */}
             {!paid ? (
               <button
                 onClick={() => setPaid(true)}
-                className="group relative w-full rounded-xl bg-mint py-4 text-sm font-bold text-black transition-all hover:bg-glow active:scale-[0.98]"
+                className="w-full rounded-2xl bg-[#0A0A0A] py-6 text-[10px] font-bold uppercase tracking-[0.3em] text-white shadow-xl shadow-black/10 transition-all hover:bg-black active:scale-[0.98]"
               >
-                Pay 25.00 USDC
-                <div className="absolute inset-0 -z-10 rounded-xl bg-mint/30 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
+                Complete Payment
               </button>
             ) : (
               <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
+                initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className="flex flex-col items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] py-5"
+                className="flex flex-col items-center gap-4 py-4"
               >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 15, delay: 0.15 }}
-                >
-                  <svg className="h-10 w-10 text-emerald-400" viewBox="0 0 40 40" fill="none">
-                    <circle cx="20" cy="20" r="19" stroke="currentColor" strokeWidth="1.5" />
-                    <path d="M13 20.5l5 5 9.5-10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </motion.div>
-                <p className="text-sm font-semibold text-emerald-400">
-                  Payment Confirmed
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F9F9F9] border border-[#E8E8E8] text-green-500">
+                  <IconCheck />
+                </div>
+                <p className="text-sm font-bold uppercase tracking-widest text-[#0A0A0A]">
+                  Transaction Confirmed
                 </p>
-                <button
-                  onClick={() => setPaid(false)}
-                  className="mt-1 text-xs text-slate-500 underline decoration-slate-700 underline-offset-2 transition-colors hover:text-slate-300"
-                >
-                  Reset demo
-                </button>
               </motion.div>
             )}
-
-            {/* footer */}
-            <p className="mt-5 text-center text-[10px] text-slate-600">
-              Secured by Stellar &middot; Powered by Stellar Pay API
-            </p>
           </div>
         </div>
       </FadeUp>
@@ -480,36 +429,67 @@ function PayWithLinkDemo() {
   );
 }
 
+function HowItWorksSection() {
+  const steps = [
+    { title: "Connect", description: "Authenticate your platform with secure API keys." },
+    { title: "Configure", description: "Set up webhooks to receive real-time payment events." },
+    { title: "Integrate", description: "Use our single endpoint to generate payment links." },
+    { title: "Settle", description: "Funds settle instantly to your Stellar wallet." },
+  ];
+
+  return (
+    <div className="mx-auto max-w-7xl px-6 py-32 lg:py-48 border-y border-[#E8E8E8] bg-[#F9F9F9]">
+      <Section className="mb-24 text-center">
+        <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
+          Simple Workflow
+        </p>
+        <h2 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">
+          Four steps to scale
+        </h2>
+      </Section>
+
+      <div className="grid gap-16 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((step, i) => (
+          <FadeUp key={step.title} delay={i * 0.1}>
+            <div className="relative flex flex-col items-center text-center">
+              <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-[2.5rem] bg-white border border-[#E8E8E8] shadow-[0_10px_40px_rgb(0,0,0,0.03)] text-2xl font-bold text-[#0A0A0A]">
+                {i + 1}
+              </div>
+              <h3 className="mb-4 text-xl font-bold text-[#0A0A0A] uppercase tracking-widest">{step.title}</h3>
+              <p className="font-sans text-sm font-medium leading-relaxed text-[#6B6B6B]">
+                {step.description}
+              </p>
+            </div>
+          </FadeUp>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CTASection() {
   return (
-    <div className="relative mx-auto max-w-6xl px-6 py-24 lg:py-32">
-      {/* glow */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="h-[400px] w-[600px] rounded-full bg-mint/[0.04] blur-[100px]" />
-      </div>
-
+    <div className="relative mx-auto max-w-7xl px-6 py-48">
       <Section className="relative z-10 flex flex-col items-center text-center">
-        <h2 className="mx-auto max-w-3xl text-3xl font-bold leading-tight text-white sm:text-5xl">
-          Start accepting Stellar payments today
+        <h2 className="mx-auto max-w-5xl text-6xl font-bold leading-[0.9] text-[#0A0A0A] sm:text-8xl lg:text-9xl uppercase tracking-tighter">
+          Deploy <br /> Today.
         </h2>
-        <p className="mx-auto mt-5 max-w-lg text-base text-slate-400">
-          Create a free account, grab your API key, and go live in under five
-          minutes. No contracts, no minimums.
+        <p className="mx-auto mt-10 max-w-lg font-sans text-lg font-medium text-[#6B6B6B]">
+          Join the next generation of modern commerce. No contracts, no minimums, pure speed.
         </p>
-        <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
+        <div className="mt-16 flex flex-col items-center gap-8 sm:flex-row">
           <Link
             href="/register"
-            className="group relative inline-flex items-center gap-2 rounded-full bg-mint px-8 py-4 text-base font-bold text-black transition-all hover:scale-[1.03] hover:bg-glow active:scale-[0.98]"
+            className="group relative inline-flex items-center gap-2 rounded-lg bg-[#0A0A0A] px-12 py-6 text-[10px] font-bold uppercase tracking-widest text-white transition-all hover:bg-black active:scale-[0.98] shadow-2xl shadow-black/10"
           >
             Create Free Account
             <IconArrow />
-            <div className="absolute inset-0 -z-10 rounded-full bg-mint/40 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
           </Link>
           <Link
             href="/login"
-            className="text-sm font-medium text-slate-400 transition-colors hover:text-white"
+            className="font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B] transition-colors hover:text-[#0A0A0A]"
           >
-            Already have an account? Sign in &rarr;
+            Sign in &rarr;
           </Link>
         </div>
       </Section>
@@ -519,54 +499,37 @@ function CTASection() {
 
 function Footer() {
   return (
-    <footer className="border-t border-white/[0.06] py-10">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
-        <div className="flex items-center gap-4">
-          <span className="font-mono text-xs uppercase tracking-[0.25em] text-slate-600">
-            Stellar Pay
+    <footer className="border-t border-[#E8E8E8] bg-white py-24">
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-12 px-6 sm:flex-row">
+        <div className="flex items-center gap-12">
+          <span className="font-serif text-xl font-bold tracking-tight text-[#0A0A0A]">
+            PLUTO
           </span>
           <SystemStatus />
         </div>
-        <div className="flex gap-6 text-xs text-slate-600">
-          <Link href="/login" className="transition-colors hover:text-slate-300">
-            Login
-          </Link>
-          <Link href="/register" className="transition-colors hover:text-slate-300">
-            Register
-          </Link>
-          <Link href="/dashboard" className="transition-colors hover:text-slate-300">
-            Dashboard
-          </Link>
+        <div className="flex gap-12 font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B]">
+          <Link href="/login" className="transition-colors hover:text-[#0A0A0A]">Login</Link>
+          <Link href="/register" className="transition-colors hover:text-[#0A0A0A]">Register</Link>
+          <Link href="/dashboard" className="transition-colors hover:text-[#0A0A0A]">Dashboard</Link>
+          <Link href="/docs" className="transition-colors hover:text-[#0A0A0A]">Docs</Link>
         </div>
       </div>
     </footer>
   );
 }
 
-
 export default function Home() {
   return (
     <GuestGuard>
-    <main className="relative min-h-screen overflow-x-hidden scroll-smooth">
-      {/* subtle grid texture */}
-      <div
-        className="pointer-events-none absolute inset-0 z-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)",
-          backgroundSize: "64px 64px",
-        }}
-      />
-
-      <div className="relative z-10">
+      <main className="relative min-h-screen bg-white overflow-x-hidden">
         <HeroSection />
         <FeaturesSection />
+        <HowItWorksSection />
         <CodeSnippetSection />
         <PayWithLinkDemo />
         <CTASection />
         <Footer />
-      </div>
-    </main>
+      </main>
     </GuestGuard>
   );
 }

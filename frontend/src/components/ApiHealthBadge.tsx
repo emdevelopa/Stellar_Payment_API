@@ -44,44 +44,44 @@ export default function ApiHealthBadge() {
 
   const config = {
     loading: {
-      color: "bg-slate-500",
-      pulse: "bg-slate-500/40",
-      text: "text-slate-400",
+      color: "bg-[#E8E8E8]",
+      pulse: "bg-[#E8E8E8]",
+      text: "text-[#6B6B6B]",
       label: "Checking Health...",
     },
     healthy: {
       color: "bg-green-500",
-      pulse: "bg-green-500/40",
-      text: "text-green-400",
+      pulse: "bg-green-500/20",
+      text: "text-[#6B6B6B]",
       label: "All Systems Operational",
     },
     error: {
       color: "bg-red-500",
-      pulse: "bg-red-500/40",
-      text: "text-red-400",
+      pulse: "bg-red-500/20",
+      text: "text-red-500",
       label: "Service Disruption",
     },
   }[status];
 
   return (
-    <div className="group relative flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 transition-colors hover:bg-white/5 cursor-default mt-1 md:mt-0">
-      <div className="relative flex h-2.5 w-2.5 items-center justify-center">
+    <div className="group relative flex items-center gap-2 rounded-full border border-[#E8E8E8] bg-white px-3 py-1.5 transition-all hover:border-[#0A0A0A] hover:bg-[#F9F9F9] cursor-default">
+      <div className="relative flex h-2 w-2 items-center justify-center">
         {status !== "loading" && (
           <span
             className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${config.pulse}`}
           />
         )}
-        <span className={`relative inline-flex h-2 w-2 rounded-full ${config.color}`} />
+        <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${config.color}`} />
       </div>
-      <span className={`text-[10px] font-medium uppercase tracking-wider ${config.text}`}>
+      <span className={`text-[10px] font-bold uppercase tracking-widest ${config.text}`}>
         {status === "error" ? "Degraded" : "API"}
       </span>
 
       {/* Tooltip */}
-      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-black/80 px-3 py-2 text-xs text-white opacity-0 shadow-xl backdrop-blur-xl transition-opacity group-hover:opacity-100">
-        <p className="font-semibold text-center">{config.label}</p>
+      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-3 -translate-x-1/2 whitespace-nowrap rounded-xl border border-[#E8E8E8] bg-white px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A] opacity-0 shadow-[0_10px_30px_rgb(0,0,0,0.08)] transition-all group-hover:opacity-100 group-hover:translate-y-1">
+        <p className="text-center">{config.label}</p>
         {(status === "error" && errorMsg) && (
-          <p className="mt-0.5 text-[10px] text-slate-400 text-center">{errorMsg}</p>
+          <p className="mt-1.5 text-[9px] text-[#6B6B6B] lowercase tracking-normal font-medium text-center">{errorMsg}</p>
         )}
       </div>
     </div>

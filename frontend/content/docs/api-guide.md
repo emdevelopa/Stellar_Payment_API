@@ -27,7 +27,7 @@ curl -X POST http://localhost:4000/api/register-merchant \
   -H "Content-Type: application/json" \
   -d '{
     "email": "merchant@example.com",
-    "business_name": "Example Store",
+    "business_name": "PLUTO Shop",
     "notification_email": "ops@example.com"
   }'
 ```
@@ -70,7 +70,7 @@ curl -X POST http://localhost:4000/api/create-payment \
     "asset": "XLM",
     "recipient": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
     "description": "Order #2048",
-    "webhook_url": "https://merchant.example/webhooks/stellar"
+    "webhook_url": "https://merchant.example/webhooks/pluto"
   }'
 ```
 
@@ -82,9 +82,9 @@ curl -X POST http://localhost:4000/api/create-payment \
   "payment_link": "http://localhost:3000/pay/6aa64d44-faf1-41f0-a7e7-c8f9cce62f2f",
   "status": "pending",
   "branding_config": {
-    "primary_color": "#5ef2c0",
-    "secondary_color": "#b8ffe2",
-    "background_color": "#050608"
+    "primary_color": "#00F5D4",
+    "secondary_color": "#6C5CE7",
+    "background_color": "#0B0F1A"
   }
 }
 ```
@@ -157,7 +157,7 @@ with:
 
 ```json
 {
-  "webhook_url": "https://merchant.example/webhooks/stellar"
+  "webhook_url": "https://merchant.example/webhooks/pluto"
 }
 ```
 

@@ -118,9 +118,9 @@ interface NetworkFeeResponse {
 const DEFAULT_CHECKOUT_THEME: Required<
   Pick<BrandingConfig, "primary_color" | "secondary_color" | "background_color">
 > = {
-  primary_color: "#5ef2c0",
-  secondary_color: "#b8ffe2",
-  background_color: "#050608",
+  primary_color: "#00F5D4",
+  secondary_color: "#6C5CE7",
+  background_color: "#0B0F1A",
 };
 
 /**
@@ -158,7 +158,7 @@ function buildThemeStyle(
     "--checkout-primary-subtle": `color-mix(in srgb, var(--checkout-primary) 7%, transparent)`,
     "--checkout-primary-border": `color-mix(in srgb, var(--checkout-primary) 30%, transparent)`,
     background:
-      "radial-gradient(1200px circle at 10% -10%, color-mix(in srgb, var(--checkout-primary) 18%, #15233b) 0%, var(--checkout-bg) 45%, #050608 100%)",
+      "radial-gradient(1200px circle at 10% -10%, color-mix(in srgb, var(--checkout-primary) 18%, #0B0F1A) 0%, var(--checkout-bg) 45%, #050608 100%)",
   } as CSSProperties;
 }
 
@@ -258,7 +258,7 @@ function AssetBadge({
     return (
       <span
         aria-hidden="true"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-white/15 via-mint/20 to-mint/40 text-mint shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-white/15 via-accent/20 to-accent/40 text-accent shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
       >
         <svg
           viewBox="0 0 24 24"
@@ -311,7 +311,7 @@ function StatusBadge({
     },
     confirmed: {
       label: t("status.confirmed"),
-      classes: "bg-mint/10 text-mint border border-mint/30",
+      classes: "bg-accent/10 text-accent border border-accent/30",
     },
     completed: {
       label: t("status.completed"),
@@ -360,7 +360,7 @@ function buildReceiptFilename(paymentId: string) {
 
 function LoadingSkeleton() {
   return (
-    <SkeletonTheme baseColor="#151d2e" highlightColor="#1f2d44">
+    <SkeletonTheme baseColor="#0B0F1A" highlightColor="#161b22">
       <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 px-6 py-16">
         {/* Header — includes logo placeholder */}
         <header className="flex flex-col gap-2">

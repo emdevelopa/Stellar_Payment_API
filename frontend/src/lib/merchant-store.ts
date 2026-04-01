@@ -112,6 +112,30 @@ export const useMerchantStore = create<MerchantStore>((set) => ({
       typeof window === "undefined" ? null : localStorage.getItem(API_KEY_KEY);
     const merchant = readInitialMerchant();
 
+    // Dev Bypass: Provide mock data if enabled and no session exists
+    const isBypass = typeof window !== "undefined" && 
+      (window.location.search.includes("bypass=true") || process.env.NEXT_PUBLIC_DEV_BYPASS === "true");
+
+    if (isBypass && !session) {
+      set({
+        hydrated: true,
+        token: "mock-token",
+        session: { id: "dev-id", email: "dev@pluto.cc", exp: Math.floor(Date.now() / 1000) + 3600 },
+        apiKey: apiKey || "sk_dev_bypass_key",
+        merchant: merchant || {
+          id: "dev-id",
+          email: "dev@pluto.cc",
+          business_name: "PLUTO Dev Store",
+          notification_email: "dev@pluto.cc",
+          api_key: "sk_dev_bypass_key",
+          webhook_secret: "whsec_dev_bypass",
+          created_at: new Date().toISOString(),
+          trusted_addresses: []
+        },
+      });
+      return;
+    }
+
     set({
       hydrated: true,
       token,

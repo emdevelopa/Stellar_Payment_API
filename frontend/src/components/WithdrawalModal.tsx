@@ -9,6 +9,7 @@ import {
 } from "@/lib/stellar";
 import { signWithFreighter, getFreighterPublicKey } from "@/lib/freighter";
 import { toast } from "sonner";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface WithdrawalModalProps {
   isOpen: boolean;
@@ -154,7 +155,7 @@ export default function WithdrawalModal({
                         onClick={() => setSelectedAsset(asset)}
                         className={`flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all ${
                           selectedAsset.code === asset.code
-                            ? "border-mint bg-mint/5 ring-1 ring-mint"
+                            ? "border-accent bg-accent/5 ring-1 ring-accent"
                             : "border-white/10 bg-white/5 hover:border-white/20"
                         }`}
                       >
@@ -177,7 +178,7 @@ export default function WithdrawalModal({
                     type="text"
                     value={anchorDomain}
                     onChange={(e) => setAnchorDomain(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-mint"
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent"
                     placeholder="e.g. testanchor.stellar.org"
                   />
                 </div>
@@ -185,7 +186,7 @@ export default function WithdrawalModal({
                 <button
                   onClick={handleStartWithdrawal}
                   disabled={loading}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-mint py-4 text-sm font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-4 text-sm font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                 >
                   {loading ? (
                     <>
@@ -202,9 +203,9 @@ export default function WithdrawalModal({
             {step === "AUTH" && (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="relative mb-6">
-                  <div className="h-20 w-20 animate-ping rounded-full bg-mint/20" />
+                  <div className="h-20 w-20 animate-ping rounded-full bg-accent/20" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="h-12 w-12 rounded-full border-4 border-mint border-t-transparent animate-spin" />
+                    <div className="h-12 w-12 rounded-full border-4 border-accent border-t-transparent animate-spin" />
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-white">Authenticating</h3>

@@ -3,6 +3,8 @@ import express from "express";
 import { Server as SocketIOServer } from "socket.io";
 import swaggerUi from "swagger-ui-express";
 import { ZodError } from "zod";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { httpLogger, logger } from "./lib/logger.js";
 import { createSwaggerSpec } from "./swagger.js";
 
@@ -30,6 +32,10 @@ import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
 
 export async function createApp({ redisClient }) {
   const app = express();
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const publicDir = path.join(__dirname, "..", "public");
 
   // Create socket.io instance (attached to HTTP server in server.js)
   const io = new SocketIOServer({
@@ -102,6 +108,17 @@ export async function createApp({ redisClient }) {
   });
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+  app.use(express.static(publicDir));
+
+  app.get("/api/postman-collection.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="postman-collection.json"',
+    );
+    res.sendFile(path.join(publicDir, "postman-collection.json"));
+  });
 
   const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
     ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
@@ -225,6 +242,7 @@ export async function createApp({ redisClient }) {
   setupSentryErrorHandler(app);
 
   app.use((err, req, res, next) => {
+    console.error("EXPRESS ERROR LOG:", err);
     res.status(err.status || 500).json({
       error: err.message || "Internal Server Error",
     });

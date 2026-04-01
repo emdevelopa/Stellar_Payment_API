@@ -33,7 +33,7 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Welcome to Vaultix">
+    <Modal isOpen={isOpen} onClose={onClose} title="Welcome to PLUTO">
       <div className="flex flex-col gap-6">
         {!apiKey ? (
           <>
@@ -48,7 +48,7 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
               type="button"
               onClick={handleGenerate}
               disabled={loading}
-              className="w-full rounded-xl bg-mint py-3 font-bold text-black transition-all hover:bg-glow disabled:opacity-50"
+              className="w-full rounded-xl bg-accent py-3 font-bold text-black transition-all hover:bg-secondary disabled:opacity-50"
             >
               {loading ? "Generating..." : "Generate API Key"}
             </button>
@@ -56,14 +56,14 @@ export default function FirstApiKeyModal({ isOpen, onClose }: FirstApiKeyModalPr
         ) : (
           <>
             <div className="flex flex-col gap-2">
-              <h3 className="text-xl font-bold text-mint">Your API Key is ready!</h3>
+              <h3 className="text-xl font-bold text-accent">Your API Key is ready!</h3>
               <p className="text-slate-400 text-sm">
                 Copy this key and save it somewhere secure. You won&apos;t be able to see it again after closing this window.
               </p>
             </div>
 
             <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/40 px-4 py-3">
-              <code className="flex-1 truncate text-sm text-mint">{apiKey}</code>
+              <code className="flex-1 truncate text-sm text-accent">{apiKey}</code>
               <CopyButton text={apiKey} />
             </div>
 

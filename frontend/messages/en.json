@@ -47,7 +47,7 @@
   },
   "dashboardPage": {
     "title": "Merchant Overview",
-    "description": "Monitor your transaction volume, track payments in real-time, and manage your Stellar integration.",
+    "description": "Monitor your transaction volume, track payments in real-time, and manage your PLUTO integration.",
     "paymentMetrics": "Payment Metrics",
     "recentActivity": "Recent Activity",
     "viewAllPayments": "View all payments",
@@ -61,7 +61,7 @@
   "createPaymentPage": {
     "eyebrow": "Dashboard",
     "title": "Create Payment Link",
-    "description": "Set an amount, choose an asset, and enter a Stellar recipient address to generate a shareable payment link.",
+    "description": "Set an amount, choose an asset, and enter a recipient address to generate a shareable PLUTO payment link.",
     "newHere": "New here?",
     "registerMerchant": "Register a merchant account"
   },
@@ -79,7 +79,7 @@
     "readyDescription": "Share this link with your customer to collect payment.",
     "shareLink": "Share Link",
     "shareTitle": "Payment link ready",
-    "shareText": "Open this Stellar payment link.",
+    "shareText": "Open this PLUTO payment link.",
     "shareFailed": "Native sharing is unavailable right now.",
     "paymentLink": "Payment Link",
     "paymentId": "Payment ID",
@@ -221,7 +221,7 @@
     "walletConnectWaiting": "Waiting for wallet...",
     "noProjectId": "(no project ID)",
     "notInstalled": "(not installed)",
-    "scanTitle": "Scan with your Stellar wallet app",
+    "scanTitle": "Scan with your compatible wallet app",
     "pairingFailed": "WalletConnect pairing failed"
   },
   "checkout": {
@@ -237,7 +237,7 @@
     "doNotClose": "Do not close this tab",
     "recipient": "Recipient",
     "scanToPay": "Scan to Pay",
-    "scanDescription": "Scan with Freighter or any Stellar wallet",
+    "scanDescription": "Scan with Freighter or any compatible wallet",
     "openQrModal": "Pay with QR code",
     "qrModalTitle": "Pay with QR code",
     "qrModalDescription": "Scan this code on another device or share it with your wallet app.",
@@ -277,7 +277,7 @@
     "cancel": "Cancel",
     "confirmPayment": "Confirm Payment",
     "receivedTitle": "This payment has been received.",
-    "receivedDescription": "The transaction was confirmed on the Stellar network.",
+    "receivedDescription": "The transaction was confirmed on-chain via PLUTO.",
     "downloadReceipt": "Download Receipt",
     "downloadReceiptLoading": "Preparing Receipt...",
     "receiptDownloaded": "Receipt download started.",

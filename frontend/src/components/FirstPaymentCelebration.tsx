@@ -32,7 +32,7 @@ export default function FirstPaymentCelebration() {
         if (paymentsCount === 1) {
           triggerCelebration();
         }
-      } catch (err) {
+      } catch {
         // silent fail
       }
     };
@@ -54,14 +54,14 @@ export default function FirstPaymentCelebration() {
         angle: 60,
         spread: 55,
         origin: { x: 0 },
-        colors: ["#5ef2c0", "#b8ffe2"]
+        colors: ["#00F5D4", "#6C5CE7"]
       });
       confetti({
         particleCount: 5,
         angle: 120,
         spread: 55,
         origin: { x: 1 },
-        colors: ["#5ef2c0", "#b8ffe2"]
+        colors: ["#00F5D4", "#6C5CE7"]
       });
 
       if (Date.now() < end) {
@@ -76,7 +76,7 @@ export default function FirstPaymentCelebration() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-mint/30 bg-black p-8 text-center shadow-2xl flex flex-col items-center">
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-accent/30 bg-black p-8 text-center shadow-2xl flex flex-col items-center">
         <div className="absolute top-0 right-0 p-4">
           <button 
             onClick={() => setShowModal(false)}
@@ -86,7 +86,7 @@ export default function FirstPaymentCelebration() {
           </button>
         </div>
         
-        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-mint/20 text-mint text-3xl">
+        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-accent/20 text-accent text-3xl">
           🎉
         </div>
         
@@ -102,7 +102,7 @@ export default function FirstPaymentCelebration() {
         <div className="flex w-full flex-col gap-3">
           <a
             href="/settings"
-            className="flex items-center justify-center rounded-xl bg-mint px-6 py-3 font-semibold text-black transition-all hover:bg-glow"
+            className="flex items-center justify-center rounded-xl bg-accent px-6 py-3 font-semibold text-black transition-all hover:bg-secondary"
           >
             Configure Webhooks
           </a>
@@ -110,7 +110,7 @@ export default function FirstPaymentCelebration() {
             onClick={() => setShowModal(false)}
             className="flex items-center justify-center rounded-xl border border-white/10 px-6 py-3 font-semibold text-slate-300 transition-all hover:bg-white/5"
           >
-            I'll do it later
+            I&apos;ll do it later
           </button>
         </div>
       </div>

@@ -60,8 +60,8 @@ export default function WebhookHealthIndicator({
   if (loading || !health) {
     return (
       <div className="flex items-center gap-2">
-        <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-slate-500" />
-        <span className="text-xs text-slate-500">Checking...</span>
+        <div className="h-2 w-2 animate-pulse rounded-full bg-[#1F1F1F]" />
+        <span className="text-[10px] font-black uppercase tracking-widest text-[#A0A0A0]">Checking...</span>
       </div>
     );
   }
@@ -69,13 +69,13 @@ export default function WebhookHealthIndicator({
   const getStatusColor = () => {
     switch (health.status) {
       case "healthy":
-        return "bg-green-500";
+        return "bg-[#00F5D4]";
       case "degraded":
         return "bg-yellow-500";
       case "unhealthy":
         return "bg-red-500";
       default:
-        return "bg-slate-500";
+        return "bg-[#1F1F1F]";
     }
   };
 
@@ -93,19 +93,19 @@ export default function WebhookHealthIndicator({
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative">
+    <div className="flex items-center gap-2.5">
+      <div className="relative flex h-2 w-2">
         <div
-          className={`h-2.5 w-2.5 rounded-full ${getStatusColor()}`}
+          className={`h-full w-full rounded-full ${getStatusColor()}`}
           aria-label={`Webhook status: ${getStatusText()}`}
         />
         <div
-          className={`absolute inset-0 h-2.5 w-2.5 animate-ping rounded-full ${getStatusColor()} opacity-75`}
+          className={`absolute inset-0 h-full w-full animate-ping rounded-full ${getStatusColor()} opacity-50`}
         />
       </div>
-      <span className="text-xs text-slate-400">
-        {getStatusText()} ({health.successRate}% success rate, last{" "}
-        {health.lastDeliveries} deliveries)
+      <span className="text-[10px] font-black uppercase tracking-widest text-[#A0A0A0]">
+        {getStatusText()} <span className="text-white mx-1">/</span> {health.successRate}% <span className="text-white mx-1">/</span> last{" "}
+        {health.lastDeliveries}
       </span>
     </div>
   );

@@ -8,16 +8,16 @@ export default function DocsSidebar() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col gap-3">
+    <nav className="flex flex-col gap-4">
       <Link
         href="/docs"
-        className={`rounded-xl border px-4 py-3 text-sm transition-all ${
+        className={`rounded-2xl border px-6 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${
           pathname === "/docs"
-            ? "border-mint/40 bg-mint/10 text-mint"
-            : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:text-white"
+            ? "border-[#0A0A0A] bg-[#0A0A0A] text-white"
+            : "border-[#E8E8E8] bg-white text-[#6B6B6B] hover:border-[#0A0A0A] hover:bg-[#F9F9F9] hover:text-[#0A0A0A]"
         }`}
       >
-        Docs Home
+        Library Home
       </Link>
 
       {docsManifest.map((doc) => {
@@ -28,14 +28,14 @@ export default function DocsSidebar() {
           <Link
             key={doc.slug}
             href={href}
-            className={`rounded-xl border px-4 py-3 transition-all ${
+            className={`rounded-2xl border px-6 py-4 transition-all ${
               active
-                ? "border-mint/40 bg-mint/10 text-white"
-                : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:text-white"
+                ? "border-[#0A0A0A] bg-[#0A0A0A] text-white shadow-xl shadow-black/5"
+                : "border-[#E8E8E8] bg-white text-[#6B6B6B] hover:border-[#0A0A0A] hover:bg-[#F9F9F9]"
             }`}
           >
-            <p className="text-sm font-semibold">{doc.title}</p>
-            <p className="mt-1 text-xs text-slate-400">{doc.description}</p>
+            <p className={`text-sm font-bold tracking-tight ${active ? "text-white" : "text-[#0A0A0A]"}`}>{doc.title}</p>
+            <p className={`mt-1 text-[10px] font-medium uppercase tracking-widest ${active ? "text-white/60" : "text-[#6B6B6B]"}`}>{doc.slug.replace(/-/g, ' ')}</p>
           </Link>
         );
       })}

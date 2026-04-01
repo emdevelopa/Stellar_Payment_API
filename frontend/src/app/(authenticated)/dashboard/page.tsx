@@ -71,7 +71,7 @@ export default function DashboardPage() {
               </h2>
               <Link
                 href="/payment-history"
-                className="text-sm text-mint hover:text-glow"
+                className="text-sm text-accent hover:text-white"
               >
                 {t("viewAllPayments")} →
               </Link>
@@ -89,7 +89,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-3">
               <Link
                 href="/dashboard/create"
-                className="flex items-center gap-3 rounded-xl border border-mint/20 bg-mint/5 px-4 py-3 text-sm font-medium text-mint transition-all hover:bg-mint/10"
+                className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm font-medium text-accent transition-all hover:bg-accent/10"
               >
                 <svg
                   className="h-5 w-5"
@@ -187,11 +187,11 @@ export default function DashboardPage() {
             </h3>
             <div className="space-y-4 text-sm text-slate-300">
               <div className="flex items-start gap-3">
-                <div className="mt-1 h-1.5 w-1.5 rounded-full bg-mint" />
+                <div className="mt-1 h-1.5 w-1.5 rounded-full bg-accent" />
                 <p>{t("apiKeysTip")}</p>
               </div>
               <div className="flex items-start gap-3">
-                <div className="mt-1 h-1.5 w-1.5 rounded-full bg-mint" />
+                <div className="mt-1 h-1.5 w-1.5 rounded-full bg-accent" />
                 <p>{t("webhookLogsTip")}</p>
               </div>
             </div>

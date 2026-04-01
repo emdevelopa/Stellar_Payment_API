@@ -271,12 +271,16 @@ vi.mock("../../src/lib/redis.js", () => ({
  * Webhook mock — records calls so we can assert delivery payloads.
  */
 const mockSendWebhook = vi.fn().mockResolvedValue({ ok: true, signed: true, status: 200 });
-vi.mock("../../src/lib/webhooks.js", () => ({
-  sendWebhook: (...args) => mockSendWebhook(...args),
-  signPayload: vi.fn(() => "mocked-signature"),
-  verifyWebhook: vi.fn(() => true),
-  isEventSubscribed: vi.fn(() => true),
-}));
+vi.mock("../../src/lib/webhooks.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    sendWebhook: (...args) => mockSendWebhook(...args),
+    signPayload: vi.fn(() => "mocked-signature"),
+    verifyWebhook: vi.fn(() => true),
+    isEventSubscribed: vi.fn(() => true),
+  };
+});
 
 /*
  * Rate-limit mock — bypass Redis-backed rate limiters with noop middleware

@@ -1,0 +1,769 @@
+
+> pluto-api@0.1.0 test
+> vitest run
+
+
+ RUN  v2.1.9 /home/zarcc/Documents/GitHub/WEB3/drips/Stellar_Payment_API/backend
+
+ ✓ src/routes/metadata-filter.test.js (12 tests) 65ms
+ ✓ src/lib/sanitize-metadata.test.js (20 tests) 38ms
+ ✓ src/lib/stellar.test.js (25 tests) 54ms
+ ✓ src/routes/sandbox.test.js (9 tests) 703ms
+   ✓ POST /api/create-payment — sandbox flag > generates a test_ prefixed ID when sandbox: true 658ms
+ ✓ src/lib/stellar-memo-validation.test.js (26 tests) 42ms
+ ✓ src/lib/webhooks.test.js (15 tests) 46ms
+ ✓ src/routes/webhooks.test.js (7 tests) 16ms
+ ↓ src/lib/rls.test.js (5 tests | 5 skipped)
+ ✓ src/lib/request-schemas.test.js (25 tests) 59ms
+ ✓ src/routes/soft-delete.test.js (9 tests) 123ms
+ ✓ src/routes/payments.test.js (6 tests) 29ms
+ ✓ src/lib/create-payment-rate-limit.test.js (10 tests) 34ms
+ ✓ src/lib/webhook-domain-verification.test.js (6 tests) 180ms
+ ✓ src/lib/webhook-subscriptions.test.js (17 tests) 49ms
+ ↓ tests/maintenance.test.js (3 tests | 3 skipped)
+ ✓ src/lib/sep0001-generator.test.js (10 tests) 15ms
+ ✓ src/routes/api-key-rotation.test.js (4 tests) 609ms
+   ✓ API Key Rotation and Expiry - Auth Integration > allows authentication with the current API key 555ms
+ ✓ src/routes/payments-path-quote.test.js (2 tests) 30ms
+ ✓ src/lib/email.test.js (9 tests) 31ms
+[2026-04-01 12:49:09.720 +0100] [32mINFO[39m (86884): [36mPOST / completed[39m
+    [35mreq[39m: {
+      "id": "4cb98d73-b4c4-45e6-bc7f-b921e5571e47",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 401
+    }
+    [35mresponseTime[39m: 9
+[2026-04-01 12:49:09.790 +0100] [32mINFO[39m (86884): [36mPOST / completed[39m
+    [35mreq[39m: {
+      "id": "95efee54-6bb9-4c83-870a-6d6d14ee14dd",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 401
+    }
+    [35mresponseTime[39m: 4
+[2026-04-01 12:49:09.818 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "9289b237-c811-4655-ac4e-a00eb324cc72",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 13
+[2026-04-01 12:49:09.837 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "1b220a1c-ba72-4a50-9264-ecb1711f4c11",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 4
+[2026-04-01 12:49:09.854 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "7fd5dd1c-fd2b-4ff7-b42a-e2480b6e6575",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:09.870 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "23a4fef4-6ff4-457d-8e3f-cc0fc285b353",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 4
+[2026-04-01 12:49:09.885 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "7fe44a70-f317-4e8e-95ae-16ffb35673b2",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:09.901 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "3ce128bc-1b83-4db5-b9c3-012bc378e7d1",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:09.928 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "cb4313bd-0cfa-4824-a311-c41979dffd49",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:09.953 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "420e4f20-a5bf-4ac6-bfda-9ef205bd82d0",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:09.968 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "2f96690a-1b23-4645-9f94-91ab131efa72",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 5
+[2026-04-01 12:49:09.984 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "10a7f9df-f3db-4a13-a3a0-ed6cc411eebf",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.019 +0100] [32mINFO[39m (86884): [36mGET /payment-status/0d9bca5c-a9b7-4b00-a097-2d358f80af27 completed[39m
+    [35mreq[39m: {
+      "id": "345d19f4-3e63-4b1c-bd1d-4254ddf33c37",
+      "method": "GET",
+      "url": "/api/payment-status/0d9bca5c-a9b7-4b00-a097-2d358f80af27",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 10
+[2026-04-01 12:49:10.045 +0100] [32mINFO[39m (86884): [36mGET /payment-status/97b22a39-191c-439e-8cac-45f7ae9bc17e completed[39m
+    [35mreq[39m: {
+      "id": "7b1ba03b-b26b-4f17-a552-19ff2a06f6b4",
+      "method": "GET",
+      "url": "/api/payment-status/97b22a39-191c-439e-8cac-45f7ae9bc17e",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.069 +0100] [32mINFO[39m (86884): [36mGET /payment-status/not-a-uuid completed[39m
+    [35mreq[39m: {
+      "id": "8b49a496-5f6a-4105-8de1-39c00f3bbbe5",
+      "method": "GET",
+      "url": "/api/payment-status/not-a-uuid",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 1
+[2026-04-01 12:49:10.099 +0100] [32mINFO[39m (86884): [36mGET /network-fee completed[39m
+    [35mreq[39m: {
+      "id": "ffdfb16e-4e7e-4b5e-9db0-9f148689d89b",
+      "method": "GET",
+      "url": "/api/network-fee",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 5
+ ❯ src/lib/webhook-retries.test.js (0 test)
+[2026-04-01 12:49:10.173 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "96ae7d76-b831-42cf-b523-b5a85c3b4e19",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 11
+[2026-04-01 12:49:10.202 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/7d268549-522b-49e1-948b-113ad8b86955 completed[39m
+    [35mreq[39m: {
+      "id": "f29d69aa-02ce-4787-9365-deddff24b149",
+      "method": "POST",
+      "url": "/api/verify-payment/7d268549-522b-49e1-948b-113ad8b86955",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 9
+[2026-04-01 12:49:10.252 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "8ac291eb-e5d2-4ac0-90ef-91f6a763fc01",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 7
+[2026-04-01 12:49:10.306 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/cfc61c81-1296-4d96-abcd-fc18b0d65c57 completed[39m
+    [35mreq[39m: {
+      "id": "eb2550c9-3c78-4aee-9ee6-8d1651945a5b",
+      "method": "POST",
+      "url": "/api/verify-payment/cfc61c81-1296-4d96-abcd-fc18b0d65c57",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 40
+[2026-04-01 12:49:10.346 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "a9412e90-05ef-40ab-b17d-e5cc9bf053d4",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.355 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/ab29f71b-3765-4e3f-9474-7c1e440079c2 completed[39m
+    [35mreq[39m: {
+      "id": "818808f1-3edc-4937-80e6-e9cca503dd2a",
+      "method": "POST",
+      "url": "/api/verify-payment/ab29f71b-3765-4e3f-9474-7c1e440079c2",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.376 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "6280e66b-83c9-4c3a-a7a7-c9be1105fd31",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.389 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/2dc56aae-3462-40b3-9e26-f8e4fe378f19 completed[39m
+    [35mreq[39m: {
+      "id": "ae25429d-daeb-4e40-9396-96cfeb276da3",
+      "method": "POST",
+      "url": "/api/verify-payment/2dc56aae-3462-40b3-9e26-f8e4fe378f19",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 5
+[2026-04-01 12:49:10.403 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/2dc56aae-3462-40b3-9e26-f8e4fe378f19 completed[39m
+    [35mreq[39m: {
+      "id": "7eda09f2-4c23-4420-b04a-c4752eba29ec",
+      "method": "POST",
+      "url": "/api/verify-payment/2dc56aae-3462-40b3-9e26-f8e4fe378f19",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 4
+[2026-04-01 12:49:10.415 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/82237b20-64c3-4d90-bd50-6188d158e044 completed[39m
+    [35mreq[39m: {
+      "id": "b2ff2bfd-4d4a-4e2d-a3af-87d39c407626",
+      "method": "POST",
+      "url": "/api/verify-payment/82237b20-64c3-4d90-bd50-6188d158e044",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.427 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "91231b95-af9a-4d13-84dd-039d8bfac99c",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.443 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/f1b7cd50-597d-41bc-8b03-993682fb9ed6 completed[39m
+    [35mreq[39m: {
+      "id": "243603f8-1114-4eb2-b522-8a95d35f7387",
+      "method": "POST",
+      "url": "/api/verify-payment/f1b7cd50-597d-41bc-8b03-993682fb9ed6",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 5
+[2026-04-01 12:49:10.458 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "ce6e6e95-d342-454a-8829-7536e28669ea",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.473 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/aa83e8d6-fbd8-417b-891b-8e032c001d9d completed[39m
+    [35mreq[39m: {
+      "id": "a06cf093-e724-4aa2-bc25-f44c1b2ae68c",
+      "method": "POST",
+      "url": "/api/verify-payment/aa83e8d6-fbd8-417b-891b-8e032c001d9d",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 4
+[2026-04-01 12:49:10.486 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "0abe109e-7abb-4b14-92bd-8e321a6f3e70",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.495 +0100] [32mINFO[39m (86884): [36mGET /payment-status/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4 completed[39m
+    [35mreq[39m: {
+      "id": "112023ba-0d29-4862-aff6-84026cfd64ce",
+      "method": "GET",
+      "url": "/api/payment-status/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+[2026-04-01 12:49:10.506 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4 completed[39m
+    [35mreq[39m: {
+      "id": "aa242e89-cc92-4d69-a64f-0a440d1d1f63",
+      "method": "POST",
+      "url": "/api/verify-payment/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.570 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4 completed[39m
+    [35mreq[39m: {
+      "id": "9fcda9f1-5440-4c91-98f6-08a37e961a68",
+      "method": "POST",
+      "url": "/api/verify-payment/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 23
+[2026-04-01 12:49:10.599 +0100] [32mINFO[39m (86884): [36mGET /payment-status/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4 completed[39m
+    [35mreq[39m: {
+      "id": "83bbd617-af95-412e-90b0-4c55ce5a0a72",
+      "method": "GET",
+      "url": "/api/payment-status/a63e1c88-b0e0-43c2-88ce-7a5f3e1bbef4",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.636 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "28356f14-87b5-4b15-9729-e042d4f2eac0",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 12
+[2026-04-01 12:49:10.655 +0100] [32mINFO[39m (86884): [36mPOST / completed[39m
+    [35mreq[39m: {
+      "id": "735e69b8-a9e3-4f0a-97f8-14f37e608a3f",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.671 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "9b977e89-9775-4527-8944-b51b7a2c5644",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 4
+[2026-04-01 12:49:10.699 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "cd91b9d7-96ae-4930-b902-d4ddc1051e97",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.732 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "d8df1156-3289-46e6-8450-6a0106f4b786",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.789 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "240557d9-b243-47ac-a9cb-4c66c44d5a25",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 5
+[2026-04-01 12:49:10.814 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "870ab0c9-fb04-4383-8596-4d52017c666d",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 5
+ ✓ src/lib/audit.test.js (5 tests) 34ms
+[2026-04-01 12:49:10.849 +0100] [32mINFO[39m (86884): [36mGET /payments?page=1&limit=2 completed[39m
+    [35mreq[39m: {
+      "id": "28e07ff7-00d9-4c1a-b7e2-e27ceb41fdc2",
+      "method": "GET",
+      "url": "/api/payments?page=1&limit=2",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 20
+[2026-04-01 12:49:10.863 +0100] [32mINFO[39m (86884): [36mGET /payments completed[39m
+    [35mreq[39m: {
+      "id": "cb7c1c1c-f65b-410b-a861-2757190b28a8",
+      "method": "GET",
+      "url": "/api/payments",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.874 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "d38e4b08-0c49-41fd-bcdc-d255e9fcbaa7",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.885 +0100] [32mINFO[39m (86884): [36mDELETE /payments/ae29a277-4ebe-46a4-9c4e-6a16be85f14e completed[39m
+    [35mreq[39m: {
+      "id": "cf351d40-c122-4964-bfd7-c8dfab07e70d",
+      "method": "DELETE",
+      "url": "/api/payments/ae29a277-4ebe-46a4-9c4e-6a16be85f14e",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.897 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "e8f8aac9-f5ab-45fe-af0d-989ddc60ffd7",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:10.911 +0100] [32mINFO[39m (86884): [36mDELETE /payments/d14ad51e-a366-47e1-b3bd-93452f679718 completed[39m
+    [35mreq[39m: {
+      "id": "e0db25fb-542e-4b4d-9652-54b6d677b9dd",
+      "method": "DELETE",
+      "url": "/api/payments/d14ad51e-a366-47e1-b3bd-93452f679718",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 8
+[2026-04-01 12:49:10.926 +0100] [32mINFO[39m (86884): [36mDELETE /payments/d14ad51e-a366-47e1-b3bd-93452f679718 completed[39m
+    [35mreq[39m: {
+      "id": "bb001217-467e-4435-b00f-bc03461d1721",
+      "method": "DELETE",
+      "url": "/api/payments/d14ad51e-a366-47e1-b3bd-93452f679718",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 410
+    }
+    [35mresponseTime[39m: 3
+[2026-04-01 12:49:10.943 +0100] [32mINFO[39m (86884): [36mDELETE /payments/223f2695-77c6-4e57-8fd4-6a673d54e57d completed[39m
+    [35mreq[39m: {
+      "id": "c934a0f0-1d62-4e9e-8919-09c6db2c21fc",
+      "method": "DELETE",
+      "url": "/api/payments/223f2695-77c6-4e57-8fd4-6a673d54e57d",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 5
+[2026-04-01 12:49:10.971 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "74b9ef4c-bc82-4368-aa7d-d5b3f08c0c5c",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-04-01 12:49:10.979 +0100] [32mINFO[39m (86884): [36mDELETE /payments/62c276d8-bb0d-47ea-a971-fb7565decdf5 completed[39m
+    [35mreq[39m: {
+      "id": "619682c0-dc5e-42e4-b4fc-5c300638c116",
+      "method": "DELETE",
+      "url": "/api/payments/62c276d8-bb0d-47ea-a971-fb7565decdf5",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+ ✓ src/lib/api-usage.test.js (4 tests) 88ms
+[2026-04-01 12:49:10.989 +0100] [32mINFO[39m (86884): [36mGET /payment-status/62c276d8-bb0d-47ea-a971-fb7565decdf5 completed[39m
+    [35mreq[39m: {
+      "id": "e8c82664-a4e2-41e0-8503-294983317c61",
+      "method": "GET",
+      "url": "/api/payment-status/62c276d8-bb0d-47ea-a971-fb7565decdf5",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 1
+[2026-04-01 12:49:11.002 +0100] [32mINFO[39m (86884): [36mPOST /sessions completed[39m
+    [35mreq[39m: {
+      "id": "1819adaf-954c-4e18-b070-0e4f2e2f566b",
+      "method": "POST",
+      "url": "/api/sessions",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:11.068 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "82d3bb20-4acb-463e-88c1-8fad5c8fac36",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 5
+[2026-04-01 12:49:11.111 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/c45537c7-fdd4-428e-8947-3b269f8ace13 completed[39m
+    [35mreq[39m: {
+      "id": "1c0494ce-dc9b-4d12-8332-eaa7ab6a240b",
+      "method": "POST",
+      "url": "/api/verify-payment/c45537c7-fdd4-428e-8947-3b269f8ace13",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 10
+[2026-04-01 12:49:11.113 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/c45537c7-fdd4-428e-8947-3b269f8ace13 completed[39m
+    [35mreq[39m: {
+      "id": "2a85d823-6bf5-4442-b771-e56fd8d3733c",
+      "method": "POST",
+      "url": "/api/verify-payment/c45537c7-fdd4-428e-8947-3b269f8ace13",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+[2026-04-01 12:49:11.144 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "2d943e1a-183a-447b-9358-1f224e9e5d6b",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:11.159 +0100] [32mINFO[39m (86884): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "b03ef8c4-6038-4c69-bb81-f570f2ab4626",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-04-01 12:49:11.218 +0100] [32mINFO[39m (86884): [36mPOST /verify-payment/e7cd45aa-b320-443c-959f-c2e93fb22f64 completed[39m
+    [35mreq[39m: {
+      "id": "f6535b65-6fd7-48fc-8e53-27d70774615c",
+      "method": "POST",
+      "url": "/api/verify-payment/e7cd45aa-b320-443c-959f-c2e93fb22f64",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 15
+ ✓ tests/integration/payments.test.js (36 tests) 1939ms
+ ✓ tests/integration/recaptcha.test.js (6 tests) 264ms
+ ✓ src/routes/merchants.test.js (2 tests) 1963ms
+   ✓ POST /api/merchants/rotate-webhook-secret > rotates secret with default 24h grace period 1953ms
+ ✓ src/lib/rate-limit.test.js (3 tests) 98ms
+ ❯ tests/integration/webhook-custom-headers.test.js (7 tests | 1 failed) 80ms
+   × sanitizeCustomHeaders > drops reserved system headers regardless of case 52ms
+     → expected { 'STELLAR-SIGNATURE': 'fake', …(1) } to deeply equal { 'X-Custom': 'keep' }
+ ✓ src/verification/frontend-path-payment-transaction.test.js (1 test) 129ms
+ ✓ src/lib/sep10-auth.test.js (4 tests) 113ms
+ ✓ src/routes/payments-security.test.js (1 test) 120ms
+ ✓ src/lib/log-retention.test.js (2 tests) 22ms
+ ❯ tests/integration/prometheus.test.js (0 test)
+ ❯ tests/integration/auth.test.js (0 test)
+ ✓ tests/integration/health.test.js (1 test) 153ms
+ ✓ src/lib/auth.test.js (9 tests) 7318ms
+   ✓ hashPassword / verifyPassword > produces a bcrypt hash distinct from the plaintext 1181ms
+   ✓ hashPassword / verifyPassword > verifyPassword returns true for the correct password 2312ms
+   ✓ hashPassword / verifyPassword > verifyPassword returns false for a wrong password 2099ms
+   ✓ hashPassword / verifyPassword > two hashes of the same password differ (unique salts) 1699ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/webhook-retries.test.js [ src/lib/webhook-retries.test.js ]
+Error: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY
+ ❯ src/lib/supabase.js:8:9
+      6| 
+      7| if (!supabaseUrl || !supabaseServiceKey) {
+      8|   throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+       |         ^
+      9| }
+     10| 
+ ❯ src/lib/webhooks.js:5:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/auth.test.js [ tests/integration/auth.test.js ]
+ FAIL  tests/integration/prometheus.test.js [ tests/integration/prometheus.test.js ]
+Error: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY
+ ❯ src/lib/supabase.js:8:9
+      6| 
+      7| if (!supabaseUrl || !supabaseServiceKey) {
+      8|   throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+       |         ^
+      9| }
+     10| 
+ ❯ src/services/paymentService.js:2:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/webhook-custom-headers.test.js > sanitizeCustomHeaders > drops reserved system headers regardless of case
+AssertionError: expected { 'STELLAR-SIGNATURE': 'fake', …(1) } to deeply equal { 'X-Custom': 'keep' }
+
+- Expected
++ Received
+
+  Object {
++   "STELLAR-SIGNATURE": "fake",
+    "X-Custom": "keep",
+  }
+
+ ❯ tests/integration/webhook-custom-headers.test.js:45:20
+     43|       "X-Custom": "keep",
+     44|     });
+     45|     expect(result).toEqual({ "X-Custom": "keep" });
+       |                    ^
+     46|   });
+     47| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ Test Files  4 failed | 29 passed | 2 skipped (35)
+      Tests  1 failed | 292 passed | 8 skipped (301)
+   Start at  12:49:04
+   Duration  11.20s (transform 3.61s, setup 0ms, collect 20.71s, tests 14.44s, environment 23ms, prepare 10.37s)
+

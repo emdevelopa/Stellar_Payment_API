@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { MDXRemote } from "next-mdx-remote";
+import MDXWrapper from "@/components/MDXWrapper";
 import { docsManifest } from "@/lib/docs-manifest";
 import { getDocBySlug } from "@/lib/docs";
 
@@ -40,19 +40,19 @@ export default async function DocPage({
   }
 
   return (
-    <article className="rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur sm:p-10">
-      <header className="mb-8 border-b border-white/10 pb-6">
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-mint">
-          Guide
+    <article className="rounded-[3rem] border border-[#E8E8E8] bg-white p-12 shadow-[0_20px_80px_rgba(0,0,0,0.04)] sm:p-16">
+      <header className="mb-12 border-b border-[#E8E8E8] pb-10">
+        <p className="font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
+          Reference Document
         </p>
-        <h2 className="mt-3 text-3xl font-bold text-white">{doc.title}</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
+        <h1 className="mt-4 text-5xl font-bold text-[#0A0A0A] font-serif tracking-tight uppercase">{doc.title}</h1>
+        <p className="mt-6 max-w-3xl text-base font-medium leading-relaxed text-[#6B6B6B]">
           {doc.description}
         </p>
       </header>
 
       <div className="docs-prose">
-        <MDXRemote {...doc.serialized} />
+        <MDXWrapper serialized={doc.serialized} />
       </div>
     </article>
   );

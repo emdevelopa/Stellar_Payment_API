@@ -38,7 +38,7 @@ export default function ActivityFeed() {
 
   useHydrateMerchantStore();
 
-  const handleConfirmed = useCallback((event: any) => {
+  const handleConfirmed = useCallback((event: { id: string; amount: number; asset: string; confirmed_at: string }) => {
     setPayments((prev) => {
       // If payment exists, update it to confirmed and move to top
       const exists = prev.find((p) => p.id === event.id);
@@ -108,9 +108,9 @@ export default function ActivityFeed() {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-3">
+      <div className="space-y-4 animate-pulse">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-16 w-full rounded-xl bg-white/5" />
+          <div key={i} className="h-16 w-full rounded-lg bg-[#F5F5F5]" />
         ))}
       </div>
     );
@@ -122,14 +122,14 @@ export default function ActivityFeed() {
 
   if (payments.length === 0) {
     return (
-      <div className="rounded-xl border border-white/10 bg-white/5 p-12 text-center flex flex-col items-center justify-center">
-        <h3 className="text-xl font-bold text-white mb-2">No transaction history</h3>
-        <p className="text-slate-400 max-w-sm mb-6">
+      <div className="rounded-lg border border-[#E8E8E8] bg-[#F9F9F9] p-16 text-center flex flex-col items-center justify-center">
+        <h3 className="text-xl font-bold text-[#0A0A0A] mb-3">No activity detected</h3>
+        <p className="text-[#6B6B6B] max-w-sm mb-8 font-medium">
           Your live feed will populate here once you start receiving payments. Create a link to get started.
         </p>
         <Link
           href="/dashboard/create"
-          className="rounded-full bg-mint px-6 py-3 text-sm font-bold text-black transition-all hover:bg-glow"
+          className="rounded-[6px] bg-[#0A0A0A] px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-[#222]"
         >
           Create First Payment
         </Link>
@@ -138,63 +138,58 @@ export default function ActivityFeed() {
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-      <div className="px-6 py-4 border-b border-white/5 bg-black/20 flex items-center justify-between">
-        <h3 className="font-semibold text-white">Live Activity Feed</h3>
-        <div className="flex items-center gap-2 text-xs font-mono text-mint">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-mint opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-mint"></span>
-          </span>
-          Listening for events...
+    <div className="rounded-lg border border-[#E8E8E8] bg-white overflow-hidden">
+      <div className="px-6 py-4 border-b border-[#E8E8E8] bg-[#0A0A0A] flex items-center justify-between">
+        <h3 className="font-semibold text-white text-sm">Live Activity Feed</h3>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-white/70 uppercase tracking-widest">
+          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+          Live
         </div>
       </div>
-      <div className="divide-y divide-white/5">
-        <AnimatePresence initial={false}>
-          {payments.map((payment) => (
-            <motion.div
-              key={payment.id}
-              initial={{ height: 0, opacity: 0, backgroundColor: "rgba(94, 242, 192, 0.4)" }}
-              animate={{ 
-                height: "auto", 
-                opacity: 1, 
-                backgroundColor: "transparent",
-                scale: [0.95, 1.02, 1]
-              }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              className="px-6 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  payment.status === "confirmed" ? "bg-green-500/20 text-green-400" : 
-                  payment.status === "pending" ? "bg-yellow-500/20 text-yellow-400" : 
-                  "bg-slate-500/20 text-slate-400"
-                }`}>
-                  {payment.status === "confirmed" ? (
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
-                </div>
-                <div>
-                  <p className="font-medium text-white">{payment.description || "Stellar Payment"}</p>
-                  <p className="text-xs text-slate-500">{new Date(payment.created_at).toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-white">
-                  {formatAmount(payment.amount, locale, hideCents)} {payment.asset}
-                </p>
-                <p className="text-xs font-mono text-slate-400 uppercase">{payment.status}</p>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-[#F9F9F9] border-b border-[#E8E8E8]">
+              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Description</th>
+              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Date</th>
+              <th className="px-6 py-3 text-right text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#E8E8E8]">
+            {payments.map((payment, i) => (
+              <tr 
+                key={payment.id} 
+                className={`group transition-all 150ms ease cursor-default hover:bg-[#F0F0F0] ${i % 2 === 0 ? "bg-white" : "bg-[#F9F9F9]"}`}
+              >
+                <td className="px-6 py-4">
+                  <div className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-tight ${
+                    payment.status === "confirmed" ? "bg-[#0A0A0A] text-white" : 
+                    payment.status === "pending" ? "bg-[#F5F5F5] text-[#6B6B6B] border border-[#E8E8E8]" : 
+                    "bg-red-50 text-red-600 border border-red-100"
+                  }`}>
+                    {payment.status}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <p className="text-sm font-semibold text-[#0A0A0A] truncate max-w-[200px]">
+                    {payment.description || "Transaction"}
+                  </p>
+                </td>
+                <td className="px-6 py-4">
+                  <p className="text-[11px] font-medium text-[#6B6B6B]">
+                    {new Date(payment.created_at).toLocaleDateString()}
+                  </p>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <p className="text-sm font-bold text-[#0A0A0A]">
+                    {formatAmount(payment.amount, locale, hideCents)} {payment.asset}
+                  </p>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

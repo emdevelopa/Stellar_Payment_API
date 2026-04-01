@@ -260,8 +260,8 @@ export async function getAccountBalances(
         };
       }
       return {
-        code: (b as any).asset_code || "UNKNOWN",
-        issuer: (b as any).asset_issuer || null,
+        code: (b as { asset_code?: string }).asset_code || "UNKNOWN",
+        issuer: (b as { asset_issuer?: string }).asset_issuer || null,
         balance: b.balance,
       };
     });

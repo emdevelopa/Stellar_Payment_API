@@ -21,7 +21,7 @@ type Command = {
 const SettingsIcon = (
   <svg
     viewBox="0 0 24 24"
-    className="h-5 w-5 text-slate-400"
+    className="h-5 w-5 text-[#A0A0A0]"
     fill="none"
     stroke="currentColor"
     strokeWidth={1.8}
@@ -38,7 +38,7 @@ const SettingsIcon = (
 const CreatePaymentIcon = (
   <svg
     viewBox="0 0 24 24"
-    className="h-5 w-5 text-slate-400"
+    className="h-5 w-5 text-[#A0A0A0]"
     fill="none"
     stroke="currentColor"
     strokeWidth={1.8}
@@ -50,7 +50,7 @@ const CreatePaymentIcon = (
 const HomeIcon = (
   <svg
     viewBox="0 0 24 24"
-    className="h-5 w-5 text-slate-400"
+    className="h-5 w-5 text-[#A0A0A0]"
     fill="none"
     stroke="currentColor"
     strokeWidth={1.8}
@@ -67,7 +67,7 @@ const HomeIcon = (
 const RegisterIcon = (
   <svg
     viewBox="0 0 24 24"
-    className="h-5 w-5 text-slate-400"
+    className="h-5 w-5 text-[#A0A0A0]"
     fill="none"
     stroke="currentColor"
     strokeWidth={1.8}
@@ -118,7 +118,7 @@ const commands: Command[] = [
   {
     id: "create-payment",
     label: "Create Payment",
-    description: "Generate a new Stellar payment link",
+    description: "Generate a new PLUTO payment link",
     href: "/dashboard/create",
     icon: CreatePaymentIcon,
     keywords: ["create", "payment", "new", "link", "pay", "generate"],
@@ -145,7 +145,7 @@ const commands: Command[] = [
     description: "Look up real-time Stellar conversion rates",
     action: "converter",
     icon: (
-      <svg viewBox="0 0 24 24" className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#A0A0A0]" fill="none" stroke="currentColor" strokeWidth={1.8}>
         <path d="M2 17 12 7l10 10" strokeLinecap="round" strokeLinejoin="round" opacity={0.4} />
         <path d="M2 12 12 2l10 10" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -275,7 +275,7 @@ export default function CommandPalette() {
       <div
         role="dialog"
         aria-label="Command palette"
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-white/10 bg-black/90 shadow-2xl shadow-mint/5 backdrop-blur-xl"
+        className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-[#1F1F1F] bg-black shadow-[0_30px_60px_rgba(0,0,0,0.8)] backdrop-blur-xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handlePaletteKeydown}
       >
@@ -287,7 +287,7 @@ export default function CommandPalette() {
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
           <svg
             viewBox="0 0 24 24"
-            className="h-5 w-5 shrink-0 text-slate-500"
+            className="h-5 w-5 shrink-0 text-[#A0A0A0]"
             fill="none"
             stroke="currentColor"
             strokeWidth={2}
@@ -302,7 +302,7 @@ export default function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type a command…"
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 outline-none"
+            className="flex-1 bg-transparent text-sm font-black text-white font-heading tracking-widest placeholder:text-white/10 outline-none"
             aria-label="Search commands"
             aria-activedescendant={
               filtered.length > 0 ? `cmd-${filtered[activeIndex].id}` : undefined
@@ -313,7 +313,7 @@ export default function CommandPalette() {
             aria-autocomplete="list"
           />
 
-          <kbd className="hidden rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 sm:inline-block">
+          <kbd className="hidden rounded-lg border border-[#1F1F1F] bg-white/[0.03] px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block">
             ESC
           </kbd>
         </div>
@@ -339,30 +339,30 @@ export default function CommandPalette() {
               aria-selected={i === activeIndex}
               className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
                 i === activeIndex
-                  ? "bg-mint/10 text-white"
+                  ? "bg-accent/10 text-white"
                   : "text-slate-300 hover:bg-white/5"
               }`}
               onMouseEnter={() => setActiveIndex(i)}
               onClick={() => select(cmd)}
             >
               <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all ${
                   i === activeIndex
-                    ? "border-mint/30 bg-mint/10"
-                    : "border-white/10 bg-white/5"
+                    ? "border-[#00F5D4]/30 bg-[#00F5D4]/10 shadow-[0_0_15px_rgba(0,245,212,0.1)]"
+                    : "border-[#1F1F1F] bg-white/[0.03]"
                 }`}
               >
                 {cmd.icon}
               </span>
 
-              <span className="flex flex-col">
-                <span className="text-sm font-medium">{cmd.label}</span>
-                <span className="text-xs text-slate-500">{cmd.description}</span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-black font-heading tracking-widest uppercase">{cmd.label}</span>
+                <span className="text-[10px] font-medium text-[#A0A0A0] uppercase tracking-wider">{cmd.description}</span>
               </span>
 
               {i === activeIndex && (
-                <kbd className="ml-auto hidden rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 sm:inline-block">
-                  ↵
+                <kbd className="ml-auto hidden rounded-lg border border-white/10 bg-white/10 px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block">
+                  ENTER
                 </kbd>
               )}
             </li>

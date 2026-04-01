@@ -36,9 +36,9 @@ export default function LocaleSwitcher({
 
   return (
     <label
-      className={`inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-slate-300 ${className}`}
+      className={`inline-flex items-center gap-2 rounded-xl border border-[#1F1F1F] bg-black px-3 py-2 text-xs text-[#A0A0A0] transition-all hover:border-white/20 ${className}`}
     >
-      <span className="font-mono uppercase tracking-[0.2em] text-slate-400">
+      <span className="font-black uppercase tracking-[0.2em] text-[#A0A0A0]">
         {t("label")}
       </span>
       <select
@@ -49,7 +49,7 @@ export default function LocaleSwitcher({
         className="bg-transparent text-sm text-white outline-none"
       >
         {locales.map((option) => (
-          <option key={option} value={option} className="bg-night text-white">
+          <option key={option} value={option} className="bg-black text-white">
             {t(`options.${option}`)}
           </option>
         ))}

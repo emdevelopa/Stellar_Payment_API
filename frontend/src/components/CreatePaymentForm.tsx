@@ -26,9 +26,9 @@ const USDC_ISSUER =
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
 const DEFAULT_BRANDING = {
-  primary_color: "#5ef2c0",
-  secondary_color: "#b8ffe2",
-  background_color: "#050608",
+  primary_color: "#00F5D4",
+  secondary_color: "#6C5CE7",
+  background_color: "#0B0F1A",
 };
 
 function normalizeHexInput(value: string) {
@@ -101,17 +101,17 @@ const childVariants: Variants = {
  * Colors are tuned to match the mint design system.
  */
 function fireConfetti() {
-  const mint = "#5ef2c0";
-  const glow = "#b8ffe2";
+  const accent = "#00F5D4";
+  const secondary = "#6C5CE7";
   const white = "#ffffff";
-  const sky = "#60a5fa";
+  const cyan = "#00F5D4";
 
   const shared = {
     particleCount: 70,
     spread: 80,
     startVelocity: 38,
     ticks: 200,
-    colors: [mint, glow, white, sky],
+    colors: [accent, secondary, white, cyan],
     scalar: 0.9,
   };
 
@@ -143,11 +143,11 @@ function AnimatedCheck() {
       initial={{ scale: 0, rotate: -30 }}
       animate={{ scale: 1, rotate: 0 }}
       transition={{ type: "spring", stiffness: 320, damping: 18, delay: 0.05 }}
-      className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-mint/15 ring-1 ring-mint/30"
+      className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 ring-1 ring-accent/30"
     >
       <motion.svg
         viewBox="0 0 24 24"
-        className="h-7 w-7 text-mint"
+        className="h-7 w-7 text-accent"
         fill="none"
         stroke="currentColor"
         strokeWidth={2.2}
@@ -214,12 +214,12 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
       {/* Main card */}
       <motion.div
         variants={childVariants}
-        className="relative overflow-hidden rounded-2xl border border-mint/25 bg-mint/5 p-6 backdrop-blur"
+        className="relative overflow-hidden rounded-2xl border border-accent/25 bg-accent/5 p-6 backdrop-blur"
       >
         {/* Subtle radial glow in the corner */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-mint/10 blur-3xl"
+          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-accent/10 blur-3xl"
         />
 
         {/* Check + heading */}
@@ -227,7 +227,7 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
           <AnimatedCheck />
           <motion.p
             variants={childVariants}
-            className="font-mono text-xs uppercase tracking-[0.2em] text-mint"
+            className="font-mono text-xs uppercase tracking-[0.2em] text-accent"
           >
             {t("readyEyebrow")}
           </motion.p>
@@ -253,8 +253,8 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
           <label className="text-xs font-medium text-slate-300">
             {t("paymentLink")}
           </label>
-          <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4 transition-colors hover:border-mint/25">
-            <code className="flex-1 truncate font-mono text-sm text-mint">
+          <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4 transition-colors hover:border-accent/25">
+            <code className="flex-1 truncate font-mono text-sm text-accent">
               {created.payment_link}
             </code>
             <CopyButton text={created.payment_link} />
@@ -292,7 +292,7 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
             <button
               type="button"
               onClick={() => void handleShare()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-mint/30 bg-mint/10 px-4 py-2 text-sm font-semibold text-mint transition-colors hover:bg-mint/15"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/15"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -557,7 +557,7 @@ export default function CreatePaymentForm() {
         <p className="text-sm text-slate-400">{t("noApiKeyDescription")}</p>
         <Link
           href="/register"
-          className="mt-2 rounded-xl bg-mint px-5 py-2.5 text-sm font-bold text-black transition-all hover:bg-glow"
+          className="mt-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-bold text-black transition-all hover:bg-secondary"
         >
           {t("registerAsMerchant")}
         </Link>
@@ -599,7 +599,7 @@ export default function CreatePaymentForm() {
               {view === "form" && (
                 <motion.div
                   layoutId="view-tab-bg"
-                  className="absolute inset-0 rounded-lg bg-mint"
+                  className="absolute inset-0 rounded-lg bg-accent"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
@@ -615,7 +615,7 @@ export default function CreatePaymentForm() {
               {view === "code" && (
                 <motion.div
                   layoutId="view-tab-bg"
-                  className="absolute inset-0 rounded-lg bg-mint"
+                  className="absolute inset-0 rounded-lg bg-accent"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
@@ -674,7 +674,7 @@ export default function CreatePaymentForm() {
                 }}
                 aria-invalid={!!amountError}
                 aria-describedby={amountError ? "amount-error" : undefined}
-                className={`rounded-xl border bg-white/5 p-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${amountError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-mint/50 focus:ring-mint/50"}`}
+                className={`rounded-xl border bg-white/5 p-3 text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${amountError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-accent/50 focus:ring-accent/50"}`}
                 placeholder={amountPlaceholder}
               />
               {amountError && (
@@ -706,7 +706,7 @@ export default function CreatePaymentForm() {
                     aria-pressed={asset === a}
                     className={`flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all ${
                       asset === a
-                        ? "border-mint/50 bg-mint/10 text-mint"
+                        ? "border-accent/50 bg-accent/10 text-accent"
                         : "border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white"
                     }`}
                   >
@@ -737,7 +737,7 @@ export default function CreatePaymentForm() {
                   id="trusted-address"
                   value={selectedTrustedAddress}
                   onChange={(e) => handleTrustedAddressSelect(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                  className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/50"
                 >
                   <option value="">{t("selectSavedAddress")}</option>
                   {trustedAddresses.map((addr) => (
@@ -764,7 +764,7 @@ export default function CreatePaymentForm() {
                       Use a valid Stellar public key that starts with G and is 56
                       characters long. Example:
                       <br />
-                      <code className="text-[11px] text-mint">
+                      <code className="text-[11px] text-accent">
                         GDQP2KPQGKIH...MBCQ4MMR
                       </code>
                     </span>
@@ -786,7 +786,7 @@ export default function CreatePaymentForm() {
                 aria-describedby={
                   recipientError ? "recipient-error" : undefined
                 }
-                className={`rounded-xl border bg-white/5 p-3 font-mono text-sm text-white placeholder:font-sans placeholder:text-slate-600 focus:outline-none focus:ring-1 ${recipientError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-mint/50 focus:ring-mint/50"}`}
+                className={`rounded-xl border bg-white/5 p-3 font-mono text-sm text-white placeholder:font-sans placeholder:text-slate-600 focus:outline-none focus:ring-1 ${recipientError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-accent/50 focus:ring-accent/50"}`}
                 placeholder={recipientPlaceholder}
                 autoComplete="off"
                 spellCheck={false}
@@ -818,7 +818,7 @@ export default function CreatePaymentForm() {
                     <span>
                       If you add a webhook URL here, use a full URL like
                       <br />
-                      <code className="text-[11px] text-mint">
+                      <code className="text-[11px] text-accent">
                         https://example.com/api/webhooks/stellar
                       </code>
                     </span>

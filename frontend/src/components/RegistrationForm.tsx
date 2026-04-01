@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { registerMerchant, type Merchant } from "../lib/auth";
 import { toast } from "sonner";
@@ -122,31 +123,28 @@ export default function RegistrationForm() {
 
   if (registeredMerchant) {
     return (
-      <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="rounded-2xl border border-mint/30 bg-mint/5 p-6 backdrop-blur">
-          <div className="flex flex-col gap-2">
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-mint">
-              Registration Success
+      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="rounded-[3rem] border border-[#E8E8E8] bg-white p-12 shadow-[0_20px_60px_rgb(0,0,0,0.05)]">
+          <div className="flex flex-col gap-4 text-center sm:text-left mb-8">
+            <p className="font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
+              Success
             </p>
-            <h2 className="text-xl font-semibold text-white">
-              Welcome, {registeredMerchant.business_name}!
+            <h2 className="text-4xl font-bold text-[#0A0A0A] font-serif tracking-tight uppercase">
+              Welcome, {registeredMerchant.business_name}
             </h2>
-            <p className="text-sm text-slate-300">
-              Your merchant account is ready. Save your API key below-you
-              won&apos;t be able to see it again.
+            <p className="text-sm font-medium text-[#6B6B6B] leading-relaxed">
+              Your merchant account is ready. Save your API key below—you
+              won&apos;t be able to access it again.
             </p>
           </div>
 
-          <div className="mt-6">
+          <div className="space-y-4">
             <MaskedValue
               label="Your API Key"
               value={registeredMerchant.api_key}
               copyText={registeredMerchant.api_key}
               defaultRevealed={true}
             />
-          </div>
-
-          <div className="mt-4">
             <MaskedValue
               label="Webhook Secret"
               value={registeredMerchant.webhook_secret}
@@ -156,29 +154,29 @@ export default function RegistrationForm() {
           </div>
         </div>
 
-        <a
+        <Link
           href="/"
-          className="text-center text-sm font-medium text-slate-300 transition-colors underline underline-offset-4 hover:text-white"
+          className="text-center text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] transition-colors underline underline-offset-8 hover:text-[#0A0A0A]"
         >
-          Go to Dashboard
-        </a>
+          Enter Dashboard
+        </Link>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-8" noValidate>
       {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-xs font-bold text-red-600">
           {error}
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
           <label
             htmlFor="businessName"
-            className="text-xs font-medium text-slate-300 uppercase tracking-wider"
+            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Business Name
           </label>
@@ -194,24 +192,24 @@ export default function RegistrationForm() {
             }}
             aria-invalid={Boolean(businessNameError)}
             aria-describedby={businessNameError ? "business-name-error" : undefined}
-            className={`rounded-xl border bg-white/5 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 ${businessNameError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-mint/50 focus:ring-mint/50"}`}
-            placeholder="Stellar Shop"
+            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+              businessNameError 
+                ? "border-red-500/50 focus:border-red-500" 
+                : "border-[#E8E8E8] focus:border-[#0A0A0A]"
+            }`}
+            placeholder="PLUTO Merchant"
           />
-          {businessNameError ? (
-            <p id="business-name-error" className="text-xs text-red-400" role="alert">
+          {businessNameError && (
+            <p id="business-name-error" className="text-[10px] font-bold text-red-500 uppercase tracking-widest" role="alert">
               {businessNameError}
             </p>
-          ) : businessNameTrimmed.length > 0 ? (
-            <p className="text-xs text-green-400" aria-live="polite">
-              Looks good.
-            </p>
-          ) : null}
+          )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label
             htmlFor="email"
-            className="text-xs font-medium text-slate-300 uppercase tracking-wider"
+            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Primary Email
           </label>
@@ -227,24 +225,24 @@ export default function RegistrationForm() {
             }}
             aria-invalid={Boolean(emailError)}
             aria-describedby={emailError ? "primary-email-error" : undefined}
-            className={`rounded-xl border bg-white/5 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 ${emailError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-mint/50 focus:ring-mint/50"}`}
+            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+              emailError 
+                ? "border-red-500/50 focus:border-red-500" 
+                : "border-[#E8E8E8] focus:border-[#0A0A0A]"
+            }`}
             placeholder="owner@business.com"
           />
-          {emailError ? (
-            <p id="primary-email-error" className="text-xs text-red-400" role="alert">
+          {emailError && (
+            <p id="primary-email-error" className="text-[10px] font-bold text-red-500 uppercase tracking-widest" role="alert">
               {emailError}
             </p>
-          ) : emailTrimmed.length > 0 ? (
-            <p className="text-xs text-green-400" aria-live="polite">
-              Email format looks valid.
-            </p>
-          ) : null}
+          )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label
             htmlFor="password"
-            className="text-xs font-medium text-slate-300 uppercase tracking-wider"
+            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Password
           </label>
@@ -259,23 +257,25 @@ export default function RegistrationForm() {
             }}
             aria-invalid={Boolean(passwordError)}
             aria-describedby={passwordError ? "password-error" : undefined}
-            className={`rounded-xl border bg-white/5 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 ${passwordError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-mint/50 focus:ring-mint/50"}`}
-            placeholder="********"
+            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+              passwordError 
+                ? "border-red-500/50 focus:border-red-500" 
+                : "border-[#E8E8E8] focus:border-[#0A0A0A]"
+            }`}
+            placeholder="••••••••"
           />
-          <div className="mt-1 flex flex-col gap-1.5">
-            <div className="flex h-1.5 gap-1">
+          <div className="mt-1 flex flex-col gap-2">
+            <div className="flex h-1 gap-1">
               {[0, 1, 2, 3].map((index) => {
                 const score = passwordScore;
                 const activeBars = score === 0 ? 1 : score === 4 ? 4 : score + 1;
                 const isActive = password.length > 0 && index < activeBars;
-                let bgColor = "bg-white/10";
+                let bgColor = "bg-[#E8E8E8]";
 
                 if (isActive) {
-                  if (score === 0) bgColor = "bg-red-500";
-                  else if (score === 1) bgColor = "bg-orange-500";
+                  if (score <= 1) bgColor = "bg-red-400";
                   else if (score === 2) bgColor = "bg-yellow-400";
-                  else if (score === 3) bgColor = "bg-lime-400";
-                  else if (score === 4) bgColor = "bg-green-500";
+                  else bgColor = "bg-[#0A0A0A]";
                 }
 
                 return (
@@ -287,26 +287,22 @@ export default function RegistrationForm() {
               })}
             </div>
             {password.length > 0 && (
-              <p className="text-[10px] text-slate-300 text-right font-medium">
+              <p className="text-[9px] text-[#6B6B6B] text-right font-black uppercase tracking-widest">
                 {["Weak", "Fair", "Good", "Strong", "Strong"][passwordScore]}
               </p>
             )}
           </div>
-          {passwordError ? (
-            <p id="password-error" className="text-xs text-red-400" role="alert">
+          {passwordError && (
+            <p id="password-error" className="text-[10px] font-bold text-red-500 uppercase tracking-widest" role="alert">
               {passwordError}
             </p>
-          ) : password.length > 0 ? (
-            <p className="text-xs text-green-400" aria-live="polite">
-              Password strength is acceptable.
-            </p>
-          ) : null}
+          )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label
             htmlFor="notificationEmail"
-            className="text-xs font-medium text-slate-300 uppercase tracking-wider"
+            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Notification Email
           </label>
@@ -324,39 +320,38 @@ export default function RegistrationForm() {
             aria-describedby={
               notificationEmailError ? "notification-email-error" : undefined
             }
-            className={`rounded-xl border bg-white/5 p-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 ${notificationEmailError ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/50" : "border-white/10 focus:border-mint/50 focus:ring-mint/50"}`}
+            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+              notificationEmailError 
+                ? "border-red-500/50 focus:border-red-500" 
+                : "border-[#E8E8E8] focus:border-[#0A0A0A]"
+            }`}
             placeholder="alerts@business.com"
           />
-          {notificationEmailError ? (
+          {notificationEmailError && (
             <p
               id="notification-email-error"
-              className="text-xs text-red-400"
+              className="text-[10px] font-bold text-red-500 uppercase tracking-widest"
               role="alert"
             >
               {notificationEmailError}
             </p>
-          ) : notificationEmailTrimmed.length > 0 ? (
-            <p className="text-xs text-green-400" aria-live="polite">
-              Notification email format looks valid.
-            </p>
-          ) : null}
+          )}
         </div>
       </div>
 
       <button
         type="submit"
         disabled={loading || !isFormValid}
-        className="group relative flex h-12 items-center justify-center rounded-xl bg-mint px-6 font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+        className="group relative flex h-16 items-center justify-center rounded-2xl bg-[#0A0A0A] px-8 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-black shadow-xl shadow-black/10 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? (
-          <span className="flex items-center gap-2">
-            <Spinner size="sm" className="text-black" />
-            Processing...
+          <span className="flex items-center gap-3">
+            <Spinner size="sm" className="text-white" />
+            Initializing Account...
           </span>
         ) : (
-          "Register Merchant"
+          "Create Professional Profile"
         )}
-        <div className="absolute inset-0 -z-10 bg-mint/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
       </button>
     </form>
   );

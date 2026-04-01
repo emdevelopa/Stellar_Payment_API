@@ -60,11 +60,11 @@ const CHART_HEIGHT = 300;
 const EXPORT_SCALE = 2;
 
 const ASSET_COLORS: Record<string, string> = {
-  USDC: "#2775CA",
-  XLM: "#E8B84B",
+  USDC: "#0A0A0A",
+  XLM: "#6B6B6B",
 };
 
-const FALLBACK_COLORS = ["#0ea5e9", "#10b981", "#8b5cf6", "#f43f5e", "#f97316"];
+const FALLBACK_COLORS = ["#0A0A0A", "#444444", "#6B6B6B", "#888888", "#AAAAAA"];
 const TIME_RANGES: TimeRange[] = ["7D", "30D", "1Y"];
 
 function colorForAsset(asset: string, index: number): string {
@@ -116,7 +116,7 @@ function buildSvgMarkup(svg: SVGSVGElement): {
   );
   background.setAttribute("width", "100%");
   background.setAttribute("height", "100%");
-  background.setAttribute("fill", "#0f172a");
+  background.setAttribute("fill", "#FFFFFF");
   clone.insertBefore(background, clone.firstChild);
 
   return {
@@ -216,7 +216,7 @@ function ChartExportButton({
         <button
           type="button"
           disabled={exporting}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-mint/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-[6px] border border-[#E8E8E8] bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-[#0A0A0A] transition-all hover:bg-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={exporting ? t("exporting") : t("downloadImage")}
         >
           <svg
@@ -411,56 +411,50 @@ export default function PaymentMetrics({
   return (
     <div className="flex flex-col gap-6">
       {summary && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
               {t("sevenDayVolume")}
             </p>
-            <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-mint">
+            <div className="mt-2 flex items-baseline gap-1">
+              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
                 {summary.total_volume.toLocaleString()}
               </p>
-              <p className="text-sm text-slate-300">XLM</p>
+              <p className="text-[10px] font-bold text-[#6B6B6B] uppercase">XLM</p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
+          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
               {t("totalPayments")}
             </p>
-            <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-mint">
+            <div className="mt-2 flex items-baseline gap-1">
+              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
                 {summary.total_payments}
               </p>
-              <p className="text-sm text-slate-300">
-                {t("paymentsCount", { count: summary.total_payments })}
-              </p>
+              <p className="text-[10px] font-bold text-[#6B6B6B] uppercase">Intents</p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
-              Confirmed
-            </p>
-            <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-green-400">
-                {summary.confirmed_count}
-              </p>
-              <p className="text-sm text-slate-300">
-                {summary.confirmed_count === 1 ? "intent" : "intents"}
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <p className="font-mono text-xs uppercase tracking-wider text-slate-300">
+          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
               Success Rate
             </p>
-            <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-green-400">
-                {summary.success_rate}
+            <div className="mt-2 flex items-baseline gap-1">
+              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
+                {summary.success_rate}%
               </p>
-              <p className="text-sm text-slate-300">%</p>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+              Confirmed
+            </p>
+            <div className="mt-2 flex items-baseline gap-1">
+              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
+                {summary.confirmed_count}
+              </p>
             </div>
           </div>
         </div>
@@ -468,30 +462,27 @@ export default function PaymentMetrics({
 
       <div
         ref={chartContainerRef}
-        className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur"
+        className="flex flex-col gap-8 rounded-lg border border-[#E8E8E8] bg-white p-8"
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-white">{t("chartTitle")}</h3>
-            <p className="text-xs text-slate-300">{t("chartSubtitle")}</p>
+            <h3 className="text-sm font-bold text-[#0A0A0A] uppercase tracking-wider">{t("chartTitle")}</h3>
+            <p className="text-[10px] font-medium text-[#6B6B6B] uppercase tracking-widest mt-1">{t("chartSubtitle")}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
+            <div className="flex gap-0.5 rounded-md border border-[#E8E8E8] bg-[#F5F5F5] p-0.5">
               {TIME_RANGES.map((nextRange) => (
                 <button
                   key={nextRange}
                   type="button"
                   onClick={() => setRange(nextRange)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-[4px] px-3 py-1 text-[10px] font-bold tracking-tight transition-all ${
                     range === nextRange
-                      ? "bg-white/10 text-white"
-                      : "text-slate-300 hover:text-white"
+                      ? "bg-white text-[#0A0A0A] shadow-sm"
+                      : "text-[#6B6B6B] hover:text-[#0A0A0A]"
                   }`}
                   aria-pressed={range === nextRange}
-                  aria-label={t("showRange", {
-                    range: t(`ranges.${nextRange}`),
-                  })}
                 >
                   {nextRange}
                 </button>
@@ -563,32 +554,40 @@ export default function PaymentMetrics({
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
               >
                 <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#1e293b"
+                  strokeDasharray="4 4"
+                  stroke="#F0F0F0"
                   horizontal
                   vertical={false}
                 />
                 <XAxis
                   dataKey="dateShort"
-                  stroke="#64748b"
-                  style={{ fontSize: "12px" }}
+                  stroke="#6B6B6B"
+                  style={{ fontSize: "10px", fontWeight: "600" }}
+                  axisLine={false}
+                  tickLine={false}
                 />
                 <YAxis
-                  stroke="#64748b"
-                  style={{ fontSize: "12px" }}
+                  stroke="#6B6B6B"
+                  style={{ fontSize: "10px", fontWeight: "600" }}
+                  axisLine={false}
+                  tickLine={false}
                   tickFormatter={(value) => value.toLocaleString()}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#0f172a",
-                    border: "1px solid #334155",
-                    borderRadius: "8px",
-                    padding: "8px 12px",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E8E8E8",
+                    borderRadius: "4px",
+                    padding: "12px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)"
                   }}
-                  labelStyle={{ color: "#e2e8f0", fontSize: "12px" }}
+                  labelStyle={{ color: "#0A0A0A", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}
                   formatter={(value: number, name: string) => [
-                    `${value.toLocaleString()} ${name}`,
-                    name,
+                    <span key={name} className="flex items-center gap-2">
+                       <span className="text-[11px] font-bold text-[#0A0A0A]">{value.toLocaleString()}</span>
+                       <span className="text-[9px] font-medium text-[#6B6B6B] uppercase">{name}</span>
+                    </span>,
+                    null,
                   ]}
                 />
                 <Legend wrapperStyle={{ display: "none" }} />

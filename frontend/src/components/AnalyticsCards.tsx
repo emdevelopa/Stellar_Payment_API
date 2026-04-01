@@ -84,48 +84,49 @@ export default function AnalyticsCards() {
 
   if (loading || !hydrated) {
     return (
-      <div className="grid gap-4 sm:grid-cols-3 animate-pulse">
+      <div className="grid gap-6 sm:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-32 rounded-xl bg-white/5" />
+          <div key={i} className="h-32 rounded-lg bg-[#F5F5F5] animate-pulse" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-6 sm:grid-cols-3">
       {/* Total Volume */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur transition-all hover:bg-white/10">
-        <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
-          Total Volume (7D)
-        </p>
-        <div className="mt-4 flex items-baseline gap-2">
-          <p className="text-4xl font-bold text-mint">
+      <div className="rounded-lg border border-[#E8E8E8] bg-white p-6 transition-all hover:bg-[#F9F9F9]">
+        <div className="flex flex-col gap-1">
+          <p className="text-[clamp(28px,4vw,48px)] font-bold tracking-tight text-[#0A0A0A]">
             {formatAmount(totalVolume, locale, hideCents)}
           </p>
-          <p className="text-sm text-slate-400">XLM/USDC</p>
+          <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
+            Total Volume (7D)
+          </p>
         </div>
       </div>
 
       {/* Success Rate */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur transition-all hover:bg-white/10">
-        <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
-          Success Rate
-        </p>
-        <div className="mt-4 flex items-baseline gap-2">
-          <p className="text-4xl font-bold text-white">{successRate.toFixed(1)}</p>
-          <p className="text-sm text-slate-400">%</p>
+      <div className="rounded-lg border border-[#E8E8E8] bg-white p-6 transition-all hover:bg-[#F9F9F9]">
+        <div className="flex flex-col gap-1">
+          <p className="text-[clamp(28px,4vw,48px)] font-bold tracking-tight text-[#0A0A0A]">
+            {successRate.toFixed(1)}%
+          </p>
+          <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
+            Success Rate
+          </p>
         </div>
       </div>
 
       {/* Active Intents */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur transition-all hover:bg-white/10">
-        <p className="font-mono text-xs uppercase tracking-wider text-slate-400">
-          Active Payment Intents
-        </p>
-        <div className="mt-4 flex items-baseline gap-2">
-          <p className="text-4xl font-bold text-cyan-400">{activeIntents}</p>
-          <p className="text-sm text-slate-400">pending</p>
+      <div className="rounded-lg border border-[#E8E8E8] bg-white p-6 transition-all hover:bg-[#F9F9F9]">
+        <div className="flex flex-col gap-1">
+          <p className="text-[clamp(28px,4vw,48px)] font-bold tracking-tight text-[#0A0A0A]">
+            {activeIntents}
+          </p>
+          <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
+            Active intents
+          </p>
         </div>
       </div>
     </div>

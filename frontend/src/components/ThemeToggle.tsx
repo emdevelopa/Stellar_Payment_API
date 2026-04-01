@@ -54,7 +54,7 @@ export default function ThemeToggle() {
           viewBox="0 0 24 24"
           strokeWidth={1.5}
           stroke="currentColor"
-          className="h-5 w-5 text-mint"
+          className="h-5 w-5 text-accent"
         >
           <path
             strokeLinecap="round"
@@ -79,7 +79,7 @@ export default function ThemeToggle() {
             />
           </svg>
           <div className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2 items-center justify-center">
-            <div className={`h-1.5 w-1.5 rounded-full ${resolvedTheme === 'dark' ? 'bg-mint' : 'bg-amber-500'}`} />
+            <div className={`h-1.5 w-1.5 rounded-full ${resolvedTheme === 'dark' ? 'bg-accent' : 'bg-amber-500'}`} />
           </div>
         </div>
       )}

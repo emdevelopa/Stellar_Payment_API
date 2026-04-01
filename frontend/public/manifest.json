@@ -1,11 +1,11 @@
 {
-    "name": "Stellar Payment API",
-    "short_name": "StellarPay",
-    "description": "Secure and fast Stellar payments",
+    "name": "PLUTO",
+    "short_name": "PLUTO",
+    "description": "Secure and fast Web3 payments on Stellar",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#050608",
-    "theme_color": "#5ef2c0",
+    "background_color": "#000000",
+    "theme_color": "#00F5D4",
     "icons": [
         {
             "src": "/icons/icon-192x192.png",

@@ -5,7 +5,7 @@
  * @returns {string} HTML string
  */
 export function renderReceiptEmail({ payment, merchant }) {
-  const merchantName = merchant?.business_name || "Merchant";
+  const merchantName = merchant?.name || merchant?.business_name || "Merchant";
   const logoUrl = merchant?.branding_config?.logo_url;
   const amount = payment?.amount ?? "—";
   const asset = payment?.asset ?? "—";

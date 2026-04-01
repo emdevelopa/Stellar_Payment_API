@@ -46,6 +46,7 @@ describe("createVerifyPaymentRateLimit", () => {
       message: { error: "Too many verification requests, please try again later." },
       standardHeaders: true,
       legacyHeaders: false,
+      requestWasSuccessful: expect.any(Function),
       store,
     });
   });

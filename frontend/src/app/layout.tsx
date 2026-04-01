@@ -1,5 +1,5 @@
 import "./globals.css";
-import { Space_Grotesk, Space_Mono } from "next/font/google";
+import { Outfit, Instrument_Serif, Space_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import ThemeProvider from "@/components/ThemeProvider";
@@ -11,22 +11,23 @@ import { WalletContextProvider } from "@/lib/wallet-context";
 import { DisplayPreferencesProvider } from "@/lib/display-preferences";
 import { Metadata, Viewport } from "next";
 
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-const spaceMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-mono", display: "swap" });
+const displayFont = Instrument_Serif({ subsets: ["latin"], weight: ["400"], variable: "--font-display", display: "swap" });
+const sansFont = Outfit({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const monoFont = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Stellar Payment Dashboard",
-  description: "Accept Stellar payments with simple links and status tracking.",
+  title: "PLUTO | Web3 Payments",
+  description: "The Hub for Decentralized Commerce on Stellar.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "StellarPay",
+    title: "PLUTO",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#5ef2c0",
+  themeColor: "#FFFFFF",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -39,26 +40,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var theme = localStorage.getItem('merchant-theme-preference');
-                  var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
-                  var themeToApply = 'light';
-                  if (theme === 'dark' || ((!theme || theme === 'system') && darkQuery.matches)) {
-                    themeToApply = 'dark';
-                  }
-                  document.documentElement.classList.remove('light', 'dark');
-                  document.documentElement.classList.add(themeToApply);
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
+        <meta name="theme-color" content="#FFFFFF" />
       </head>
-      <body className={`${spaceGrotesk.variable} ${spaceMono.variable} min-h-screen font-sans`}>
+      <body className={`${displayFont.variable} ${sansFont.variable} ${monoFont.variable} min-h-screen font-sans bg-white text-[#0A0A0A]`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <DisplayPreferencesProvider>

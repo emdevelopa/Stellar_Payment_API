@@ -11,7 +11,7 @@ export interface WebhookLog {
   status_code: number;
   event: string | null;
   url: string;
-  request_payload: any;
+  request_payload: Record<string, unknown>;
   request_headers: Record<string, string> | null;
   response_body: string | null;
   timestamp: string;

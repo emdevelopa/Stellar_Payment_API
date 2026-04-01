@@ -108,7 +108,7 @@ function NavLinks({
   return (
     <nav
       aria-label="Dashboard navigation"
-      className="flex flex-1 flex-col gap-2 px-3 py-6"
+      className="flex flex-1 flex-col gap-1 px-4 py-8"
     >
       {navItems.map((item) => {
         const isActive =
@@ -119,16 +119,16 @@ function NavLinks({
             key={item.href}
             href={item.href}
             onClick={onNavigate}
-            className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition-all ${
+            className={`flex items-center gap-3 rounded-[6px] px-3 py-2.5 transition-all 150ms ease ${
               isActive
-                ? "bg-mint text-black font-semibold shadow-[0_0_20px_rgba(45,212,191,0.2)]"
-                : "text-slate-200 hover:bg-white/5 hover:text-white focus-visible:bg-white/10 focus-visible:text-white"
+                ? "bg-[#0A0A0A] text-white shadow-none"
+                : "text-[#6B6B6B] hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
             }`}
           >
-            <span className={isActive ? "text-black" : "text-slate-300"}>
+            <span className="shrink-0">
               {item.icon}
             </span>
-            {!isCollapsed && <span className="text-sm">{item.label}</span>}
+            <span className="text-xs font-semibold tracking-wide">{item.label}</span>
           </Link>
         );
       })}
@@ -154,97 +154,28 @@ export default function Sidebar({
 
   const chrome = (
     <>
-      <div className="flex h-20 items-center justify-between border-b border-white/10 px-5">
-        <div className="min-w-0">
-          <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-mint">
-            {isCollapsed ? "SP" : "Stellar Pay"}
-          </p>
-          {!isCollapsed && (
-            <p className="mt-1 text-xs text-slate-500">{t("workspace")}</p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setIsCollapsed((value) => !value)}
-          className="hidden rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:bg-white/10 focus-visible:text-white lg:inline-flex"
-          aria-label={isCollapsed ? t("expand") : t("collapse")}
-          aria-controls="dashboard-sidebar-navigation"
-          aria-expanded={!isCollapsed}
-        >
-          <svg
-            className={`h-5 w-5 transition-transform ${isCollapsed ? "rotate-180" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-            />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={() => onMobileOpenChange(false)}
-          className="rounded-xl p-2 text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:bg-white/10 focus-visible:text-white lg:hidden"
-          aria-label={t("close")}
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+      <div className="flex h-16 items-center border-b border-[#E8E8E8] px-6">
+        <Link href="/" className="font-display text-2xl tracking-tight text-[#0A0A0A]">
+          Pluto
+        </Link>
       </div>
 
       <NavLinks
-        isCollapsed={isCollapsed}
+        isCollapsed={false}
         pathname={pathname}
         t={t}
         onNavigate={() => onMobileOpenChange(false)}
       />
 
-      <div className="border-t border-white/10 p-4">
-        <div
-          className={`rounded-2xl border border-white/10 bg-black/40 p-4 transition-all ${isCollapsed ? "px-3" : ""}`}
-        >
-          {!isCollapsed && (
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-300">
-                {t("shortcuts")}
-              </p>
-          )}
-          <div
-            className={`mt-3 flex ${isCollapsed ? "flex-col gap-2" : "flex-col gap-3"}`}
-          >
-            {secondaryLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => onMobileOpenChange(false)}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white"
-              >
-                {isCollapsed ? link.label.slice(0, 1) : link.label}
-              </Link>
-            ))}
+      <div className="p-4">
+        <div className="rounded-lg bg-[#F5F5F5] p-5">
+           <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+            {t("network")}
+          </p>
+          <div className="mt-2 flex items-center gap-2 text-xs font-medium text-[#0A0A0A]">
+            <span className="h-2 w-2 rounded-full bg-[#111111]" />
+            Stellar Mainnet
           </div>
-          {!isCollapsed && (
-            <div className="mt-4 flex items-center gap-2 text-xs font-mono text-white">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-mint" />
-              {t("network")}
-            </div>
-          )}
         </div>
       </div>
     </>
@@ -252,14 +183,12 @@ export default function Sidebar({
 
   return (
     <>
-      <motion.aside
-        initial={false}
-        animate={{ width: isCollapsed ? 96 : 280 }}
+      <aside
         id="dashboard-sidebar-navigation"
-        className="sticky top-0 hidden h-screen shrink-0 border-r border-white/10 bg-black/40 backdrop-blur-xl lg:flex"
+        className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-[#E8E8E8] bg-white lg:flex"
       >
         {chrome}
-      </motion.aside>
+      </aside>
 
       <motion.div
         initial={false}
@@ -268,14 +197,14 @@ export default function Sidebar({
           opacity: mobileOpen ? 1 : 0,
           pointerEvents: mobileOpen ? "auto" : "none",
         }}
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden"
+        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm lg:hidden"
         onClick={() => onMobileOpenChange(false)}
       />
       <motion.aside
         initial={false}
         animate={{ x: mobileOpen ? 0 : "-100%" }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        className="fixed inset-y-0 left-0 z-[60] flex w-[86vw] max-w-[320px] flex-col border-r border-white/10 bg-black/90 backdrop-blur-xl lg:hidden"
+        className="fixed inset-y-0 left-0 z-[60] flex w-[280px] flex-col border-r border-[#E8E8E8] bg-white lg:hidden"
       >
         {chrome}
       </motion.aside>

@@ -104,7 +104,7 @@ function signaturesEqual(a, b) {
 }
 
 /**
- * Verifies a Stellar-Signature header against the merchant webhook secrets.
+ * Verifies a PLUTO-Signature header against the merchant webhook secrets.
  * Accepts the current secret and, during grace window, the previous secret.
  */
 export function verifyWebhook(rawBody, signatureHeader, merchant) {
@@ -210,7 +210,7 @@ function scheduleRetries(url, payload, headers, paymentId) {
  *
  * Accepted: plain object whose keys are safe ASCII header names and whose
  * values are non-empty strings.
- * Reserved system headers (Content-Type, User-Agent, Stellar-Signature) are
+ * Reserved system headers (Content-Type, User-Agent, PLUTO-Signature) are
  * silently dropped to prevent merchants from overriding security controls.
  *
  * @param {unknown} raw  The value stored in merchants.webhook_custom_headers.
@@ -223,7 +223,7 @@ export function sanitizeCustomHeaders(raw) {
   const RESERVED = new Set([
     "content-type",
     "user-agent",
-    "stellar-signature",
+    "pluto-signature",
   ]);
 
   const result = {};
@@ -272,13 +272,13 @@ export async function sendWebhook(url, payload, secret, paymentId = null, custom
     // Merchant custom headers first so system headers always take precedence.
     ...sanitizeCustomHeaders(customHeaders),
     "Content-Type": "application/json",
-    "User-Agent": "stellar-payment-api/0.1",
-    "Stellar-Timestamp": timestamp
+    "User-Agent": "pluto-api/0.1",
+    "PLUTO-Timestamp": timestamp
   };
 
   if (signingSecret) {
     const signature = signPayload(rawBody, signingSecret);
-    headers["Stellar-Signature"] = `sha256=${signature}`;
+    headers["PLUTO-Signature"] = `sha256=${signature}`;
   }
 
   const isValid = await validateWebhookUrl(url);

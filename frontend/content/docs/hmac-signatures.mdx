@@ -7,7 +7,7 @@ Webhook signing in this repository lives in `backend/src/lib/webhooks.js`.
 When a webhook secret is available, the backend sends:
 
 ```text
-Stellar-Signature: sha256=<hex_digest>
+PLUTO-Signature: sha256=<hex_digest>
 ```
 
 The digest is generated from the exact JSON string body using HMAC-SHA256.
@@ -42,12 +42,12 @@ import express from "express";
 const app = express();
 
 app.post(
-  "/webhooks/stellar",
+  "/webhooks/pluto",
   express.raw({type: "application/json"}),
   (req, res) => {
     const secret = process.env.STELLAR_WEBHOOK_SECRET;
     const rawBody = req.body.toString("utf8");
-    const incoming = req.get("Stellar-Signature") || "";
+    const incoming = req.get("PLUTO-Signature") || "";
 
     const expected = `sha256=${crypto
       .createHmac("sha256", secret)
@@ -113,6 +113,6 @@ Your webhook handler should therefore be:
 - Save the `webhook_secret` returned during merchant registration.
 - Read the raw request body before JSON parsing changes it.
 - Compute `HMAC-SHA256` over that exact raw body.
-- Compare against the `Stellar-Signature` header.
+- Compare against the `PLUTO-Signature` header.
 - Reject invalid signatures with `401`.
 - Treat webhook events as retryable and idempotent.

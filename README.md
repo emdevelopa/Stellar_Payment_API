@@ -1,4 +1,4 @@
-# Stellar Payment API
+# PLUTO API
 
 Accept Stellar payments (XLM or Stellar assets like USDC) using simple payment links and a developer-friendly API.
 
@@ -28,7 +28,7 @@ This project aims to feel like Stripe/PayPal, but built on Stellar. Merchants cr
 ## Quick Start (Backend)
 
 1. Install dependencies:
-```bash
+```bash 
 cd backend
 npm install
 ```
@@ -67,7 +67,11 @@ CREATE_PAYMENT_RATE_LIMIT_WINDOW_MS=60000
 ```
 
 4. Apply schema in Supabase:
-- Use `backend/sql/schema.sql` in Supabase SQL editor.
+- Run database migrations:
+```bash
+cd backend
+npm run migrate
+```
 
 5. Run the API:
 ```bash

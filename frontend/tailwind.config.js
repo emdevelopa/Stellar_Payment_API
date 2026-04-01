@@ -9,11 +9,16 @@ module.exports = {
         tide: "var(--color-tide)",
         mint: "var(--color-mint)",
         glow: "var(--color-glow)",
+        primary: "var(--color-primary)",
+        secondary: "var(--color-secondary)",
+        accent: "var(--color-accent)",
         gray: {
           950: "#000000",
         },
       },
       fontFamily: {
+        heading: ["var(--font-heading)", "system-ui", "sans-serif"],
+        body: ["var(--font-sans)", "system-ui", "sans-serif"],
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"]
       },

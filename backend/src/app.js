@@ -14,7 +14,9 @@ import metricsRouter from "./routes/metrics.js";
 import webhooksRouter from "./routes/webhooks.js";
 import prometheusRouter from "./routes/prometheus.js";
 import sep0001Router from "./routes/sep0001.js";
-import paymentDetailsRouter from "./routes/paymentDetails.js"; // NEW
+import paymentDetailsRouter from "./routes/paymentDetails.js";
+import x402Router from "./routes/x402.js";
+import demoRouter from "./routes/demo.js";
 
 import { requireApiKeyAuth } from "./lib/auth.js";
 import { isHorizonReachable } from "./lib/stellar.js";
@@ -228,6 +230,12 @@ export async function createApp({ redisClient }) {
 
   // Prometheus Metrics endpoint
   app.use("/", prometheusRouter);
+
+  // x402 pay-per-request verification (public — agents call this)
+  app.use("/api", x402Router);
+
+  // Demo routes showing x402 in action
+  app.use("/api", demoRouter);
 
   // Sentry error handler — must come after all routes, before custom error handler
   setupSentryErrorHandler(app);

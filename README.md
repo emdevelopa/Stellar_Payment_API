@@ -1,171 +1,177 @@
-# PLUTO API
+# PLUTO — Agentic Payment Infrastructure on Stellar
 
-Accept Stellar payments (XLM or Stellar assets like USDC) using simple payment links and a developer-friendly API.
+> **Hackathon submission for: Agents on Stellar · x402 + Stripe MPP**
 
-This project aims to feel like Stripe/PayPal, but built on Stellar. Merchants create a payment, share a link or QR code, and the API confirms the on-chain payment and notifies the merchant.
+PLUTO is a Stripe-like payment gateway built on Stellar that lets merchants accept XLM and USDC payments — now extended with **x402 pay-per-request** so AI agents can autonomously pay for API access using USDC micropayments.
 
-## What It Does
+---
 
-- Create payment intents with an amount, asset, and recipient
-- Generate a payment link (ready for QR code usage)
-- Verify payments on Stellar via Horizon
-- Track status in Supabase (pending → confirmed)
-- Send webhook notifications when payments are confirmed
+## What We Built
+
+### Core: Merchant Payment Gateway
+A full-stack payment infrastructure on Stellar testnet:
+- Merchants register and get an API key
+- Create payment links (`POST /api/create-payment`)
+- Customers pay via a branded checkout page (`/pay/:id`)
+- Payments confirmed automatically via Horizon polling
+- Webhooks fire on confirmation
+- Real-time dashboard with analytics
+
+### New: x402 Agentic Payments
+The x402 protocol turns any HTTP endpoint into a pay-per-request service. AI agents can autonomously pay for API access without subscriptions or API keys — just USDC on Stellar.
+
+**Flow:**
+```
+Agent → GET /api/demo/protected
+      ← 402 { amount: "0.10", asset: "USDC", recipient: "G...", memo: "x402-abc123" }
+Agent → sends 0.10 USDC on Stellar with memo
+Agent → POST /api/verify-x402 { tx_hash, amount, recipient, memo }
+      ← { access_token: "eyJ..." }
+Agent → GET /api/demo/protected + X-Payment-Token: eyJ...
+      ← 200 { secret_data: "you paid for this" }
+```
+
+---
+
+## Live Demo
+
+### Run the agent demo
+```bash
+cd backend
+node scripts/demoAgent.js
+```
+
+Watch an AI agent go through the full payment loop — 402 → pay → verify → 200 — entirely automatically on Stellar testnet.
+
+### Frontend demo
+Visit `http://localhost:3000/x402-demo` to see the agent payment flow visualized in real-time.
+
+---
 
 ## Tech Stack
 
-- Backend: Node.js + Express
-- Database: Supabase (Postgres)
-- Stellar: `stellar-sdk` + Horizon API
-- Frontend: Next.js + Tailwind (starter shell in `frontend/`)
+| Layer | Tech |
+|-------|------|
+| Backend | Node.js + Express |
+| Database | Supabase (Postgres) |
+| Blockchain | Stellar SDK + Horizon API (testnet) |
+| Frontend | Next.js 14 + Tailwind CSS |
+| Real-time | Socket.io + SSE |
+| Rate limiting | Redis |
+| Agentic payments | x402 protocol (custom implementation) |
 
-## Prerequisites
+---
 
-- Node.js 20+
-- Redis (required for backend rate limiting)
-- Supabase project (URL, service role key, and Postgres connection string)
+## x402 Implementation
 
-## Quick Start (Backend)
+### New endpoints
+- `POST /api/verify-x402` — verifies a Stellar USDC payment and issues a short-lived JWT
+- `GET /api/demo/protected` — example paywalled endpoint (0.10 USDC per request)
+- `GET /api/demo/free` — free endpoint for comparison
 
-1. Install dependencies:
-```bash 
-cd backend
-npm install
+### Middleware
+`backend/src/middleware/x402.js` — drop-in Express middleware that protects any route:
+
+```js
+import { x402Middleware } from './middleware/x402.js';
+
+app.get('/api/my-paid-endpoint',
+  x402Middleware({ amount: '0.10', recipient: 'G...YOUR_ADDRESS' }),
+  (req, res) => res.json({ data: 'you paid for this' })
+);
 ```
 
-2. Configure environment:
+### Replay attack prevention
+Every verified `tx_hash` is stored in the `x402_payments` table. Reusing a transaction hash returns `409 Conflict`.
+
+### Access tokens
+Short-lived JWTs (60s expiry) signed with `X402_JWT_SECRET`. Agents include them as `X-Payment-Token` header on retries.
+
+---
+
+## Stellar Testnet Interaction
+
+This project makes real Stellar testnet transactions:
+- Payment creation stores recipient Stellar addresses
+- Horizon polling confirms on-chain USDC/XLM payments
+- x402 agent submits real USDC payments on testnet
+- All transactions verifiable on [Stellar Expert (testnet)](https://stellar.expert/explorer/testnet)
+
+USDC issuer (testnet): `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+
+- Redis
+- Supabase account
+- Stellar testnet wallet (Freighter)
+
+### Backend
 ```bash
+cd backend
 cp .env.example .env
-```
-
-If you skip this, backend startup validation fails and prints missing required keys.
-
-Optional: bring up Redis quickly with Docker:
-```bash
-docker run --name stellar-redis -p 6379:6379 redis:7-alpine
-```
-
-Or install Redis locally (example with Homebrew):
-```bash
-brew install redis
-brew services start redis
-```
-
-3. Fill out `backend/.env`:
-```
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-DATABASE_URL=your_supabase_transaction_pooler_uri
-REDIS_URL=redis://localhost:6379
-STELLAR_NETWORK=testnet
-# Optional overrides:
-STELLAR_HORIZON_URL=
-USDC_ISSUER=your_usdc_issuer
-PAYMENT_LINK_BASE=http://localhost:3000
-CREATE_PAYMENT_RATE_LIMIT_MAX=50
-CREATE_PAYMENT_RATE_LIMIT_WINDOW_MS=60000
-```
-
-4. Apply schema in Supabase:
-- Run database migrations:
-```bash
-cd backend
+# Fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL
+npm install
 npm run migrate
-```
-
-5. Run the API:
-```bash
 npm run dev
 ```
 
-Or start Redis + API together from the backend folder:
+### Frontend
 ```bash
-docker compose up
+cd frontend
+cp .env.example .env.local
+# Set NEXT_PUBLIC_API_URL=http://localhost:4000
+npm install
+npm run dev
 ```
 
-API will be available at `http://localhost:4000`.
-
-Rate limiting uses Redis-backed shared state, so multiple API instances behind a load balancer enforce the same counters.
-
-Generate a static OpenAPI asset for SDK generation or external docs:
-```bash
-cd backend
-npm run build:docs
-```
-
-This writes `backend/public/openapi.json`.
-
-Verify the XLM -> USDC path-payment flow on Stellar testnet without a wallet:
+### Run the x402 agent demo
 ```bash
 cd backend
-npm run verify:path-payment:testnet
+node scripts/demoAgent.js
 ```
 
-This script creates disposable testnet accounts, issues a temporary USDC asset, places a DEX offer, discovers the best XLM -> USDC path, submits a live `path_payment_strict_receive`, and prints the transaction hash plus the recipient's received USDC amount.
+---
 
-## API Endpoints
+## Environment Variables
 
-- `GET /health`
-- `POST /api/create-payment`
-- `POST /api/sessions`
-- `GET /api/payment-status/:id`
-- `POST /api/verify-payment/:id`
-- `GET /api/merchant-branding`
-- `PUT /api/merchant-branding`
+```env
+# Supabase
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=
 
-### Create Payment
+# Stellar
+STELLAR_NETWORK=testnet
+STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
 
-```json
-{
-  "amount": 50,
-  "asset": "USDC",
-  "asset_issuer": "G...ISSUER",
-  "recipient": "G...RECIPIENT",
-  "description": "Digital product",
-  "webhook_url": "https://merchant.app/webhooks/stellar",
-  "branding_overrides": {
-    "primary_color": "#5ef2c0",
-    "secondary_color": "#b8ffe2",
-    "background_color": "#050608"
-  }
-}
+# x402
+X402_JWT_SECRET=your_secret_here
+X402_TOKEN_EXPIRY_SECONDS=60
+X402_PROVIDER_PUBLIC_KEY=G...YOUR_PROVIDER_ADDRESS
+
+# Redis
+REDIS_URL=redis://localhost:6379
 ```
 
-`POST /api/create-payment` and `POST /api/sessions` are rate-limited per API key. By default the backend allows 50 requests per 60 seconds and returns `429 Too Many Requests` with a `Retry-After` header when the limit is exceeded.
+---
 
-Both endpoints return `branding_config` in the response. The config is resolved in this order:
-1) per-session `branding_overrides`
-2) merchant `branding_config`
-3) system defaults
+## What's Next
 
-### Verify Payment
+- **MPP (Stripe Machine Payments)** — payment channels for high-frequency agent interactions without per-tx fees
+- **Agent marketplace** — merchants list paywalled APIs, agents discover and pay autonomously
+- **Ethereum support** — same frontend, separate backend service for ERC-20 payments
+- **Spending policies** — contract accounts with per-agent USDC limits
 
-`POST /api/verify-payment/:id` checks Horizon for a matching payment and, if found, marks it as confirmed and fires a webhook.
+---
 
-Webhook payload:
-```json
-{
-  "event": "payment.confirmed",
-  "payment_id": "...",
-  "amount": 50,
-  "asset": "USDC",
-  "asset_issuer": "G...ISSUER",
-  "recipient": "G...RECIPIENT",
-  "tx_id": "..."
-}
-```
+## Hackathon Notes
 
-## Roadmap & Issues
-
-The project currently has a comprehensive roadmap of **100+ active issues** covering:
-- **Core Stellar Integrations**: SEP-0001, SEP-0010, Path Payments, etc.
-- **Backend Architecture**: Service layer refactor, Redis idempotency, API versioning.
-- **Frontend/UX**: Merchant branding, real-time checkout, dashboard analytics.
-- **Security & Reliability**: Webhook signatures, rate limiting, audit logs.
-- **Infrastructure**: Sentry monitoring, Prometheus metrics, database archival.
-
-## Contributing
-
-We are actively seeking contributors! See the [GitHub Issues](https://github.com/emdevelopa/Stellar_Payment_API/issues) to get started. Each issue is tagged with complexity (`complexity:trivial`, `complexity:medium`, `complexity:high`) and category.
-
-If you are new, look for issues labeled `good first issue`.
+- All Stellar interactions use real testnet transactions (not mocked)
+- The x402 implementation is custom-built on top of the existing PLUTO infrastructure
+- The demo agent is fully autonomous — no human interaction required after `node scripts/demoAgent.js`
+- Open source: full source code in this repository

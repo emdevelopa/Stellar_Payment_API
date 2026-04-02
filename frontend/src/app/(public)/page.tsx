@@ -326,7 +326,7 @@ function Footer() {
           <SystemStatus />
         </div>
         <div className="flex gap-10 font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B]">
-          {[["Login", "/login"], ["Register", "/register"], ["Dashboard", "/dashboard"], ["Docs", "/docs"]].map(([label, href]) => (
+          {[["Login", "/login"], ["Register", "/register"], ["Dashboard", "/dashboard"], ["Docs", "/docs"], ["x402 Demo", "/x402-demo"]].map(([label, href]) => (
             <Link key={label} href={href} className="transition-colors hover:text-[#0A0A0A]">{label}</Link>
           ))}
         </div>

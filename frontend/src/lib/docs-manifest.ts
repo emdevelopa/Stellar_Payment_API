@@ -20,4 +20,11 @@ export const docsManifest: DocEntry[] = [
       "Validate Stellar webhook requests using the exact HMAC-SHA256 scheme implemented in the backend.",
     filename: "hmac-signatures.md",
   },
+  {
+    slug: "x402-agentic-payments",
+    title: "x402 Agentic Payments",
+    description:
+      "Let AI agents and developer tools pay per API call using USDC micropayments on Stellar. No subscriptions, no API keys — just crypto.",
+    filename: "x402-agentic-payments.md",
+  },
 ];

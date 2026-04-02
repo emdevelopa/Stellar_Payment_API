@@ -138,9 +138,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .docs-prose {
-  color: #334155;
+  color: #1a1a1a;
   line-height: 1.8;
-  font-size: 1rem;
+  font-size: 0.9375rem;
 }
 
 .docs-prose h1,
@@ -149,83 +149,130 @@ h1, h2, h3, h4, h5, h6 {
 .docs-prose h4 {
   color: #0A0A0A;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.2;
   margin-top: 2.5rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   letter-spacing: -0.02em;
 }
 
-.docs-prose h1 {
-  font-size: 2.5rem;
-}
-
+.docs-prose h1 { font-size: 2rem; }
 .docs-prose h2 {
-  font-size: 1.75rem;
-}
-
-.docs-prose h3 {
   font-size: 1.4rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #E8E8E8;
+  margin-top: 3rem;
 }
+.docs-prose h3 { font-size: 1.15rem; color: #1a1a1a; }
+.docs-prose h4 { font-size: 1rem; color: #333; }
 
-.docs-prose p,
-.docs-prose ul,
-.docs-prose ol {
+.docs-prose p {
+  color: #333;
   margin-bottom: 1.25rem;
+  line-height: 1.8;
 }
 
 .docs-prose ul,
 .docs-prose ol {
   padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+  color: #333;
 }
 
 .docs-prose li {
   margin-bottom: 0.5rem;
+  line-height: 1.7;
 }
+
+.docs-prose strong {
+  color: #0A0A0A;
+  font-weight: 700;
+}
+
+.docs-prose a {
+  color: var(--pluto-600);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+  font-weight: 600;
+  transition: color 0.15s;
+}
+.docs-prose a:hover { color: var(--pluto-800); }
 
 .docs-prose code {
   border: 1px solid #E8E8E8;
-  background: #F9F9F9;
-  border-radius: 0.5rem;
-  color: #111111;
+  background: #F5F5F5;
+  border-radius: 0.4rem;
+  color: #0A0A0A;
   font-family: var(--font-mono);
-  font-size: 0.88em;
-  padding: 0.2rem 0.4rem;
+  font-size: 0.85em;
+  padding: 0.15rem 0.45rem;
+  font-weight: 600;
 }
 
-/* Syntax highlighting for code blocks with rehype-prism-plus */
 .docs-prose pre {
   overflow-x: auto;
   border: 1px solid #E8E8E8;
-  background: #0A0A0A;
-  border-radius: 1.25rem;
+  background: #0D1117;
+  border-radius: 0.875rem;
   padding: 1.5rem;
-  margin: 2rem 0;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.05);
+  margin: 1.75rem 0;
 }
 
 .docs-prose pre code {
   border: 0;
   background: transparent;
-  color: #F8F9FA;
+  color: #e6edf3;
   padding: 0;
   font-size: 0.85em;
-  line-height: 1.6;
+  line-height: 1.7;
+  font-weight: 400;
 }
 
-.docs-prose a {
-  color: #000000;
-  text-decoration: underline;
-  text-underline-offset: 0.3em;
-  font-weight: 600;
+/* Tables */
+.docs-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.75rem 0;
+  font-size: 0.875rem;
 }
 
-.docs-prose strong {
-  color: #f8fafc;
+.docs-prose thead tr {
+  background: #F5F5F5;
+  border-bottom: 2px solid #E8E8E8;
 }
+
+.docs-prose th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6B6B6B;
+}
+
+.docs-prose td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #F0F0F0;
+  color: #333;
+  vertical-align: top;
+}
+
+.docs-prose tbody tr:hover { background: #FAFAFA; }
 
 .docs-prose hr {
-  border-color: rgba(255, 255, 255, 0.08);
-  margin: 2rem 0;
+  border: none;
+  border-top: 1px solid #E8E8E8;
+  margin: 2.5rem 0;
+}
+
+.docs-prose blockquote {
+  border-left: 3px solid var(--pluto-400);
+  background: var(--pluto-50);
+  padding: 1rem 1.25rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+  margin: 1.5rem 0;
+  color: var(--pluto-800);
+  font-style: italic;
 }
 
 /* ─── Sonner Toast Theme ─────────────────────────────── */

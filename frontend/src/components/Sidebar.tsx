@@ -62,6 +62,16 @@ function getNavItems(t: ReturnType<typeof useTranslations>) {
         </svg>
       ),
     },
+    {
+      label: "x402 Agent",
+      href: "/x402-demo",
+      icon: (
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+      external: true,
+    },
   ];
 }
 
@@ -86,6 +96,18 @@ function NavLinks({
       {navItems.map((item) => {
         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
         const isHighlight = "highlight" in item && item.highlight;
+        const isExternal = "external" in item && item.external;
+
+        if (isExternal) {
+          return (
+            <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" onClick={onNavigate}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all text-[#6B6B6B] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]">
+              <span className="shrink-0">{item.icon}</span>
+              <span className="text-xs font-semibold tracking-wide">{item.label}</span>
+              <svg className="h-3 w-3 ml-auto opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+            </a>
+          );
+        }
 
         return (
           <Link
@@ -108,9 +130,7 @@ function NavLinks({
       })}
 
       <div className="mt-auto pt-4 border-t border-[#E8E8E8]">
-        <Link
-          href="/"
-          onClick={onNavigate}
+        <Link href="/" onClick={onNavigate}
           className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[#6B6B6B] transition-all hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
         >
           <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

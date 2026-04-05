@@ -60,16 +60,16 @@ export default function Navbar() {
       initial={{ y: -100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ type: "spring", stiffness: 100, damping: 20, delay: 0.1 }}
-      className="fixed top-2 left-0 right-0 z-50 flex justify-center px-6"
+      className="fixed top-3 left-0 right-0 z-50 flex justify-center px-4 sm:px-6"
     >
-      <nav className="flex h-14 items-center justify-between gap-8 rounded-full border border-[#E8E8E8] bg-white/80 px-6 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all max-w-[1280px] w-full mx-auto">
+      <nav className="flex h-14 items-center justify-between gap-5 rounded-full border border-[#E8E8E8] bg-white/90 px-4 sm:px-6 backdrop-blur-xl shadow-[0_10px_30px_rgb(0,0,0,0.06)] transition-all max-w-[1280px] w-full mx-auto">
         <Link href="/" className="flex items-center gap-2">
-          <span className="font-display text-xl font-bold tracking-tighter text-[#0A0A0A] uppercase">
+          <span className="font-display text-lg sm:text-xl font-bold tracking-tighter text-[#0A0A0A] uppercase">
             PLUTO
           </span>
         </Link>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 sm:gap-6">
           <div className="hidden items-center gap-1 md:flex">
             {appNavLinks.map((link) => (
               <Link
@@ -96,7 +96,7 @@ export default function Navbar() {
 
           <div className="h-4 w-px bg-[#E8E8E8] hidden md:block" />
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden items-center gap-3 md:flex">
                 <LocaleSwitcher />
                 <ApiHealthBadge />
@@ -135,7 +135,7 @@ export default function Navbar() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="absolute left-0 right-0 top-16 flex flex-col gap-4 rounded-3xl border border-[#E8E8E8] bg-white p-6 shadow-xl md:hidden"
+              className="absolute left-0 right-0 top-16 flex flex-col gap-4 rounded-3xl border border-[#E8E8E8] bg-white p-5 shadow-xl md:hidden"
             >
               <div className="flex flex-col gap-2">
                 {appNavLinks.map((link) => (

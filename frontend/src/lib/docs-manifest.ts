@@ -25,6 +25,6 @@ export const docsManifest: DocEntry[] = [
     title: "x402 Agentic Payments",
     description:
       "Let AI agents and developer tools pay per API call using USDC micropayments on Stellar. No subscriptions, no API keys — just crypto.",
-    filename: "x402-agentic-payments.md",
+    filename: "x402-agentic-payments.mdx",
   },
 ];

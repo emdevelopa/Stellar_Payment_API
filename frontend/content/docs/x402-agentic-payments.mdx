@@ -215,7 +215,8 @@ Architecture:
 
 `Frontend -> Your backend -> PLUTO (x402 flow)`
 
-### Next.js route handler
+<FrameworkTabs>
+  <FrameworkTab label="Next.js">
 
 `app/api/checkout/route.ts`
 
@@ -269,7 +270,8 @@ export async function POST(req: Request) {
 }
 ```
 
-### React + Express
+  </FrameworkTab>
+  <FrameworkTab label="React + Express">
 
 `server/routes/checkout.js`
 
@@ -320,7 +322,8 @@ router.post("/checkout", async (req, res) => {
 });
 ```
 
-### Nuxt 3 server API
+  </FrameworkTab>
+  <FrameworkTab label="Nuxt 3">
 
 `server/api/checkout.post.ts`
 
@@ -364,6 +367,9 @@ export default defineEventHandler(async (event) => {
   return retry._data;
 });
 ```
+
+  </FrameworkTab>
+</FrameworkTabs>
 
 ---
 

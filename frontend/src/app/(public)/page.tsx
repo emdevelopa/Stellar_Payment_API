@@ -85,11 +85,11 @@ function HeroSection() {
           Surgical Precision Payments
         </span>
 
-        <h1 className="max-w-5xl text-7xl font-bold leading-[0.9] tracking-tighter text-[#0A0A0A] sm:text-9xl lg:text-[12rem] font-display uppercase">
+        <h1 className="max-w-5xl text-5xl font-bold leading-[0.9] tracking-tighter text-[#0A0A0A] sm:text-7xl lg:text-[10rem] font-display uppercase">
           PLUTO
         </h1>
 
-        <h2 className="max-w-4xl text-4xl font-bold leading-tight tracking-tight text-[#0A0A0A] sm:text-6xl lg:text-7xl font-display uppercase">
+        <h2 className="max-w-4xl text-3xl font-bold leading-tight tracking-tight text-[#0A0A0A] sm:text-5xl lg:text-6xl font-display uppercase">
           The Infrastructure for{" "}
           <span className="text-[#6B6B6B]">Modern Commerce</span>
         </h2>
@@ -242,6 +242,80 @@ function IntegrationModesSection() {
           >
             View x402 Guide →
           </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComparePlansSection() {
+  const plans = [
+    {
+      name: "Free Test Mode",
+      badge: "Sandbox",
+      description: "Best for development and QA before launch.",
+      includes: [
+        "Sandbox/test payments only",
+        "Up to 50 create-payment calls/day",
+        "No production settlement guarantees",
+      ],
+      cta: { label: "Start Testing", href: "/docs/api-guide" },
+    },
+    {
+      name: "Subscription",
+      badge: "Path 01",
+      description: "Traditional merchant account with dashboard operations.",
+      includes: [
+        "Merchant registration + API key",
+        "Dashboard + key rotation + merchant settings",
+        "Webhook and analytics management",
+      ],
+      cta: { label: "Use Subscription", href: "/register" },
+    },
+    {
+      name: "x402 Pay-per-request",
+      badge: "Path 02",
+      description: "No upfront plan required for x402-protected create endpoints.",
+      includes: [
+        "Pay per protected API request",
+        "No merchant registration required to start",
+        "Best for agents and automated workloads",
+      ],
+      cta: { label: "Use x402", href: "/docs/x402-agentic-payments" },
+    },
+  ];
+
+  return (
+    <div className="border-y border-[#E8E8E8] bg-white">
+      <div className="mx-auto max-w-7xl px-6 py-24 lg:py-32">
+        <div className="mb-12 text-center">
+          <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">Compare Plans</p>
+          <h2 className="mx-auto max-w-4xl text-4xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-6xl">
+            Pick the model that matches your business stage
+          </h2>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          {plans.map((plan) => (
+            <div key={plan.name} className="flex flex-col rounded-[2rem] border border-[#E8E8E8] bg-[#F9F9F9] p-8">
+              <span className="self-start rounded-full border border-[#E8E8E8] bg-white px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+                {plan.badge}
+              </span>
+              <h3 className="mt-4 text-2xl font-bold tracking-tight text-[#0A0A0A]">{plan.name}</h3>
+              <p className="mt-3 text-sm text-[#6B6B6B]">{plan.description}</p>
+              <ul className="mt-6 flex flex-1 flex-col gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+                {plan.includes.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <Link
+                href={plan.cta.href}
+                className="mt-8 inline-flex items-center justify-center rounded-xl bg-[#0A0A0A] px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-white transition-colors hover:bg-black"
+              >
+                {plan.cta.label}
+              </Link>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -418,6 +492,7 @@ export default function Home() {
       <main className="relative min-h-screen bg-white overflow-x-hidden">
         <HeroSection />
         <IntegrationModesSection />
+        <ComparePlansSection />
         <FeaturesSection />
         <HowItWorksSection />
         <CodeSnippetSection />

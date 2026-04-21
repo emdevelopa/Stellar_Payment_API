@@ -132,7 +132,20 @@ export async function registerMerchant(
     throw new Error(body.error ?? "Registration failed");
   }
 
-  return await res.json();
+  const body = await res.json();
+  const token = body.token;
+  if (!token) throw new Error("No token in server response");
+
+  saveToken(token);
+
+  if (body.merchant && typeof window !== "undefined") {
+    localStorage.setItem("merchant_metadata", JSON.stringify(body.merchant));
+    if (body.merchant.api_key) {
+      localStorage.setItem("merchant_api_key", body.merchant.api_key);
+    }
+  }
+
+  return body;
 }
 
 export function logout(): void {

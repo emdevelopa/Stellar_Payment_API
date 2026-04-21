@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { registerMerchant, type Merchant as AuthMerchant } from "../lib/auth";
+import { registerMerchant } from "../lib/auth";
 import { toast } from "sonner";
-import MaskedValue from "./MaskedValue";
+import { useRouter } from "next/navigation";
 import zxcvbn from "zxcvbn";
 import {
   useSetMerchantApiKey,
@@ -14,8 +14,10 @@ import { Spinner } from "./ui/Spinner";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BUSINESS_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9\s&'.,-]{1,79}$/;
+const ONBOARDING_WELCOME_KEY = "merchant_onboarding_welcome";
 
 export default function RegistrationForm() {
+  const router = useRouter();
   const setToken = useSetMerchantToken();
   const setApiKey = useSetMerchantApiKey();
   const setMerchant = useSetMerchantMetadata();
@@ -33,9 +35,6 @@ export default function RegistrationForm() {
     string | null
   >(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [registeredMerchant, setRegisteredMerchant] = useState<AuthMerchant | null>(
-    null,
-  );
 
   const businessNameTrimmed = businessName.trim();
   const emailTrimmed = email.trim();
@@ -115,10 +114,13 @@ export default function RegistrationForm() {
         setToken(data.token);
       }
 
-      setRegisteredMerchant(data.merchant);
       setApiKey(data.merchant.api_key);
       setMerchant(data.merchant);
-      toast.success("Merchant registered successfully!");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(ONBOARDING_WELCOME_KEY, "true");
+      }
+      toast.success("Welcome! Your merchant account is ready.");
+      router.push("/dashboard");
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to register merchant";
@@ -128,49 +130,6 @@ export default function RegistrationForm() {
       setLoading(false);
     }
   };
-
-  if (registeredMerchant) {
-    return (
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="rounded-[3rem] border border-[#E8E8E8] bg-white p-12 shadow-[0_20px_60px_rgb(0,0,0,0.05)]">
-          <div className="flex flex-col gap-4 text-center sm:text-left mb-8">
-            <p className="font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
-              Success
-            </p>
-            <h2 className="text-4xl font-bold text-[#0A0A0A] font-serif tracking-tight uppercase">
-              Welcome, {registeredMerchant.business_name}
-            </h2>
-            <p className="text-sm font-medium text-[#6B6B6B] leading-relaxed">
-              Your merchant account is ready. Save your API key below—you
-              won&apos;t be able to access it again.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <MaskedValue
-              label="Your API Key"
-              value={registeredMerchant.api_key}
-              copyText={registeredMerchant.api_key}
-              defaultRevealed={true}
-            />
-            <MaskedValue
-              label="Webhook Secret"
-              value={registeredMerchant.webhook_secret}
-              copyText={registeredMerchant.webhook_secret}
-              defaultRevealed={true}
-            />
-          </div>
-        </div>
-
-        <a
-          href="/dashboard"
-          className="text-center text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] transition-colors underline underline-offset-8 hover:text-[#0A0A0A]"
-        >
-          Enter Dashboard
-        </a>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-8" noValidate>

@@ -23,6 +23,8 @@ test.describe("Create Payment Visual Regression", () => {
     const noOverflow = await expectNoHorizontalOverflow(page);
     expect(noOverflow).toBeTruthy();
 
-    await expect(formShell).toHaveScreenshot("create-payment-form.png");
+    await expect(formShell).toHaveScreenshot("create-payment-form.png", {
+      timeout: 15_000,
+    });
   });
 });

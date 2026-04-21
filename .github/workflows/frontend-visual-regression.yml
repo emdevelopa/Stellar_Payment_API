@@ -45,6 +45,7 @@ jobs:
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
+          git add tests/e2e/__screenshots__/
           git add tests/e2e/vrt.spec.ts-snapshots/
           git diff --staged --quiet && echo "Snapshots unchanged." || \
             git commit -m "chore: update VRT baseline snapshots [skip ci]"

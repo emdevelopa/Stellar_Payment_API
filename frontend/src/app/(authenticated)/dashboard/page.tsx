@@ -12,8 +12,11 @@ import {
   useMerchantMetadata,
 } from "@/lib/merchant-store";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import FirstApiKeyModal from "@/components/FirstApiKeyModal";
 import FirstPaymentCelebration from "@/components/FirstPaymentCelebration";
+
+const ONBOARDING_WELCOME_KEY = "merchant_onboarding_welcome";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboardPage");
@@ -37,6 +40,21 @@ export default function DashboardPage() {
       return () => clearTimeout(timer);
     }
   }, [hydrated, loading, apiKey]);
+
+  useEffect(() => {
+    if (!hydrated || loading || typeof window === "undefined") return;
+    if (sessionStorage.getItem(ONBOARDING_WELCOME_KEY) !== "true") return;
+
+    sessionStorage.removeItem(ONBOARDING_WELCOME_KEY);
+    toast.success("Welcome to your dashboard. Create your first payment when you are ready.", {
+      action: {
+        label: "Create payment",
+        onClick: () => {
+          window.location.href = "/create";
+        },
+      },
+    });
+  }, [hydrated, loading]);
 
   if (!hydrated || loading) return <DashboardSkeleton />;
 

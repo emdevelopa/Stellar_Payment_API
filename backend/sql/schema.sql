@@ -44,6 +44,8 @@ create table if not exists webhook_delivery_logs (
   id uuid primary key default gen_random_uuid(),
   payment_id uuid references payments(id) on delete cascade,
   status_code integer not null,
+  request_payload jsonb,
+  request_headers jsonb,
   response_body text,
   timestamp timestamptz not null default now()
 );

@@ -18,6 +18,7 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 const nextConfig = {
   reactStrictMode: true,
   compress: true,
+  transpilePackages: ["remark-gfm", "rehype-prism-plus"],
   poweredByHeader: false,
   allowedDevOrigins: ["127.0.0.1"],
   images: {

@@ -1,19 +1,20 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
+import { logger } from "../lib/logger.js";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { paymentService } from "../services/paymentService.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import {
   paymentSessionZodSchema,
-  paginationQuerySchema,
   refundConfirmSchema,
-  pathPaymentQuoteQuerySchema
+  pathPaymentQuoteQuerySchema,
+  paymentsListQuerySchema
 } from "../lib/request-schemas.js";
 import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
 import { recaptchaMiddleware } from "../lib/recaptcha.js";
-import { sendWebhook } from "../lib/webhooks.js";
+import { sendWebhook, isEventSubscribed } from "../lib/webhooks.js";
 import { sendReceiptEmail } from "../lib/email.js";
 import { renderReceiptEmail } from "../lib/email-templates.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
@@ -37,6 +38,7 @@ import { sanitizeMetadataMiddleware } from "../lib/sanitize-metadata.js";
 import { supabase } from "../lib/supabase.js";
 import {
   findMatchingPayment,
+  findAnyRecentPayment,
   findStrictReceivePaths,
   getNetworkFeeStats,
 } from "../lib/stellar.js";
@@ -45,8 +47,8 @@ import {
 const createPaymentRateLimit = createCreatePaymentRateLimit();
 
 const defaultVerifyPaymentRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 60 * 1000, // 1 minute window
+  max: 30,             // 30 requests per minute per IP (covers 10s polling)
   message: { error: "Too many verification requests, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -56,6 +58,7 @@ const defaultVerifyPaymentRateLimit = rateLimit({
 
 function applyPaymentFilters(query, req) {
   const { status, asset, date_from: dateFrom, date_to: dateTo, search } = req.query || {};
+  const { created_after: createdAfter, created_before: createdBefore } = req.query || {};
 
   if (typeof status === "string" && status.length > 0) {
     query = query.eq("status", status);
@@ -69,6 +72,14 @@ function applyPaymentFilters(query, req) {
   if (typeof dateTo === "string" && dateTo.length > 0) {
     query = query.lte("created_at", `${dateTo}T23:59:59.999Z`);
   }
+
+  if (typeof createdAfter === "string" && createdAfter.length > 0) {
+    query = query.gte("created_at", createdAfter);
+  }
+
+  if (typeof createdBefore === "string" && createdBefore.length > 0) {
+    query = query.lte("created_at", createdBefore);
+  }
   if (typeof search === "string" && search.trim().length > 0) {
     const term = search.trim().replaceAll(",", "\\,");
     let orQuery = `id.ilike.%${term}%,description.ilike.%${term}%,recipient.ilike.%${term}%`;
@@ -81,6 +92,30 @@ function applyPaymentFilters(query, req) {
   return query;
 }
 
+/**
+ * Parse `metadata[key]=value` query params and apply JSONB equality filters.
+ *
+ * Each `metadata[key]` entry is translated to a Supabase `.filter()` call
+ * using the `cs` (contains) operator against a single-key JSON object, which
+ * maps to the Postgres `@>` operator on a JSONB column.
+ *
+ * Only safe key names (alphanumeric + _ + -) are accepted to guard against
+ * SQL injection.
+ */
+const SAFE_METADATA_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+
+function applyMetadataFilters(query, rawQuery) {
+  const metadataParam = rawQuery.metadata;
+  if (!metadataParam || typeof metadataParam !== "object" || Array.isArray(metadataParam)) {
+    return query;
+  }
+  for (const [key, value] of Object.entries(metadataParam)) {
+    if (!SAFE_METADATA_KEY_RE.test(key)) continue;
+    if (typeof value !== "string") continue;
+    query = query.filter("metadata", "cs", JSON.stringify({ [key]: value }));
+  }
+  return query;
+}
 
 function createPaymentsRouter({
   verifyPaymentRateLimit = defaultVerifyPaymentRateLimit,
@@ -115,7 +150,7 @@ function createPaymentsRouter({
    *                 description: Asset code (e.g. XLM, USDC)
    *               asset_issuer:
    *                 type: string
-   *                 description: Asset issuer (required for non-native assets)
+   *                 description: Asset issuer (optional for standard assets like USDC; PLUTO resolves these automatically)
    *               recipient:
    *                 type: string
    *                 description: Stellar address of the recipient
@@ -180,6 +215,7 @@ function createPaymentsRouter({
   async function createSession(req, res, next) {
     try {
       const body = req.body;
+      logger.info({ merchantId: req.merchant?.id, amount: body.amount, asset: body.asset }, "DEBUG: createSession started");
 
       // Per-asset payment limit validation (#153)
       const limits = req.merchant.payment_limits;
@@ -218,7 +254,9 @@ function createPaymentsRouter({
         }
       }
 
-      const paymentId = randomUUID();
+      const isSandbox = body.sandbox === true;
+      const baseId = randomUUID();
+      const paymentId = isSandbox ? `test_${baseId}` : baseId;
       const now = new Date().toISOString();
       const paymentLinkBase =
         process.env.PAYMENT_LINK_BASE || "http://localhost:3000";
@@ -249,6 +287,7 @@ function createPaymentsRouter({
         status: "pending",
         tx_id: null,
         metadata,
+        sandbox: isSandbox,
         created_at: now,
       };
 
@@ -261,16 +300,21 @@ function createPaymentsRouter({
         throw insertError;
       }
 
-      // Record metric for payment creation
-      paymentCreatedCounter.inc({ asset: body.asset });
+      // Only record production metrics for non-sandbox payments.
+      if (!isSandbox) {
+        paymentCreatedCounter.inc({ asset: body.asset });
+      }
 
+      logger.info({ paymentId: paymentId }, "DEBUG: createSession success");
       res.status(201).json({
         payment_id: paymentId,
         payment_link: paymentLink,
         status: "pending",
+        sandbox: isSandbox,
         branding_config: resolvedBrandingConfig,
       });
     } catch (err) {
+      logger.error({ err, merchantId: req.merchant?.id }, "DEBUG: createSession error");
       if (err.status === 400 && err.details) {
         return res.status(400).json({ error: err.message, ...err.details });
       }
@@ -319,24 +363,57 @@ function createPaymentsRouter({
           return res.json({ payment: cached });
         }
 
-        let query = supabase
-          .from("payments")
-          .select(
-            "id, amount, asset, asset_issuer, recipient, description, memo, memo_type, status, tx_id, metadata, created_at, merchants(branding_config)"
-          );
+        const baseFields =
+          "id, merchant_id, amount, asset, asset_issuer, recipient, description, memo, memo_type, status, tx_id, metadata, created_at";
+        const withMerchantJoin = `${baseFields}, merchants(branding_config)`;
 
-        if (req.merchant?.id) {
-          query = query.eq("merchant_id", req.merchant.id);
+        const runPaymentQuery = async ({ includeJoin, includeDeletedFilter }) => {
+          let query = supabase
+            .from("payments")
+            .select(includeJoin ? withMerchantJoin : baseFields);
+
+          if (req.merchant?.id) {
+            query = query.eq("merchant_id", req.merchant.id);
+          }
+
+          query = query.eq("id", req.params.id);
+          if (includeDeletedFilter) {
+            query = query.is("deleted_at", null);
+          }
+
+          const { data, error } = await query.maybeSingle();
+          return { data, error, includeJoin };
+        };
+
+        // Schema-tolerant fallback order for local/dev databases:
+        // 1) join + deleted_at filter (latest schema)
+        // 2) join only
+        // 3) base fields + deleted_at filter
+        // 4) base fields only
+        const attempts = [
+          { includeJoin: true, includeDeletedFilter: true },
+          { includeJoin: true, includeDeletedFilter: false },
+          { includeJoin: false, includeDeletedFilter: true },
+          { includeJoin: false, includeDeletedFilter: false },
+        ];
+
+        let data = null;
+        let queryError = null;
+        let usedJoin = false;
+        for (const attempt of attempts) {
+          const result = await runPaymentQuery(attempt);
+          if (!result.error) {
+            data = result.data;
+            usedJoin = result.includeJoin;
+            queryError = null;
+            break;
+          }
+          queryError = result.error;
         }
 
-        const { data, error } = await query
-          .eq("id", req.params.id)
-          .is("deleted_at", null)
-          .maybeSingle();
-
-        if (error) {
-          error.status = 500;
-          throw error;
+        if (queryError) {
+          queryError.status = 500;
+          throw queryError;
         }
 
         if (!data) {
@@ -344,7 +421,15 @@ function createPaymentsRouter({
         }
 
         const metadataBranding = data.metadata?.branding_config || null;
-        const merchantBranding = data.merchants?.branding_config || null;
+        let merchantBranding = usedJoin ? data.merchants?.branding_config || null : null;
+        if (!merchantBranding && data.merchant_id) {
+          const { data: merchantData } = await supabase
+            .from("merchants")
+            .select("branding_config")
+            .eq("id", data.merchant_id)
+            .maybeSingle();
+          merchantBranding = merchantData?.branding_config || null;
+        }
         const brandingConfig = metadataBranding || merchantBranding || null;
 
         const response = {
@@ -353,9 +438,14 @@ function createPaymentsRouter({
         };
         delete response.merchants;
 
-        // Cache the result for ~2 s to absorb polling bursts
-        await setCachedPayment(redis, req.params.id, response);
+        // Only cache confirmed/completed payments — never cache pending
+        // so status changes are immediately visible to pollers
+        if (data.status === "confirmed" || data.status === "completed") {
+          await setCachedPayment(redis, req.params.id, response);
+        }
 
+        // Prevent HTTP-level caching so 304 responses never mask status changes
+        res.setHeader("Cache-Control", "no-store");
         res.json({ payment: response });
       } catch (err) {
         next(err);
@@ -423,7 +513,7 @@ function createPaymentsRouter({
         let query = supabase
           .from("payments")
           .select(
-            "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version, webhook_custom_headers, notification_email, email, business_name)"
+            "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, metadata, created_at, merchants(webhook_secret, webhook_version, webhook_custom_headers, notification_email, email, business_name, subscribed_events)"
           );
 
         if (req.merchant?.id) {
@@ -435,6 +525,8 @@ function createPaymentsRouter({
           .eq("id", req.params.id)
           .is("deleted_at", null)
           .maybeSingle();
+
+        console.log("DEBUG: Supabase query finished. data exists:", !!data, "error:", !!error);
 
         if (error) {
           error.status = 500;
@@ -460,9 +552,100 @@ function createPaymentsRouter({
           assetIssuer: data.asset_issuer,
           memo: data.memo,
           memoType: data.memo_type,
+          createdAt: data.created_at,
         });
 
         if (!match) {
+          // Check if a payment arrived but with the wrong amount
+          console.log("DEBUG: No match found, calling findAnyRecentPayment");
+          const anyPayment = await findAnyRecentPayment({
+            recipient: data.recipient,
+            assetCode: data.asset,
+            assetIssuer: data.asset_issuer,
+            createdAt: data.created_at,
+          });
+          console.log("DEBUG: findAnyRecentPayment finished. anyPayment exists:", !!anyPayment);
+
+          if (anyPayment) {
+            const received = Number(anyPayment.received_amount);
+            const expected = Number(data.amount);
+            const diff = received - expected;
+
+            if (diff < -0.0000001) {
+              // Underpayment — mark as failed with details
+              await supabase.from("payments").update({
+                status: "failed",
+                tx_id: anyPayment.transaction_hash,
+                metadata: {
+                  ...(data.metadata || {}),
+                  failure_reason: "underpayment",
+                  expected_amount: expected,
+                  received_amount: received,
+                  shortfall: Number((expected - received).toFixed(7)),
+                },
+              }).eq("id", data.id);
+
+              const redis = await connectRedisClient();
+              await invalidatePaymentCache(redis, data.id);
+
+              return res.status(402).json({
+                status: "failed",
+                reason: "underpayment",
+                expected_amount: expected,
+                received_amount: received,
+                shortfall: Number((expected - received).toFixed(7)),
+                tx_id: anyPayment.transaction_hash,
+                message: `Payment received but amount was too low. Expected ${expected} ${data.asset}, received ${received} ${data.asset}.`,
+              });
+            }
+
+            if (diff > 0.0000001) {
+              // Overpayment — still confirm but flag it
+              const createdAt = new Date(data.created_at);
+              const latencySeconds = (new Date() - createdAt) / 1000;
+
+              await supabase.from("payments").update({
+                status: "confirmed",
+                tx_id: anyPayment.transaction_hash,
+                completion_duration_seconds: Math.floor(latencySeconds),
+                metadata: {
+                  ...(data.metadata || {}),
+                  overpayment: true,
+                  expected_amount: expected,
+                  received_amount: received,
+                  excess: Number((received - expected).toFixed(7)),
+                },
+              }).eq("id", data.id);
+
+              const redis = await connectRedisClient();
+              await invalidatePaymentCache(redis, data.id);
+
+              return res.json({
+                status: "confirmed",
+                tx_id: anyPayment.transaction_hash,
+                overpayment: true,
+                expected_amount: expected,
+                received_amount: received,
+                excess: Number((received - expected).toFixed(7)),
+                message: `Payment confirmed. Note: overpayment of ${Number((received - expected).toFixed(7))} ${data.asset} received.`,
+              });
+            }
+          }
+
+          return res.json({ status: "pending" });
+        }
+
+        // Guard: use a DB-level conditional update to prevent race conditions
+        // where two concurrent requests confirm the same tx_hash on different payments.
+        // Only update if tx_id is still NULL (not yet claimed by another payment).
+        const { data: existing } = await supabase
+          .from("payments")
+          .select("id")
+          .eq("tx_id", match.transaction_hash)
+          .neq("id", data.id)
+          .maybeSingle();
+
+        if (existing) {
           return res.json({ status: "pending" });
         }
 
@@ -471,18 +654,29 @@ function createPaymentsRouter({
         const now = new Date();
         const latencySeconds = (now - createdAt) / 1000;
 
-        const { error: updateError } = await supabase
+        const { data: updated, error: updateError } = await supabase
           .from("payments")
           .update({
             status: "confirmed",
             tx_id: match.transaction_hash,
             completion_duration_seconds: Math.floor(latencySeconds)
           })
-          .eq("id", data.id);
+          .eq("id", data.id)
+          .eq("status", "pending")
+          .is("tx_id", null)   // atomic claim — only if not already taken
+          .select("id")
+          .maybeSingle();
 
         if (updateError) {
+          if (updateError.code === "23505") {
+            return res.json({ status: "pending" }); // another payment claimed this tx
+          }
           updateError.status = 500;
           throw updateError;
+        }
+
+        if (!updated) {
+          return res.json({ status: "pending" }); // already processed
         }
 
         // --- Invalidate cache so next poll sees confirmed status immediately ---
@@ -493,6 +687,7 @@ function createPaymentsRouter({
         paymentConfirmationLatency.observe({ asset: data.asset }, latencySeconds);
 
         // Emit real-time event to the merchant's private room (issue #229)
+        console.log("DEBUG: confirmed logic started. ID:", data.id);
         const io = req.app.locals.io;
         if (io && data.merchant_id) {
           io.to(`merchant:${data.merchant_id}`).emit("payment:confirmed", {
@@ -507,6 +702,7 @@ function createPaymentsRouter({
         }
 
         // Notify customer via SSE (issue #89)
+        console.log("DEBUG: Calling streamManager.notify");
         streamManager.notify(data.id, "payment.confirmed", {
           status: "confirmed",
           tx_id: match.transaction_hash,
@@ -527,23 +723,16 @@ function createPaymentsRouter({
             tx_id: match.transaction_hash,
           }
         );
-        const webhookResult = await sendWebhook(
-          data.webhook_url,
-          webhookPayload,
-          merchantSecret,
-          data.id,
-          data.merchants?.webhook_custom_headers ?? {}
-        );
-        sendReceiptEmail({
-          to: data.merchants?.notification_email,
-          businessName: data.merchants?.business_name || "Merchant",
-          amount: data.amount,
-          asset: data.asset,
-          recipient: data.recipient,
-          txId: match.transaction_hash,
-          paymentId: data.id,
-        });
-
+        let webhookResult = { ok: true, skipped: true };
+        if (isEventSubscribed(data.merchants, "payment.confirmed")) {
+          webhookResult = await sendWebhook(
+            data.webhook_url,
+            webhookPayload,
+            merchantSecret,
+            data.id,
+            data.merchants?.webhook_custom_headers ?? {}
+          );
+        }
         if (!webhookResult.ok && !webhookResult.skipped) {
           console.warn("Webhook failed", webhookResult);
         }
@@ -582,6 +771,7 @@ function createPaymentsRouter({
           webhook: webhookResult,
         });
       } catch (err) {
+        console.error("VERIFY_ROUTE_ERROR:", err);
         next(err);
       }
     }
@@ -645,7 +835,7 @@ function createPaymentsRouter({
    *       401:
    *         description: Missing or invalid API key
    */
-  router.get("/payments", validateRequest({ query: paginationQuerySchema }), async (req, res, next) => {
+  router.get("/payments", validateRequest({ query: paymentsListQuerySchema }), async (req, res, next) => {
     try {
       let page = parseInt(req.query.page, 10) || 1;
       let limit = parseInt(req.query.limit, 10) || 10;
@@ -663,13 +853,13 @@ function createPaymentsRouter({
       let countQuery = supabase
         .from("payments")
         .select("*", { count: "exact", head: true })
-        .eq("merchant_id", req.merchant.id);
+        .eq("merchant_id", req.merchant.id)
+        .is("deleted_at", null);
       if (clientId) {
         countQuery = countQuery.eq("client_id", clientId);
       }
-      const { count: totalCount, error: countError } = await countQuery;
-
       countQuery = applyPaymentFilters(countQuery, req);
+      countQuery = applyMetadataFilters(countQuery, req.query);
 
       const { count: filteredCount, error: filteredCountError } = await countQuery;
 
@@ -684,10 +874,13 @@ function createPaymentsRouter({
           "id, amount, asset, asset_issuer, recipient, description, client_id, status, tx_id, created_at",
         )
         .eq("merchant_id", req.merchant.id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (clientId) {
         dataQuery = dataQuery.eq("client_id", clientId);
       }
+      dataQuery = applyPaymentFilters(dataQuery, req);
+      dataQuery = applyMetadataFilters(dataQuery, req.query);
       const { data: payments, error: dataError } = await dataQuery.range(
         offset,
         offset + limit - 1,
@@ -1039,118 +1232,50 @@ function createPaymentsRouter({
    */
   router.post("/anchor/sep24/withdraw", async (req, res, next) => {
     try {
-      const { asset_code, account, amount, anchor_domain } = req.body;
-      if (!data) {
-        return res.status(404).json({ error: "Payment not found" });
-      }
-
-      // No quote needed if customer is already paying with the right asset
-      const sameAsset =
-        sourceAsset.toUpperCase() === data.asset.toUpperCase() &&
-        (sourceAssetIssuer || null) === (data.asset_issuer || null);
-
-      if (sameAsset) {
+      const { asset_code, account } = req.body || {};
+      if (!asset_code || !account) {
         return res.status(400).json({
-          error:
-            "Source asset is the same as destination asset. Use a direct payment.",
+          error: "asset_code and account are required",
         });
       }
-
-      const SLIPPAGE = 0.01; // 1%
-
-      const quote = await findStrictReceivePaths({
-        sourceAccount,
-        destAssetCode: data.asset,
-        destAssetIssuer: data.asset_issuer,
-        destAmount: String(data.amount),
-        sourceAssetCode: sourceAsset,
-        sourceAssetIssuer,
-      });
-
-      if (!quote) {
-        return res.status(404).json({
-          error: "No path found for this asset pair",
-        });
-      }
-
-      const sendMax = (
-        parseFloat(quote.source_amount) *
-        (1 + SLIPPAGE)
-      ).toFixed(7);
-
-      res.json({
-        source_asset: quote.source_asset_code,
-        source_asset_issuer: quote.source_asset_issuer,
-        source_amount: quote.source_amount,
-        send_max: sendMax,
-        destination_asset: data.asset,
-        destination_asset_issuer: data.asset_issuer,
-        destination_amount: String(data.amount),
-        path: quote.path,
-        slippage: SLIPPAGE,
+      return res.status(501).json({
+        error: "SEP-24 withdrawal is not enabled on this deployment",
       });
     } catch (err) {
       next(err);
     }
-  }
-  );
+  });
 
   /**
    * @swagger
    * /api/anchor/sep24/transaction/{id}:
-   * get:
-   * summary: Poll the status of a SEP-0024 anchor transaction
-   * description: >
-   * Fetches the current status of a deposit or withdrawal transaction from
-   * the anchor. Call this repeatedly after the user closes the popup to check
-   * whether the transaction has completed.
-   * tags: [Anchor / SEP-0024]
-   * security:
-   * - ApiKeyAuth: []
-   * parameters:
-   * - in: path
-   * name: id
-   * required: true
-   * schema:
-   * type: string
-   * description: Anchor transaction ID returned from /deposit or /withdraw
-   * - in: query
-   * name: anchor_domain
-   * schema:
-   * type: string
-   * description: Anchor domain override (defaults to ANCHOR_DOMAIN env var)
-   * responses:
-   * 200:
-   * description: Transaction object from the anchor
-   * content:
-   * application/json:
-   * schema:
-   * type: object
-   * properties:
-   * transaction:
-   * type: object
-   * properties:
-   * id:
-   * type: string
-   * status:
-   * type: string
-   * description: >
-   * One of: incomplete, pending_user_transfer_start,
-   * pending_anchor, pending_stellar, completed, error
-   * amount_in:
-   * type: string
-   * amount_out:
-   * type: string
-   * stellar_transaction_id:
-   * type: string
-   * more_info_url:
-   * type: string
-   * 400:
-   * description: Missing transaction ID
-   * 500:
-   * description: ANCHOR_DOMAIN not configured
-   * 502:
-   * description: Anchor request failed
+   *   get:
+   *     summary: Poll the status of a SEP-0024 anchor transaction
+   *     description: >
+   *       Fetches the current status of a deposit or withdrawal transaction
+   *       from an anchor.
+   *     tags: [Anchor / SEP-0024]
+   *     security:
+   *       - ApiKeyAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Anchor transaction ID returned from /deposit or /withdraw
+   *     responses:
+   *       501:
+   *         description: Endpoint is not enabled on this deployment
+   */
+  router.get("/anchor/sep24/transaction/:id", async (req, res) => {
+    return res.status(501).json({
+      error: "SEP-24 transaction polling is not enabled on this deployment",
+    });
+  });
+
+  /**
+   * @swagger
    * /api/payments/{id}:
    *   delete:
    *     summary: Soft delete a payment (preserves audit logs)

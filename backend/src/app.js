@@ -3,6 +3,8 @@ import express from "express";
 import { Server as SocketIOServer } from "socket.io";
 import swaggerUi from "swagger-ui-express";
 import { ZodError } from "zod";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { httpLogger, logger } from "./lib/logger.js";
 import { createSwaggerSpec } from "./swagger.js";
 
@@ -12,12 +14,15 @@ import metricsRouter from "./routes/metrics.js";
 import webhooksRouter from "./routes/webhooks.js";
 import prometheusRouter from "./routes/prometheus.js";
 import sep0001Router from "./routes/sep0001.js";
-import paymentDetailsRouter from "./routes/paymentDetails.js"; // NEW
+import paymentDetailsRouter from "./routes/paymentDetails.js";
+import x402Router from "./routes/x402.js";
+import authRouter from "./routes/auth.js";
 
 import { requireApiKeyAuth } from "./lib/auth.js";
 import { isHorizonReachable } from "./lib/stellar.js";
 import { supabase } from "./lib/supabase.js";
 import { pool } from "./lib/db.js";
+import { x402Middleware } from "./middleware/x402.js";
 
 import { idempotencyMiddleware } from "./lib/idempotency.js";
 import { setupSentryErrorHandler } from "./lib/sentry.js";
@@ -30,6 +35,11 @@ import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
 
 export async function createApp({ redisClient }) {
   const app = express();
+  const redisAvailable = Boolean(redisClient && redisClient.isOpen);
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const publicDir = path.join(__dirname, "..", "public");
 
   // Create socket.io instance (attached to HTTP server in server.js)
   const io = new SocketIOServer({
@@ -103,6 +113,17 @@ export async function createApp({ redisClient }) {
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+  app.use(express.static(publicDir));
+
+  app.get("/api/postman-collection.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="postman-collection.json"',
+    );
+    res.sendFile(path.join(publicDir, "postman-collection.json"));
+  });
+
   const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
     ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
     : ["http://localhost:3000"];
@@ -123,6 +144,28 @@ export async function createApp({ redisClient }) {
   app.use(httpLogger);
   // Expose the root logger on app.locals so routes can use req.log or app.locals.logger
   app.locals.logger = logger;
+
+  // Root route for platform/browser checks.
+  app.get("/", (_req, res) => {
+    res.status(200).json({
+      ok: true,
+      service: "pluto-api",
+      docs: "/api-docs",
+      health: "/health",
+      ready: "/ready",
+    });
+  });
+
+  // Readiness probe for platforms (Railway, etc.).
+  // Keep this independent from external dependency checks so orchestrators
+  // don't restart a healthy process when Horizon/DB has transient issues.
+  app.get("/ready", (_req, res) => {
+    res.status(200).json({
+      ok: true,
+      service: "pluto-api",
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // Health check
   /**
@@ -162,48 +205,65 @@ export async function createApp({ redisClient }) {
    *                   type: boolean
    */
   app.get("/health", async (req, res) => {
-    try {
-      const [dbResult, horizonReachable] = await Promise.all([
-        supabase.from("merchants").select("id").limit(1),
-        isHorizonReachable(),
-      ]);
+    const [dbResult, horizonReachable] = await Promise.allSettled([
+      supabase.from("merchants").select("id").limit(1),
+      isHorizonReachable(),
+    ]);
 
-      if (dbResult.error) {
-        return res.status(503).json({
-          ok: false,
-          error: "Database unavailable",
-          horizon_reachable: horizonReachable,
-        });
-      }
-
-      if (!horizonReachable) {
-        return res.status(503).json({
-          ok: false,
-          error: "Horizon unavailable",
-          horizon_reachable: false,
-        });
-      }
-
-      res.json({ ok: true, horizon_reachable: true });
-    } catch {
-      res.status(503).json({
-        ok: false,
-        error: "Health check failed",
-        horizon_reachable: false,
-      });
+    const dbOk = dbResult.status === "fulfilled" && !dbResult.value?.error;
+    if (!dbOk) {
+      console.error("Health DB error:", JSON.stringify(dbResult.reason || dbResult.value?.error));
     }
+    const horizonOk = horizonReachable.status === "fulfilled" && horizonReachable.value === true;
+
+    const status = dbOk && horizonOk ? 200 : 503;
+
+    res.status(status).json({
+      ok: dbOk && horizonOk,
+      services: {
+        database: dbOk ? "ok" : "unavailable",
+        horizon: horizonOk ? "ok" : "unavailable",
+        redis: redisAvailable ? "ok" : "unavailable",
+      },
+    });
   });
 
   const verifyPaymentRateLimit = createVerifyPaymentRateLimit({
-    store: createRedisRateLimitStore({ client: redisClient }),
+    store: redisAvailable ? createRedisRateLimitStore({ client: redisClient }) : undefined,
   });
 
   const merchantRegistrationRateLimit = createMerchantRegistrationRateLimit({
-    store: createRedisRateLimitStore({ client: redisClient }),
+    store: redisAvailable ? createRedisRateLimitStore({ client: redisClient }) : undefined,
   });
 
-  app.use("/api/create-payment", requireApiKeyAuth(), idempotencyMiddleware);
-  app.use("/api/sessions", requireApiKeyAuth(), idempotencyMiddleware);
+  // x402 pay-per-request on payment creation endpoints (custom middleware flow)
+  const x402Provider = process.env.X402_PROVIDER_PUBLIC_KEY;
+  const x402Enabled = Boolean(x402Provider && process.env.X402_JWT_SECRET);
+  const x402CreatePaymentAmount = process.env.X402_CREATE_PAYMENT_AMOUNT || "0.01";
+  const x402EnforceDefault = String(process.env.X402_ENFORCE_DEFAULT || "false").toLowerCase() === "true";
+
+  if (x402Enabled) {
+    const requireCreatePaymentCharge = x402Middleware({
+      amount: x402CreatePaymentAmount,
+      recipient: x402Provider,
+      memo_prefix: "pluto-create",
+      enforceByDefault: x402EnforceDefault,
+    });
+
+    app.use("/api/create-payment", requireCreatePaymentCharge);
+    app.use("/api/sessions", requireCreatePaymentCharge);
+  }
+
+  app.use(
+    "/api/create-payment",
+    requireApiKeyAuth(),
+    idempotencyMiddleware
+  );
+  app.use(
+    "/api/sessions",
+    requireApiKeyAuth(),
+    idempotencyMiddleware
+  );
   app.use("/api/payments", requireApiKeyAuth(), idempotencyMiddleware);
   app.use("/api/rotate-key", requireApiKeyAuth(), idempotencyMiddleware);
   app.use("/api/merchant-branding", requireApiKeyAuth(), idempotencyMiddleware);
@@ -211,6 +271,7 @@ export async function createApp({ redisClient }) {
 
   app.use("/api", createPaymentsRouter({ verifyPaymentRateLimit }));
   app.use("/api", createMerchantsRouter({ merchantRegistrationRateLimit }));
+  app.use("/api", authRouter);
   app.use("/api", metricsRouter);
   app.use("/api", webhooksRouter);
   app.use("/api/payments", paymentDetailsRouter); // NEW — GET /api/payments/:id
@@ -221,10 +282,14 @@ export async function createApp({ redisClient }) {
   // Prometheus Metrics endpoint
   app.use("/", prometheusRouter);
 
+  // x402 pay-per-request verification (public — agents call this)
+  app.use("/api", x402Router);
+
   // Sentry error handler — must come after all routes, before custom error handler
   setupSentryErrorHandler(app);
 
   app.use((err, req, res, next) => {
+    console.error("EXPRESS ERROR LOG:", err);
     res.status(err.status || 500).json({
       error: err.message || "Internal Server Error",
     });

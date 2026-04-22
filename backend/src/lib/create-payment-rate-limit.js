@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 const DEFAULT_CREATE_PAYMENT_RATE_LIMIT_MAX = 50;
 const DEFAULT_CREATE_PAYMENT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -44,7 +44,7 @@ export function getCreatePaymentRateLimitKey(req) {
     return `merchant:${req.merchant.id}`;
   }
 
-  return req.ip;
+  return ipKeyGenerator(req.ip);
 }
 
 export function getRetryAfterSeconds(resetTime, now = new Date(), windowMs = DEFAULT_CREATE_PAYMENT_RATE_LIMIT_WINDOW_MS) {
@@ -67,7 +67,27 @@ export function createCreatePaymentRateLimit({
     max: config.max,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { ip: false },
     keyGenerator: getCreatePaymentRateLimitKey,
+    requestWasSuccessful(req, res) {
+      if (typeof req.rateLimit?.limit === "number") {
+        res.set("X-RateLimit-Limit", String(req.rateLimit.limit));
+      }
+      if (typeof req.rateLimit?.remaining === "number") {
+        res.set("X-RateLimit-Remaining", String(req.rateLimit.remaining));
+      }
+      if (
+        req.rateLimit?.resetTime instanceof Date &&
+        !Number.isNaN(req.rateLimit.resetTime.getTime())
+      ) {
+        res.set(
+          "X-RateLimit-Reset",
+          String(Math.floor(req.rateLimit.resetTime.getTime() / 1000))
+        );
+      }
+
+      return res.statusCode < 400;
+    },
     handler(req, res) {
       const retryAfterSeconds = getRetryAfterSeconds(
         req.rateLimit?.resetTime,

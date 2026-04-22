@@ -46,6 +46,7 @@ describe("createVerifyPaymentRateLimit", () => {
       message: { error: "Too many verification requests, please try again later." },
       standardHeaders: true,
       legacyHeaders: false,
+      requestWasSuccessful: expect.any(Function),
       store,
     });
   });
@@ -78,9 +79,15 @@ describe("redis client helpers", () => {
 
     expect(first).toBe(second);
     expect(clientFactory).toHaveBeenCalledTimes(1);
-    expect(clientFactory).toHaveBeenCalledWith({
-      url: "redis://localhost:6379",
-    });
+    expect(clientFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "redis://localhost:6379",
+        socket: expect.objectContaining({
+          connectTimeout: 4000,
+          reconnectStrategy: expect.any(Function),
+        }),
+      }),
+    );
     expect(on).toHaveBeenCalledWith("error", expect.any(Function));
 
     await connectRedisClient({

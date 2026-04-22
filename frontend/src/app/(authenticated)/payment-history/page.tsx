@@ -6,8 +6,10 @@ import { useLocale, useTranslations } from "next-intl";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import PaymentDetailModal from "@/components/PaymentDetailModal";
+import PaymentDetailsSheet from "@/components/PaymentDetailsSheet";
 import ExportCsvButton from "@/components/ExportCsvButton";
 import { localeToLanguageTag } from "@/i18n/config";
+import { toast } from "sonner";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
@@ -108,8 +110,28 @@ export default function PaymentHistoryPage() {
   const page = 1;
   const [totalCount, setTotalCount] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
+  const [hoveredPayment, setHoveredPayment] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [flashedIds, setFlashedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+C (Mac) or Ctrl+C (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+        if (hoveredPayment) {
+          e.preventDefault();
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          const link = `${origin}/pay/${hoveredPayment}`;
+          navigator.clipboard.writeText(link);
+          toast.success(t("linkCopied"));
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hoveredPayment, t]);
 
   const updateFilters = useCallback(
     (nextFilters: FilterState) => {
@@ -230,7 +252,12 @@ export default function PaymentHistoryPage() {
 
   const handlePaymentClick = (paymentId: string) => {
     setSelectedPayment(paymentId);
-    setIsModalOpen(true);
+    setIsSheetOpen(true);
+  };
+
+  const closeSheet = () => {
+    setIsSheetOpen(false);
+    setSelectedPayment(null);
   };
 
   const closeModal = () => {
@@ -242,13 +269,14 @@ export default function PaymentHistoryPage() {
     return (
       <div className="flex flex-col gap-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Payment History</h1>
-          <p className="mt-2 text-slate-400">
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
+          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">
             View and manage all your payment transactions
           </p>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
           <Skeleton height={40} borderRadius={12} className="mb-4" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
@@ -257,15 +285,15 @@ export default function PaymentHistoryPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <div className="border-b border-white/10 bg-white/5 px-4 py-3">
+        <div className="overflow-x-auto rounded-xl border border-[#E8E8E8]">
+          <div className="border-b border-[#E8E8E8] bg-[#F9F9F9] px-4 py-3">
             <div className="flex justify-between">
               {[...Array(6)].map((_, i) => (
                 <Skeleton key={i} width={80} height={14} borderRadius={4} />
               ))}
             </div>
           </div>
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-[#E8E8E8]">
             {[...Array(10)].map((_, i) => (
               <div key={i} className="px-4 py-4">
                 <div className="flex justify-between items-center">
@@ -297,10 +325,9 @@ export default function PaymentHistoryPage() {
     return (
       <div className="flex flex-col gap-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Payment History</h1>
-          <p className="mt-2 text-slate-400">
-            View and manage all your payment transactions
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
+          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">View and manage all your payment transactions</p>
         </div>
 
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center">
@@ -324,7 +351,7 @@ export default function PaymentHistoryPage() {
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-[#0A0A0A]">
               Unable to Load Payments
             </h3>
             <p className="text-sm text-red-400">{error}</p>
@@ -357,13 +384,12 @@ export default function PaymentHistoryPage() {
     return (
       <div className="flex flex-col gap-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Payment History</h1>
-          <p className="mt-2 text-slate-400">
-            View and manage all your payment transactions
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
+          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">View and manage all your payment transactions</p>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
+        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-8 text-center">
           <div className="mx-auto mb-6 w-24 h-24 relative">
             <div className="absolute inset-0 bg-mint/10 rounded-full blur-xl" />
             <div className="relative w-full h-full flex items-center justify-center">
@@ -384,10 +410,10 @@ export default function PaymentHistoryPage() {
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-[#0A0A0A]">
               No payment history yet
             </h3>
-            <p className="text-sm text-slate-400 max-w-md mx-auto">
+            <p className="text-sm text-[#6B6B6B] max-w-md mx-auto">
               Start accepting payments to see your transaction history here.
             </p>
           </div>
@@ -401,10 +427,9 @@ export default function PaymentHistoryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Payment History</h1>
-          <p className="mt-2 text-slate-400">
-            View and manage all your payment transactions
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
+          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">View and manage all your payment transactions</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -429,13 +454,13 @@ export default function PaymentHistoryPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]">
                 Total Payments
               </p>
-              <p className="mt-2 text-2xl font-bold text-white">{totalCount}</p>
+              <p className="mt-2 text-2xl font-bold text-[#0A0A0A]">{totalCount}</p>
             </div>
             <div className="rounded-full bg-mint/10 p-3">
               <svg
@@ -455,10 +480,10 @@ export default function PaymentHistoryPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]">
                 Confirmed
               </p>
               <p className="mt-2 text-2xl font-bold text-green-400">
@@ -483,10 +508,10 @@ export default function PaymentHistoryPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]">
                 Pending
               </p>
               <p className="mt-2 text-2xl font-bold text-yellow-400">
@@ -511,10 +536,10 @@ export default function PaymentHistoryPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]">
                 Failed
               </p>
               <p className="mt-2 text-2xl font-bold text-red-400">
@@ -541,12 +566,12 @@ export default function PaymentHistoryPage() {
       </div>
 
       {/* Filters */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <label
               htmlFor="search"
-              className="text-xs font-medium uppercase tracking-wider text-slate-400"
+              className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]"
             >
               Search
             </label>
@@ -559,10 +584,10 @@ export default function PaymentHistoryPage() {
                   handleFilterChange("search", event.target.value)
                 }
                 placeholder="Search by ID or description..."
-                className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                className="w-full rounded-xl border border-[#E8E8E8] bg-white py-2.5 pl-10 pr-4 text-sm text-[#0A0A0A] placeholder:text-[#6B6B6B] focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
               />
               <svg
-                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B6B6B]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -581,7 +606,7 @@ export default function PaymentHistoryPage() {
             <div className="flex flex-col gap-2">
               <label
                 htmlFor="status"
-                className="text-xs font-medium uppercase tracking-wider text-slate-400"
+                className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]"
               >
                 Status
               </label>
@@ -591,7 +616,7 @@ export default function PaymentHistoryPage() {
                 onChange={(event) =>
                   handleFilterChange("status", event.target.value)
                 }
-                className="rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                className="rounded-xl border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
               >
                 {STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>
@@ -606,7 +631,7 @@ export default function PaymentHistoryPage() {
             <div className="flex flex-col gap-2">
               <label
                 htmlFor="asset"
-                className="text-xs font-medium uppercase tracking-wider text-slate-400"
+                className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]"
               >
                 Asset
               </label>
@@ -616,7 +641,7 @@ export default function PaymentHistoryPage() {
                 onChange={(event) =>
                   handleFilterChange("asset", event.target.value)
                 }
-                className="rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                className="rounded-xl border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
               >
                 {ASSET_OPTIONS.map((asset) => (
                   <option key={asset} value={asset}>
@@ -629,7 +654,7 @@ export default function PaymentHistoryPage() {
             <div className="flex flex-col gap-2">
               <label
                 htmlFor="dateFrom"
-                className="text-xs font-medium uppercase tracking-wider text-slate-400"
+                className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]"
               >
                 From Date
               </label>
@@ -640,14 +665,14 @@ export default function PaymentHistoryPage() {
                 onChange={(event) =>
                   handleFilterChange("dateFrom", event.target.value)
                 }
-                className="rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
+                className="rounded-xl border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
               />
             </div>
 
             <div className="flex flex-col gap-2">
               <label
                 htmlFor="dateTo"
-                className="text-xs font-medium uppercase tracking-wider text-slate-400"
+                className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]"
               >
                 To Date
               </label>
@@ -658,14 +683,14 @@ export default function PaymentHistoryPage() {
                 onChange={(event) =>
                   handleFilterChange("dateTo", event.target.value)
                 }
-                className="rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
+                className="rounded-xl border border-[#E8E8E8] bg-white px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
               />
             </div>
           </div>
 
           {hasActiveFilters && (
             <div className="flex flex-wrap items-center gap-2 pt-2">
-              <span className="text-xs text-slate-400">Active filters:</span>
+              <span className="text-xs text-[#6B6B6B]">Active filters:</span>
 
               {filters.search && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
@@ -790,7 +815,7 @@ export default function PaymentHistoryPage() {
 
               <button
                 onClick={clearAllFilters}
-                className="ml-auto text-xs font-medium text-slate-400 underline underline-offset-4 hover:text-white"
+                className="ml-auto text-xs font-medium text-[#6B6B6B] underline underline-offset-4 hover:text-[#0A0A0A]"
               >
                 Clear All
               </button>
@@ -801,51 +826,68 @@ export default function PaymentHistoryPage() {
 
       {/* Results Info */}
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-[#6B6B6B]">
           Showing {payments.length} of {totalCount} payments
           {hasActiveFilters && " (filtered)"}
         </p>
       </div>
 
       {/* Payment Table */}
-      <div className="overflow-x-auto rounded-xl border border-white/10">
+      <div className="overflow-x-auto rounded-xl border border-[#E8E8E8]">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+            <tr className="border-b border-[#E8E8E8] bg-[#F9F9F9]">
+              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
                 ID
               </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
                 Status
               </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
                 Amount
               </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 sm:table-cell">
+              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B] sm:table-cell">
                 Description
               </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 md:table-cell">
+              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B] md:table-cell">
                 Date
               </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
                 Actions
               </th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-[#E8E8E8]">
             {payments.map((payment) => (
               <tr
                 key={payment.id}
-                className={`transition-colors hover:bg-white/5 ${flashedIds.has(payment.id)
+                onClick={() => handlePaymentClick(payment.id)}
+                onMouseEnter={() => setHoveredPayment(payment.id)}
+                onMouseLeave={() => setHoveredPayment(null)}
+                className={`group relative cursor-pointer transition-colors hover:bg-[#F9F9F9] ${flashedIds.has(payment.id)
                   ? "animate-payment-confirmed bg-green-500/10"
                   : ""
                   }`}
               >
                 <td className="px-4 py-3">
-                  <code className="text-xs text-slate-400">
-                    {payment.id.slice(0, 8)}...
-                  </code>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs text-[#6B6B6B]">
+                      {payment.id.slice(0, 8)}...
+                    </code>
+                    {hoveredPayment === payment.id && (
+                      <span className="animate-in fade-in zoom-in duration-200 pointer-events-none absolute left-2 top-1 z-10 hidden rounded-md border border-[#E8E8E8] bg-black/80 px-2 py-0.5 text-[10px] font-medium text-[#0A0A0A] shadow-xl lg:flex items-center gap-1.5 backdrop-blur-sm">
+                        <kbd className="rounded border border-white/20 bg-[#F9F9F9] px-1 font-sans text-[9px] text-[#0A0A0A]">
+                          ⌘
+                        </kbd>{" "}
+                        +{" "}
+                        <kbd className="rounded border border-white/20 bg-[#F9F9F9] px-1 font-sans text-[9px] text-[#0A0A0A]">
+                          C
+                        </kbd>{" "}
+                        to copy link
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -861,13 +903,13 @@ export default function PaymentHistoryPage() {
                     {toStatusLabel(t, payment.status)}
                   </span>
                 </td>
-                <td className="px-4 py-3 font-medium text-white">
+                <td className="px-4 py-3 font-medium text-[#0A0A0A]">
                   {payment.amount} {payment.asset}
                 </td>
-                <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">
+                <td className="hidden px-4 py-3 text-[#6B6B6B] sm:table-cell">
                   {payment.description || "—"}
                 </td>
-                <td className="hidden px-4 py-3 text-slate-400 md:table-cell">
+                <td className="hidden px-4 py-3 text-[#6B6B6B] md:table-cell">
                   {new Date(payment.created_at).toLocaleDateString(locale, {
                     year: "numeric",
                     month: "short",
@@ -905,12 +947,12 @@ export default function PaymentHistoryPage() {
 
       {/* Empty State for Filtered Results */}
       {payments.length === 0 && hasActiveFilters && (
-        <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
+        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-8 text-center">
           <div className="mx-auto mb-4 w-16 h-16 relative">
             <div className="absolute inset-0 bg-slate-500/10 rounded-full blur-xl" />
             <div className="relative w-full h-full flex items-center justify-center">
               <svg
-                className="w-8 h-8 text-slate-400"
+                className="w-8 h-8 text-[#6B6B6B]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -924,10 +966,10 @@ export default function PaymentHistoryPage() {
               </svg>
             </div>
           </div>
-          <h3 className="text-base font-semibold text-white mb-2">
+          <h3 className="text-base font-semibold text-[#0A0A0A] mb-2">
             No payments found
           </h3>
-          <p className="text-sm text-slate-400 mb-4">
+          <p className="text-sm text-[#6B6B6B] mb-4">
             Try adjusting your filters to see more results
           </p>
           <button
@@ -945,6 +987,15 @@ export default function PaymentHistoryPage() {
           paymentId={selectedPayment}
           isOpen={isModalOpen}
           onClose={closeModal}
+        />
+      )}
+
+      {/* Payment Detail Sheet */}
+      {selectedPayment && (
+        <PaymentDetailsSheet
+          paymentId={selectedPayment}
+          isOpen={isSheetOpen}
+          onClose={closeSheet}
         />
       )}
     </div>

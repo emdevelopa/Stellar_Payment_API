@@ -18,12 +18,12 @@ export default function DashboardSkeleton() {
             <section className="flex flex-col gap-4">
               <Skeleton width={180} height={28} borderRadius={6} />
               <div className="grid gap-4 sm:grid-cols-2">
-                {[...Array(2)].map((_, i) => (
+                {[...Array(3)].map((_, i) => (
                   <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-                    <Skeleton width={100} height={14} borderRadius={4} />
+                    <Skeleton width={126} height={14} borderRadius={4} />
                     <div className="mt-2 flex items-baseline gap-2">
-                      <Skeleton width={120} height={36} borderRadius={6} />
-                      <Skeleton width={40} height={20} borderRadius={4} />
+                      <Skeleton width={132} height={36} borderRadius={6} />
+                      <Skeleton width={56} height={20} borderRadius={4} />
                     </div>
                   </div>
                 ))}
@@ -41,11 +41,11 @@ export default function DashboardSkeleton() {
                     <Skeleton width={140} height={32} borderRadius={8} />
                   </div>
                 </div>
-                <div className="mt-4 flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Skeleton width={60} height={24} borderRadius={12} />
                   <Skeleton width={60} height={24} borderRadius={12} />
                 </div>
-                <div className="mt-4 h-[300px]">
+                <div className="h-[300px]">
                   <Skeleton height="100%" borderRadius={8} />
                 </div>
               </div>

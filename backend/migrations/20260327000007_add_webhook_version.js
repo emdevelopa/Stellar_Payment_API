@@ -3,11 +3,12 @@
  * @returns { Promise<void> }
  */
 export async function up(knex) {
-  await knex.schema.alterTable("merchants", (table) => {
-    // Default 'v1' ensures every existing merchant keeps receiving the
-    // payload format they integrated against without any manual data migration.
-    table.text("webhook_version").notNullable().defaultTo("v1");
-  });
+  const has = await knex.schema.hasColumn("merchants", "webhook_version");
+  if (!has) {
+    await knex.schema.alterTable("merchants", (table) => {
+      table.text("webhook_version").notNullable().defaultTo("v1");
+    });
+  }
 }
 
 /**

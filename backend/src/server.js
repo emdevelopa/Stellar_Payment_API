@@ -8,14 +8,26 @@ import { logger } from "./lib/logger.js";
 import { isHorizonReachable } from "./lib/stellar.js";
 import cron from "node-cron";
 import { archiveOldPaymentIntents } from "./lib/maintenance.js";
+import { startHorizonPoller, stopHorizonPoller } from "./lib/horizon-poller.js";
 
 initSentry();
 validateEnvironmentVariables();
 
 const port = process.env.PORT || 4000;
+const host = process.env.HOST || "0.0.0.0";
 
 async function startServer() {
-  const redisClient = await connectRedisClient();
+  let redisClient = null;
+  try {
+    redisClient = await connectRedisClient();
+    if (redisClient?.isOpen) {
+      logger.info("redis connected");
+    } else {
+      logger.warn("redis unavailable, continuing with in-memory fallbacks");
+    }
+  } catch (err) {
+    logger.warn({ err }, "redis unavailable, continuing with in-memory fallbacks");
+  }
 
   const { app, io } = await createApp({ redisClient });
 
@@ -33,7 +45,7 @@ async function startServer() {
 
     const results = await Promise.allSettled([
       probe("Database", () => pool.query("SELECT 1")),
-      probe("Redis", () => redisClient.ping()),
+      probe("Redis", () => (redisClient ? redisClient.ping() : Promise.reject(new Error("redis unavailable")))),
       probe("Horizon", () => isHorizonReachable())
     ]);
 
@@ -58,12 +70,15 @@ async function startServer() {
     logger.info({ intervalMs: monitoringIntervalMs }, "pool monitoring started");
   }
 
-  const server = app.listen(port, () => {
-    logger.info({ port }, `API listening on http://localhost:${port}`);
+  const server = app.listen(port, host, () => {
+    logger.info({ host, port }, `API listening on http://${host}:${port}`);
   });
 
   // Attach socket.io to the HTTP server
   io.attach(server);
+
+  // Start Horizon poller — auto-confirms pending payments
+  startHorizonPoller(io);
 
   // Schedule maintenance jobs: Run once daily at 2:00 AM
   const maintenanceJob = cron.schedule("0 2 * * *", () => {
@@ -76,6 +91,7 @@ async function startServer() {
   function shutdown(signal) {
     logger.info({ signal }, "shutdown signal received");
     if (stopPoolMonitoring) stopPoolMonitoring();
+    stopHorizonPoller();
     maintenanceJob.stop();
     server.close(async () => {
       await closePool();
@@ -86,6 +102,16 @@ async function startServer() {
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
+
+  process.on("uncaughtException", (err) => {
+    logger.fatal({ err }, "UNCAUGHT_EXCEPTION: process crashing");
+    // Allow logger to flush before exiting
+    setTimeout(() => process.exit(1), 1000);
+  });
+
+  process.on("unhandledRejection", (reason, promise) => {
+    logger.error({ reason, promise }, "UNHANDLED_REJECTION: a promise was rejected but not caught");
+  });
 }
 
 startServer();

@@ -1,0 +1,118 @@
+{
+  "info": {
+    "name": "Stellar Payment API",
+    "_postman_id": "00000000-0000-0000-0000-000000000000",
+    "description": "Postman collection for the Stellar Payment API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "API_KEY",
+      "value": "{{API_KEY}}"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{BASE_URL}}/health",
+          "host": ["{{BASE_URL}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Register Merchant",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"merchant@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/register-merchant",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "register-merchant"]
+        }
+      }
+    },
+    {
+      "name": "Create Payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{API_KEY}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 10,\n  \"asset\": \"XLM\",\n  \"recipient\": \"G...RECIPIENT\",\n  \"description\": \"Example payment\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/create-payment",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "create-payment"]
+        }
+      }
+    },
+    {
+      "name": "Create Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{API_KEY}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 10,\n  \"asset\": \"XLM\",\n  \"recipient\": \"G...RECIPIENT\",\n  \"description\": \"Example payment\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/sessions",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "sessions"]
+        }
+      }
+    },
+    {
+      "name": "List Payments",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "x-api-key", "value": "{{API_KEY}}" }
+        ],
+        "url": {
+          "raw": "{{BASE_URL}}/api/payments?page=1&limit=10",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "payments"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "10" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Download Postman Collection",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{BASE_URL}}/api/postman-collection.json",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "postman-collection.json"]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,409 @@
+# x402 Agentic Payments
+
+This guide is for integrating PLUTO into an external business app using x402 pay-per-request mode.
+
+It assumes you already have a merchant account and API key.
+
+---
+
+## Integration architecture
+
+`Customer frontend -> Your backend -> PLUTO API (x402 mode)`
+
+Recommended local setup used in this guide:
+
+- Store frontend: `https://your-app.vercel.app`
+- Store backend: `https://your-api.up.railway.app`
+- PLUTO frontend (checkout): `https://stellar-payment-api.vercel.app`
+- PLUTO backend (API): `https://pluto-api.up.railway.app`
+
+---
+
+## Your backend `.env` (x402)
+
+Store backend example:
+
+```bash
+# The port your integration server runs on
+PORT=3001
+
+# The production PLUTO API base URL
+PLUTO_API_URL=https://pluto-api.up.railway.app
+
+# Your Private Merchant API Key (keep this secret!)
+PLUTO_API_KEY=sk_your_merchant_api_key
+
+# The Stellar address where you want to receive payments
+MERCHANT_STELLAR_RECIPIENT=G_YOUR_RECEIVING_ADDRESS
+
+# Optional: Standard USDC issuer is auto-resolved if omitted
+USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+
+# Edit this and replace S... with the secret key for the account 
+# that will sign transactions and pay for the resource.
+X402_PAYER_SECRET=S_YOUR_PAYER_SECRET_KEY
+
+# Stellar network configuration (testnet or public)
+STELLAR_NETWORK=testnet
+STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+```
+
+Requirements for `X402_PAYER_SECRET` wallet:
+
+- funded with XLM (network fees)
+- has USDC trustline
+- has enough USDC for x402 charges
+
+> [!TIP]
+> `USDC_ISSUER` is **optional** for standard USDC; PLUTO resolves it automatically based on your `STELLAR_NETWORK`.
+
+---
+
+## x402 flow in one view
+
+1. Your backend calls `POST /api/create-payment` with:
+- `x-api-key`
+- `x-pluto-pricing-mode: x402`
+
+2. PLUTO responds `402 Payment Required` with challenge payload.
+3. Your backend pays the exact challenge on Stellar.
+4. Your backend verifies tx at `POST /api/verify-x402`.
+5. Your backend retries `create-payment` with `X-Payment-Token`.
+
+---
+
+## Production `payOnStellar` sample
+
+<FrameworkTabs>
+  <FrameworkTab label="Express (Node.js) / Next.js">
+`lib/payOnStellar.js`
+
+```js
+import StellarSdk from "stellar-sdk";
+
+const HORIZON_URL =
+  process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
+
+const NETWORK_PASSPHRASE =
+  process.env.STELLAR_NETWORK === "public"
+    ? StellarSdk.Networks.PUBLIC
+    : StellarSdk.Networks.TESTNET;
+
+export async function payOnStellar({ amount, recipient, memo, assetIssuer }) {
+  const secret = process.env.X402_PAYER_SECRET;
+  if (!secret) throw new Error("X402_PAYER_SECRET is missing");
+  if (!amount || !recipient || !memo || !assetIssuer) {
+    throw new Error("Missing x402 challenge payment fields");
+  }
+  if (Buffer.byteLength(memo, "utf8") > 28) {
+    throw new Error("x402 memo exceeds 28 bytes");
+  }
+
+  const server = new StellarSdk.Horizon.Server(HORIZON_URL);
+  const source = StellarSdk.Keypair.fromSecret(secret);
+  const sourceAccount = await server.loadAccount(source.publicKey());
+  const fee = await server.fetchBaseFee();
+
+  const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+    fee: String(fee),
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      StellarSdk.Operation.payment({
+        destination: recipient,
+        asset: new StellarSdk.Asset("USDC", assetIssuer),
+        amount: String(amount),
+      })
+    )
+    .addMemo(StellarSdk.Memo.text(memo))
+    .setTimeout(30)
+    .build();
+
+  tx.sign(source);
+  const result = await server.submitTransaction(tx);
+  return result.hash;
+}
+```
+  </FrameworkTab>
+  <FrameworkTab label="Python (Django)">
+`payment_helpers.py`
+
+```python
+import os
+from stellar_sdk import Server, Keypair, Network, TransactionBuilder, Asset
+
+def pay_on_stellar(amount, recipient, memo, asset_issuer):
+    secret = os.getenv("X402_PAYER_SECRET")
+    if not secret:
+        raise Exception("X402_PAYER_SECRET is missing")
+        
+    if not amount or not recipient or not memo or not asset_issuer:
+        raise Exception("Missing x402 challenge payment fields")
+        
+    if len(memo.encode("utf-8")) > 28:
+        raise Exception("x402 memo exceeds 28 bytes")
+        
+    horizon_url = os.getenv("STELLAR_HORIZON_URL", "https://horizon-testnet.stellar.org")
+    network_passphrase = Network.PUBLIC_NETWORK_PASSPHRASE if os.getenv("STELLAR_NETWORK") == "public" else Network.TESTNET_NETWORK_PASSPHRASE
+    
+    server = Server(horizon_url)
+    source_keypair = Keypair.from_secret(secret)
+    source_account = server.load_account(source_keypair.public_key)
+    base_fee = server.fetch_base_fee()
+    
+    tx = TransactionBuilder(
+        source_account,
+        network_passphrase=network_passphrase,
+        base_fee=base_fee
+    )
+    
+    tx.append_payment_op(
+        destination=recipient,
+        asset=Asset("USDC", asset_issuer),
+        amount=str(amount)
+    )
+    
+    tx.add_text_memo(memo)
+    tx.set_timeout(30)
+    
+    transaction = tx.build()
+    transaction.sign(source_keypair)
+    
+    response = server.submit_transaction(transaction)
+    return response.get("hash")
+```
+  </FrameworkTab>
+</FrameworkTabs>
+
+---
+
+## Store backend checkout route (x402)
+
+<FrameworkTabs>
+  <FrameworkTab label="Express (Node)">
+```js
+import "dotenv/config";
+import express from "express";
+import { payOnStellar } from "../lib/payOnStellar.js";
+
+const router = express.Router();
+const API_URL = process.env.PLUTO_API_URL || "https://pluto-api.up.railway.app";
+
+router.post("/checkout", async (req, res) => {
+  try {
+    const payload = {
+      amount: req.body.amount,
+      asset: "USDC",
+      // Optional: Standard issuer is used if process.env.USDC_ISSUER is missing
+      asset_issuer: process.env.USDC_ISSUER,
+      recipient: process.env.MERCHANT_STELLAR_RECIPIENT,
+      metadata: { cart_id: req.body.cartId },
+    };
+
+    const create = async (token) =>
+      fetch(`${API_URL}/api/create-payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.PLUTO_API_KEY,
+          "x-pluto-pricing-mode": "x402",
+          ...(token ? { "X-Payment-Token": token } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+    const first = await create();
+    const firstBody = await first.json();
+
+    if (first.ok) return res.status(first.status).json(firstBody);
+    if (first.status !== 402) return res.status(first.status).json(firstBody);
+
+    const txHash = await payOnStellar({
+      amount: firstBody.amount,
+      recipient: firstBody.recipient,
+      memo: firstBody.memo,
+      assetIssuer: firstBody.asset_issuer,
+    });
+
+    const verify = await fetch(`${API_URL}/api/verify-x402`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tx_hash: txHash,
+        expected_amount: firstBody.amount,
+        expected_recipient: firstBody.recipient,
+        memo: firstBody.memo,
+      }),
+    });
+
+    const verifyBody = await verify.json();
+    if (!verify.ok || !verifyBody.access_token) {
+      return res.status(verify.status).json(verifyBody);
+    }
+
+    const retry = await create(verifyBody.access_token);
+    const retryBody = await retry.json();
+    return res.status(retry.status).json(retryBody);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Checkout failed" });
+  }
+});
+
+export default router;
+```
+  </FrameworkTab>
+  <FrameworkTab label="Next.js (App Router)">
+```typescript
+import { NextResponse } from 'next/server';
+import { payOnStellar } from '@/lib/payOnStellar';
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const API_URL = process.env.PLUTO_API_URL || "https://pluto-api.up.railway.app";
+    const payload = {
+      amount: body.amount,
+      asset: "USDC",
+      asset_issuer: process.env.USDC_ISSUER,
+      recipient: process.env.MERCHANT_STELLAR_RECIPIENT,
+      metadata: { cart_id: body.cartId },
+    };
+
+    const create = async (token?: string) =>
+      fetch(`${API_URL}/api/create-payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.PLUTO_API_KEY!,
+          "x-pluto-pricing-mode": "x402",
+          ...(token ? { "X-Payment-Token": token } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+    const first = await create();
+    const firstBody = await first.json();
+
+    if (first.ok) return NextResponse.json(firstBody, { status: first.status });
+    if (first.status !== 402) return NextResponse.json(firstBody, { status: first.status });
+
+    const txHash = await payOnStellar({
+      amount: firstBody.amount,
+      recipient: firstBody.recipient,
+      memo: firstBody.memo,
+      assetIssuer: firstBody.asset_issuer,
+    });
+
+    const verify = await fetch(`${API_URL}/api/verify-x402`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tx_hash: txHash,
+        expected_amount: firstBody.amount,
+        expected_recipient: firstBody.recipient,
+        memo: firstBody.memo,
+      }),
+    });
+
+    const verifyBody = await verify.json();
+    if (!verify.ok || !verifyBody.access_token) {
+      return NextResponse.json(verifyBody, { status: verify.status });
+    }
+
+    const retry = await create(verifyBody.access_token);
+    const retryBody = await retry.json();
+    return NextResponse.json(retryBody, { status: retry.status });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+```
+  </FrameworkTab>
+  <FrameworkTab label="Python (Django)">
+```python
+import requests
+import os
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+# Ensure you import your pay_on_stellar helper here
+
+@csrf_exempt
+@require_POST
+def handle_agentic_payment(request):
+    try:
+        body = json.loads(request.body)
+        amount = body.get("amount")
+        cart_id = body.get("cartId")
+        
+        API_URL = os.getenv("PLUTO_API_URL")
+        SK = os.getenv("PLUTO_API_KEY")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": SK,
+            "x-pluto-pricing-mode": "x402"
+        }
+        
+        payload = {
+            "amount": amount,
+            "asset": "USDC",
+            "asset_issuer": os.getenv("USDC_ISSUER"),
+            "recipient": os.getenv("MERCHANT_STELLAR_RECIPIENT"),
+            "metadata": {"cart_id": cart_id}
+        }
+        
+        first = requests.post(f"{API_URL}/api/create-payment", json=payload, headers=headers)
+        if first.status_code == 201:
+            return JsonResponse(first.json(), status=201)
+            
+        if first.status_code != 402:
+            return JsonResponse(first.json(), status=first.status_code)
+            
+        # 402 Challenge Handling
+        challenge = first.json()
+        tx_hash = pay_on_stellar(
+            amount=challenge["amount"],
+            recipient=challenge["recipient"],
+            memo=challenge["memo"],
+            asset_issuer=challenge["asset_issuer"]
+        )
+        
+        verify = requests.post(f"{API_URL}/api/verify-x402", json={
+            "tx_hash": tx_hash,
+            "expected_amount": challenge["amount"],
+            "expected_recipient": challenge["recipient"],
+            "memo": challenge["memo"]
+        })
+        
+        verify_data = verify.json()
+        if verify.status_code != 200 or not verify_data.get("access_token"):
+            return JsonResponse(verify_data, status=verify.status_code)
+            
+        headers["X-Payment-Token"] = verify_data.get("access_token")
+        retry = requests.post(f"{API_URL}/api/create-payment", json=payload, headers=headers)
+        
+        return JsonResponse(retry.json(), status=retry.status_code)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+```
+  </FrameworkTab>
+</FrameworkTabs>
+
+---
+
+## Practical notes
+
+- Keep x402 flow on server-side only.
+- Do not trust client-provided challenge fields.
+- Use exact challenge values (`amount`, `recipient`, `memo`, `asset_issuer`).
+- `memo` must remain at most 28 bytes.
+- Keep the returned `payment_id` in your order table.
+
+---
+
+## Related
+
+- Non-x402 integration: `/docs/api-guide`

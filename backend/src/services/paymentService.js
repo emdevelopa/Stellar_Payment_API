@@ -16,6 +16,7 @@ import {
   setCachedPayment,
   invalidatePaymentCache,
 } from "../lib/redis.js";
+import { ASSET_DEFAULTS } from "../constants/assetConstants.js";
 import {
   paymentCreatedCounter,
   paymentConfirmedCounter,
@@ -106,12 +107,20 @@ export const paymentService = {
     const metadata = body.metadata && typeof body.metadata === "object" ? { ...body.metadata } : {};
     metadata.branding_config = resolvedBranding;
 
+    const network = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
+    const asset = body.asset?.toUpperCase();
+    let assetIssuer = body.asset_issuer;
+
+    if (!assetIssuer && ASSET_DEFAULTS[asset]) {
+      assetIssuer = ASSET_DEFAULTS[asset][network] || ASSET_DEFAULTS[asset]["testnet"];
+    }
+
     const payload = {
       id: paymentId,
       merchant_id: merchant.id,
       amount: body.amount,
-      asset: body.asset,
-      asset_issuer: body.asset_issuer || null,
+      asset: asset,
+      asset_issuer: assetIssuer || null,
       recipient: body.recipient,
       description: body.description || null,
       memo: body.memo || null,

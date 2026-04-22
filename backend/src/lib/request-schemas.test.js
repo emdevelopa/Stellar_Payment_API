@@ -215,12 +215,14 @@ describe("registerMerchantZodSchema", () => {
   it("parses and normalizes a valid merchant registration request", () => {
     const result = registerMerchantZodSchema.parse({
       email: " merchant@example.com ",
+      password: "password123",
       business_name: " Example Co ",
       notification_email: " ops@example.com ",
     });
 
     expect(result).toEqual({
       email: "merchant@example.com",
+      password: "password123",
       business_name: "Example Co",
       notification_email: "ops@example.com",
     });
@@ -230,6 +232,7 @@ describe("registerMerchantZodSchema", () => {
     expect(() =>
       registerMerchantZodSchema.parse({
         email: "not-an-email",
+        password: "password123",
       })
     ).toThrowError("Invalid email format");
   });
@@ -238,6 +241,7 @@ describe("registerMerchantZodSchema", () => {
     expect(() =>
       registerMerchantZodSchema.parse({
         email: "merchant@example.com",
+        password: "password123",
         branding_config: {
           primary_color: "blue",
         },
@@ -248,6 +252,7 @@ describe("registerMerchantZodSchema", () => {
   it("accepts and passes through a metadata blob", () => {
     const result = registerMerchantZodSchema.parse({
       email: "merchant@example.com",
+      password: "password123",
       metadata: { industry: "retail", country: "NG" },
     });
 
@@ -258,6 +263,7 @@ describe("registerMerchantZodSchema", () => {
     expect(() =>
       registerMerchantZodSchema.parse({
         email: "merchant@example.com",
+        password: "password123",
         metadata: "not-an-object",
       })
     ).toThrow();
@@ -332,4 +338,3 @@ describe("v2PaymentSessionSchema", () => {
     );
   });
 });
-

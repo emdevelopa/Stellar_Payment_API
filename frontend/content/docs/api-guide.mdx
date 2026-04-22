@@ -1,170 +1,290 @@
-# How to use the API
+# Subscription API Guide
 
-This guide mirrors the routes currently implemented in the backend of this repository.
+This guide is for teams integrating PLUTO into an external business app using the standard API-key flow (no x402 challenge handling).
 
-## Base URL
+---
 
-During local development, the frontend defaults to:
+## Integration architecture
 
-```text
-http://localhost:4000
+`Customer frontend -> Your backend -> PLUTO API`
+
+Recommended local setup used in this guide:
+
+- Store frontend: `https://your-app.vercel.app`
+- Store backend: `https://your-api.up.railway.app`
+- PLUTO frontend (checkout): `https://stellar-payment-api.vercel.app`
+- PLUTO backend (API): `https://pluto-api.up.railway.app`
+
+---
+
+## Your backend `.env` (non-x402)
+
+Store backend example:
+
+```bash
+# The port your integration server runs on
+PORT=3001
+
+# The production PLUTO API base URL
+PLUTO_API_URL=https://pluto-api.up.railway.app
+
+# Your Private Merchant API Key (keep this secret!)
+PLUTO_API_KEY=sk_your_merchant_api_key
+
+# The Stellar address where you want to receive payments
+MERCHANT_STELLAR_RECIPIENT=G_YOUR_RECEIVING_ADDRESS
+
+# Optional: Standard USDC issuer is auto-resolved if omitted
+# USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
 ```
 
-## 1. Register a merchant
+Notes:
 
-Create a merchant and receive both an API key and a webhook secret.
+- Keep `PLUTO_API_KEY` only on your backend.
+- `USDC_ISSUER` is **optional** for standard USDC; PLUTO resolves it automatically based on your network.
 
-**Endpoint**
+---
+
+## Step-by-step implementation (non-x402)
+
+### 1. Register merchant on PLUTO
 
 ```http
 POST /api/register-merchant
 ```
 
-**Example**
+Save:
 
-```bash
-curl -X POST http://localhost:4000/api/register-merchant \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "merchant@example.com",
-    "business_name": "Example Store",
-    "notification_email": "ops@example.com"
-  }'
-```
-
-**Response fields to save**
-
+- `merchant.id`
 - `merchant.api_key`
 - `merchant.webhook_secret`
-- `merchant.id`
 
-## 2. Create a payment link
+### 2. Add checkout route in your backend
 
-All merchant-protected endpoints use the `x-api-key` header.
+<FrameworkTabs>
+  <FrameworkTab label="Express (Node)">
+```js
+import "dotenv/config";
+import express from "express";
 
-**Endpoint**
+const router = express.Router();
+const API_URL = process.env.PLUTO_API_URL || "https://pluto-api.up.railway.app";
 
-```http
-POST /api/create-payment
+router.post("/checkout", async (req, res) => {
+  try {
+    const payload = {
+      amount: req.body.amount,
+      asset: "USDC",
+      // Optional: Standard issuer is used if process.env.USDC_ISSUER is missing
+      asset_issuer: process.env.USDC_ISSUER, 
+      recipient: process.env.MERCHANT_STELLAR_RECIPIENT,
+      metadata: { cart_id: req.body.cartId },
+    };
+
+    const r = await fetch(`${API_URL}/api/create-payment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.PLUTO_API_KEY,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await r.json();
+    return res.status(r.status).json(data);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Checkout failed" });
+  }
+});
+
+export default router;
 ```
+  </FrameworkTab>
+  <FrameworkTab label="Next.js (App Router)">
+```typescript
+import { NextResponse } from 'next/server';
 
-**Headers**
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const API_URL = process.env.PLUTO_API_URL || "https://pluto-api.up.railway.app";
 
-```text
-x-api-key: sk_...
-Content-Type: application/json
-Idempotency-Key: 3f0d65e1-27b8-4b28-8f2f-8a6f9fd9d7d9
-```
+    const payload = {
+      amount: body.amount,
+      asset: "USDC",
+      asset_issuer: process.env.USDC_ISSUER,
+      recipient: process.env.MERCHANT_STELLAR_RECIPIENT,
+      metadata: { cart_id: body.cartId },
+    };
 
-`Idempotency-Key` is optional, but recommended. The backend caches successful duplicate requests for 24 hours.
+    const r = await fetch(`${API_URL}/api/create-payment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.PLUTO_API_KEY!,
+      },
+      body: JSON.stringify(payload),
+    });
 
-**Example**
-
-```bash
-curl -X POST http://localhost:4000/api/create-payment \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: sk_your_api_key" \
-  -H "Idempotency-Key: 3f0d65e1-27b8-4b28-8f2f-8a6f9fd9d7d9" \
-  -d '{
-    "amount": 25,
-    "asset": "XLM",
-    "recipient": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
-    "description": "Order #2048",
-    "webhook_url": "https://merchant.example/webhooks/stellar"
-  }'
-```
-
-**Typical success response**
-
-```json
-{
-  "payment_id": "6aa64d44-faf1-41f0-a7e7-c8f9cce62f2f",
-  "payment_link": "http://localhost:3000/pay/6aa64d44-faf1-41f0-a7e7-c8f9cce62f2f",
-  "status": "pending",
-  "branding_config": {
-    "primary_color": "#5ef2c0",
-    "secondary_color": "#b8ffe2",
-    "background_color": "#050608"
+    const data = await r.json();
+    return NextResponse.json(data, { status: r.status });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 ```
+  </FrameworkTab>
+  <FrameworkTab label="Python (Django)">
+```python
+import os
+import requests
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
-## 3. Check payment status
-
-Use the public status endpoint to read the latest payment state.
-
-**Endpoint**
-
-```http
-GET /api/payment-status/:id
+@csrf_exempt
+@require_POST
+def create_checkout(request):
+    try:
+        body = json.loads(request.body)
+        
+        payload = {
+            "amount": body.get("amount"),
+            "asset": "USDC",
+            # Optional: Standard issuer is used if USDC_ISSUER is missing
+            "asset_issuer": os.getenv("USDC_ISSUER"),
+            "recipient": os.getenv("MERCHANT_STELLAR_RECIPIENT"),
+            "metadata": {"cart_id": body.get("cartId")}
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": os.getenv("PLUTO_API_KEY")
+        }
+        
+        url = f"{os.getenv('PLUTO_API_URL')}/api/create-payment"
+        response = requests.post(url, json=payload, headers=headers)
+        
+        return JsonResponse(response.json(), status=response.status_code)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 ```
+  </FrameworkTab>
+</FrameworkTabs>
 
-**Example**
+### 3. Call your backend from the frontend
 
-```bash
-curl http://localhost:4000/api/payment-status/6aa64d44-faf1-41f0-a7e7-c8f9cce62f2f
+Once your backend route is ready, trigger it seamlessly from your frontend customer checkout page:
+
+<FrameworkTabs>
+  <FrameworkTab label="React">
+```tsx
+import { useState } from 'react';
+
+export default function CheckoutButton({ amount, cartId }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, cartId })
+      });
+      
+      const session = await response.json();
+      
+      if (session.payment_link) {
+        // Redirect standard browser to PLUTO UI
+        window.location.href = session.payment_link;
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleCheckout} disabled={loading}>
+      {loading ? 'Processing...' : `Pay $${amount} with Crypto`}
+    </button>
+  );
+}
 ```
+  </FrameworkTab>
+  <FrameworkTab label="Vue 3 (Composition API)">
+```html
+<script setup>
+import { ref } from 'vue';
 
-## 4. Verify the payment on Stellar
+const props = defineProps({
+  amount: Number,
+  cartId: String
+});
 
-After the customer submits payment, verify it against the Stellar network.
+const loading = ref(false);
 
-**Endpoint**
+const handleCheckout = async () => {
+  loading.value = true;
+  try {
+    const response = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        amount: props.amount, 
+        cartId: props.cartId 
+      })
+    });
+    
+    const session = await response.json();
+    
+    if (session.payment_link) {
+      // Redirect standard browser to PLUTO UI
+      window.location.href = session.payment_link;
+    }
+  } catch (err) {
+    console.error("Checkout error:", err);
+  } finally {
+    loading.value = false;
+  }
+};
+</script>
 
-```http
-POST /api/verify-payment/:id
+<template>
+  <button @click="handleCheckout" :disabled="loading">
+    {{ loading ? 'Processing...' : `Pay $${amount} with Crypto` }}
+  </button>
+</template>
 ```
+  </FrameworkTab>
+</FrameworkTabs>
 
-If the payment is found, the API marks it as `confirmed`, stores the `tx_id`, emits the merchant socket event, and sends the webhook.
+### 4. Redirect customer to returned `payment_link`
 
-**Example**
-
-```bash
-curl -X POST http://localhost:4000/api/verify-payment/6aa64d44-faf1-41f0-a7e7-c8f9cce62f2f
-```
-
-## 5. List merchant payments
-
-Read recent payments for the authenticated merchant.
-
-**Endpoint**
-
-```http
-GET /api/payments?page=1&limit=10
-```
-
-**Headers**
-
-```text
-x-api-key: sk_...
-```
-
-## 6. Test webhook delivery
-
-If you already stored a webhook URL for the merchant, you can send a signed test event using:
-
-```http
-POST /api/webhooks/test
-```
-
-If you want to ping an arbitrary URL directly, the repo also exposes:
-
-```http
-POST /api/test-webhook
-```
-
-with:
+Example response:
 
 ```json
 {
-  "webhook_url": "https://merchant.example/webhooks/stellar"
+  "payment_id": "f95aa43c-46ad-42f4-88b9-4c9be8d7865e",
+  "payment_link": "https://stellar-payment-api.vercel.app/pay/f95aa43c-46ad-42f4-88b9-4c9be8d7865e",
+  "status": "pending"
 }
 ```
 
-## Notes
+### 5. Track result in your app
 
-- Merchant auth in this codebase uses `x-api-key`, not `Authorization: Bearer ...`.
-- The create-payment flow supports optional `webhook_url`, `memo`, `memo_type`, and `branding_overrides`.
-- Webhook events are signed with the merchant webhook secret using `HMAC-SHA256`.
+Use one or both:
 
-Continue with the HMAC guide in `/docs/hmac-signatures` to verify those webhook requests correctly.
+- `GET /api/payment-status/:id`
+- Webhooks + signature verification (`PLUTO_WEBHOOK_SECRET`)
+
+---
+
+## Common mistakes
+
+- Sending `x-api-key` from browser/frontend code.
+- Missing `asset_issuer` when sending **non-standard** tokens.
+- Pointing users to the wrong checkout domain.

@@ -133,9 +133,9 @@
         }
       }
     },
-    "/api/auth/challenge": {
+    "/api/auth/login": {
       "post": {
-        "summary": "Generate a SEP-0010 challenge transaction",
+        "summary": "Login with email and password",
         "tags": [
           "Auth"
         ],
@@ -146,12 +146,15 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "account"
+                  "email",
+                  "password"
                 ],
                 "properties": {
-                  "account": {
-                    "type": "string",
-                    "description": "Stellar public key (G...)"
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
                   }
                 }
               }
@@ -160,26 +163,10 @@
         },
         "responses": {
           "200": {
-            "description": "Challenge transaction",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "transaction": {
-                      "type": "string",
-                      "description": "Base64-encoded challenge XDR"
-                    },
-                    "network_passphrase": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Login successful"
           },
-          "400": {
-            "description": "Invalid request"
+          "401": {
+            "description": "Invalid credentials"
           }
         }
       }
@@ -384,6 +371,41 @@
                       "type": "integer"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preview-receipt": {
+      "post": {
+        "summary": "Generate a preview HTML of the email receipt with custom branding",
+        "tags": [
+          "Merchants"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrandingConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "HTML preview of the receipt",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -633,6 +655,172 @@
         ]
       }
     },
+    "/api/payments/{id}": {
+      "get": {
+        "summary": "Get detailed payment intent",
+        "description": "Returns the full payment record for the authenticated merchant. When status is \"completed\", a `stellar_tx` block is also included containing the on-chain tx_hash, ledger sequence, and timestamp sourced directly from Horizon.\n",
+        "tags": [
+          "Payments"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Payment intent UUID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "payment": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "number"
+                        },
+                        "asset": {
+                          "type": "string"
+                        },
+                        "asset_issuer": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "recipient": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "memo": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "memo_type": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "confirmed",
+                            "completed",
+                            "failed"
+                          ]
+                        },
+                        "tx_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "branding_config": {
+                          "type": "object",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "stellar_tx": {
+                      "nullable": true,
+                      "type": "object",
+                      "description": "Present only when status is \"completed\" and Horizon returns the transaction. null otherwise.\n",
+                      "properties": {
+                        "tx_hash": {
+                          "type": "string"
+                        },
+                        "ledger": {
+                          "type": "integer"
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorised — invalid or missing API key"
+          },
+          "404": {
+            "description": "Payment not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Soft delete a payment (preserves audit logs)",
+        "tags": [
+          "Payments"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Payment ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "payment_id": {
+                      "type": "string"
+                    },
+                    "deleted_at": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Payment not found"
+          },
+          "410": {
+            "description": "Payment already deleted"
+          }
+        }
+      }
+    },
     "/api/create-payment": {
       "post": {
         "summary": "Create a new payment session request",
@@ -694,6 +882,10 @@
                   },
                   "webhook_url": {
                     "type": "string"
+                  },
+                  "client_id": {
+                    "type": "string",
+                    "description": "Merchant-defined client/store identifier for segmentation"
                   },
                   "branding_overrides": {
                     "type": "object",
@@ -872,6 +1064,14 @@
               "default": 10
             },
             "description": "Number of results per page (max 100)"
+          },
+          {
+            "in": "query",
+            "name": "client_id",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter payments by merchant-defined client identifier"
           }
         ],
         "responses": {
@@ -1182,6 +1382,36 @@
         ]
       }
     },
+    "/api/anchor/sep24/transaction/{id}": {
+      "get": {
+        "summary": "Poll the status of a SEP-0024 anchor transaction",
+        "description": "Fetches the current status of a deposit or withdrawal transaction from an anchor.\n",
+        "tags": [
+          "Anchor / SEP-0024"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Anchor transaction ID returned from /deposit or /withdraw"
+          }
+        ],
+        "responses": {
+          "501": {
+            "description": "Endpoint is not enabled on this deployment"
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "summary": "Expose Prometheus metrics",
@@ -1240,10 +1470,10 @@
         }
       }
     },
-    "/api/webhooks/logs": {
+    "/api/webhook-logs": {
       "get": {
         "summary": "Get webhook delivery logs for authenticated merchant",
-        "description": "Retrieve paginated webhook delivery logs for the authenticated merchant account",
+        "description": "Retrieve paginated webhook delivery logs for the authenticated merchant account using cursor-based pagination",
         "tags": [
           "Webhooks"
         ],
@@ -1255,12 +1485,11 @@
         "parameters": [
           {
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "schema": {
-              "type": "integer",
-              "default": 1
+              "type": "string"
             },
-            "description": "Page number (1-indexed)"
+            "description": "Pagination cursor (base64 encoded)"
           },
           {
             "in": "query",
@@ -1287,87 +1516,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated webhook logs",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "logs": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "payment_id": {
-                            "type": "string"
-                          },
-                          "status_code": {
-                            "type": "integer"
-                          },
-                          "success": {
-                            "type": "boolean"
-                          },
-                          "response_body": {
-                            "type": "string"
-                          },
-                          "timestamp": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "payment": {
-                            "type": "object",
-                            "properties": {
-                              "amount": {
-                                "type": "number"
-                              },
-                              "asset": {
-                                "type": "string"
-                              },
-                              "status": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    },
-                    "pagination": {
-                      "type": "object",
-                      "properties": {
-                        "page": {
-                          "type": "integer"
-                        },
-                        "limit": {
-                          "type": "integer"
-                        },
-                        "total": {
-                          "type": "integer"
-                        },
-                        "totalPages": {
-                          "type": "integer"
-                        }
-                      }
-                    },
-                    "links": {
-                      "type": "object",
-                      "properties": {
-                        "next": {
-                          "type": "string",
-                          "description": "URL to the next page"
-                        },
-                        "previous": {
-                          "type": "string",
-                          "description": "URL to the previous page"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Paginated webhook logs"
           },
           "401": {
             "description": "Unauthorized - invalid or missing API key"
@@ -1389,6 +1538,68 @@
             "ApiKeyAuth": []
           }
         ]
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "summary": "Get dashboard notifications",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/api/verify-x402": {
+      "post": {
+        "summary": "Verify a Stellar USDC payment for x402 access",
+        "tags": [
+          "x402"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tx_hash",
+                  "expected_amount",
+                  "expected_recipient",
+                  "memo"
+                ],
+                "properties": {
+                  "tx_hash": {
+                    "type": "string"
+                  },
+                  "expected_amount": {
+                    "type": "string"
+                  },
+                  "expected_recipient": {
+                    "type": "string"
+                  },
+                  "memo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment verified — access token returned"
+          },
+          "400": {
+            "description": "Payment verification failed"
+          },
+          "409": {
+            "description": "Transaction already used (replay attack)"
+          }
+        }
       }
     }
   }

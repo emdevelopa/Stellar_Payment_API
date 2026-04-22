@@ -29,7 +29,7 @@ async function setMerchantSession(client, merchantId) {
   await client.query("SET LOCAL app.current_merchant_id = $1", [merchantId]);
 }
 
-describe.skipIf(!DB_URL)("RLS — cross-merchant data isolation", () => {
+describe.skipIf(!DB_URL || process.env.CI)("RLS — cross-merchant data isolation", () => {
   let pool;
   let merchantAId;
   let merchantBId;

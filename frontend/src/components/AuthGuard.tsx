@@ -2,7 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useMerchantHydrated, useMerchantSession } from "@/lib/merchant-store";
+import {
+  useMerchantHydrated,
+  useMerchantSession,
+  useHydrateMerchantStore,
+} from "@/lib/merchant-store";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const hydrated = useMerchantHydrated();
@@ -11,19 +15,24 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
+  // Ensure the store is hydrated from localStorage
+  useHydrateMerchantStore();
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
+    console.log("[AuthGuard]", { mounted, hydrated, session });
+    // Only redirect once both mounted and hydrated — avoids false redirects
     if (mounted && hydrated && !session) {
       router.push(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
     }
   }, [mounted, hydrated, session, router, pathname]);
 
-  if (!mounted || !hydrated || !session) {
-    return null;
-  }
+  // Wait for client mount + store hydration before rendering or redirecting
+  if (!mounted || !hydrated) return null;
+  if (!session) return null;
 
   return <>{children}</>;
 }

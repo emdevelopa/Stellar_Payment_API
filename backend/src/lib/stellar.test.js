@@ -65,7 +65,7 @@ describe('findMatchingPayment', () => {
       assetCode: 'XLM'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('returns matching non-native (USDC) payment', async () => {
@@ -87,7 +87,7 @@ describe('findMatchingPayment', () => {
       assetIssuer: USDC_ISSUER
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('matches when received amount differs by exactly the tolerance boundary (0.0000001)', async () => {
@@ -164,7 +164,7 @@ describe('findMatchingPayment', () => {
       assetIssuer: USDC_ISSUER
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('rejects path_payment_strict_receive when destination amount does not match', async () => {
@@ -226,7 +226,7 @@ describe('findMatchingPayment', () => {
       assetCode: 'XLM'
     })
 
-    expect(result).toEqual({ id: 'op-first', transaction_hash: 'tx-first', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-first', transaction_hash: 'tx-first', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('returns a fee estimate that responds to current fee stats', async () => {
@@ -268,7 +268,7 @@ describe('findMatchingPayment', () => {
       memoType: 'text'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('rejects payment with wrong memo value', async () => {
@@ -313,7 +313,7 @@ describe('findMatchingPayment', () => {
       memoType: 'id'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('matches hash memo type', async () => {
@@ -329,7 +329,7 @@ describe('findMatchingPayment', () => {
       memoType: 'hash'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('matches return memo type', async () => {
@@ -345,7 +345,7 @@ describe('findMatchingPayment', () => {
       memoType: 'return'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
   })
 
   it('skips memo check when no memo is provided', async () => {
@@ -357,7 +357,7 @@ describe('findMatchingPayment', () => {
       assetCode: 'XLM'
     })
 
-    expect(result).toEqual({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false })
+    expect(result).toMatchObject({ id: 'op-1', transaction_hash: 'tx-abc123', is_multisig: false, received_amount: expect.any(String) })
     expect(mockTxCall).not.toHaveBeenCalled()
   })
 

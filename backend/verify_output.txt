@@ -1,0 +1,859 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90m/home/solodev/Documents/Stellar_Payment_API/backend[39m
+
+(node:19674) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2026-03-30 20:32:40.748 +0100] [32mINFO[39m (19674): [36mPOST / completed[39m
+    [35mreq[39m: {
+      "id": "430953aa-c7f0-46e1-9542-68de03ffb712",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 401
+    }
+    [35mresponseTime[39m: 3
+[2026-03-30 20:32:40.759 +0100] [32mINFO[39m (19674): [36mPOST / completed[39m
+    [35mreq[39m: {
+      "id": "e5451887-5d0f-461b-8eae-fa5cc390180b",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 401
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.769 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "cce9a1a8-1310-4e0e-9c31-9cd7b7a3c561",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 4
+[2026-03-30 20:32:40.776 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "021b4359-6559-4dfe-a624-4ffb92b77cfe",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-03-30 20:32:40.782 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "d1b74f40-9d43-4707-b14f-0040e8db0197",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.788 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "eda0d229-6801-4ab0-873d-e4eee8704143",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 2
+[2026-03-30 20:32:40.794 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "c5dcd43f-04c7-4bef-b3f0-3730f62771a9",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.800 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "b4c4f40b-19c3-4c07-a84b-a3da7ec65bad",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.805 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "7bfc1a38-a674-480b-ba45-589d3017d810",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.811 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "7ecd122a-0c1c-4305-967b-1b3c40c7ffb9",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.815 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "1fc1311b-ec40-4fa4-9aef-2a07ff1ba4f8",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.819 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "4938cbcf-131d-4163-967b-d17f0bf497f0",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.824 +0100] [32mINFO[39m (19674): [36mGET /payment-status/b7359b7e-889b-454f-828e-a0a10e9ee06b completed[39m
+    [35mreq[39m: {
+      "id": "a036f499-130c-4238-b055-bc5db1b3d314",
+      "method": "GET",
+      "url": "/api/payment-status/b7359b7e-889b-454f-828e-a0a10e9ee06b",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.827 +0100] [32mINFO[39m (19674): [36mGET /payment-status/c963a268-9e0f-45c4-8615-ab045f69ecba completed[39m
+    [35mreq[39m: {
+      "id": "cf91e1ea-d577-43b4-8225-78517a6f70ef",
+      "method": "GET",
+      "url": "/api/payment-status/c963a268-9e0f-45c4-8615-ab045f69ecba",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.831 +0100] [32mINFO[39m (19674): [36mGET /payment-status/not-a-uuid completed[39m
+    [35mreq[39m: {
+      "id": "e48f032b-65e0-4404-8000-89ca391acad7",
+      "method": "GET",
+      "url": "/api/payment-status/not-a-uuid",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 400
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.835 +0100] [32mINFO[39m (19674): [36mGET /network-fee completed[39m
+    [35mreq[39m: {
+      "id": "27b15782-d7c9-40a7-bba0-504d7db7e84f",
+      "method": "GET",
+      "url": "/api/network-fee",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.842 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "a11692e4-8787-4092-9221-12bf491e3972",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.852 +0100] [32mINFO[39m (19674): [36mPOST /verify-payment/dcaeefa4-7c93-4144-b60a-2e99ab222c07 completed[39m
+    [35mreq[39m: {
+      "id": "0522db74-ae19-4f5c-a488-085974574e8f",
+      "method": "POST",
+      "url": "/api/verify-payment/dcaeefa4-7c93-4144-b60a-2e99ab222c07",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 5
+[2026-03-30 20:32:40.864 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "bc0ce42d-e3e7-4622-a743-cfd58ac9c111",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-03-30 20:32:40.872 +0100] [32mINFO[39m (19674): [36mPOST /api/verify-payment/77b9fcdf-54b5-40ed-81b9-022f1dba9fe5 errored: failed with status code 500[39m
+    [35mreq[39m: {
+      "id": "32cc8211-45d2-42de-bd5a-d51a145cce9c",
+      "method": "POST",
+      "url": "/api/verify-payment/77b9fcdf-54b5-40ed-81b9-022f1dba9fe5",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 500
+    }
+    [35mresponseTime[39m: 5
+    err: {
+      "type": "Error",
+      "message": "failed with status code 500",
+      "stack":
+          Error: failed with status code 500
+              at onResFinished (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:115:39)
+              at ServerResponse.onResponseComplete (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)
+              at onFinish (node:_http_outgoing:1026:10)
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:88:21)
+    }
+[2026-03-30 20:32:40.889 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "237d4f95-5b68-4ead-809e-927796ab72bc",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.892 +0100] [32mINFO[39m (19674): [36mPOST /verify-payment/7785b585-e421-4d8e-b598-396c478b9853 completed[39m
+    [35mreq[39m: {
+      "id": "8259fdf8-bba9-4033-a348-ae9887591db1",
+      "method": "POST",
+      "url": "/api/verify-payment/7785b585-e421-4d8e-b598-396c478b9853",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.897 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "d26d19b0-0cd7-4be9-9636-7a8eb470229b",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.900 +0100] [32mINFO[39m (19674): [36mPOST /api/verify-payment/3dfe4fa4-0e14-4a2a-b29a-6871cc7f73a2 errored: failed with status code 500[39m
+    [35mreq[39m: {
+      "id": "8d166a07-49a9-4c20-9952-e6f1214640bd",
+      "method": "POST",
+      "url": "/api/verify-payment/3dfe4fa4-0e14-4a2a-b29a-6871cc7f73a2",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 500
+    }
+    [35mresponseTime[39m: 1
+    err: {
+      "type": "Error",
+      "message": "failed with status code 500",
+      "stack":
+          Error: failed with status code 500
+              at onResFinished (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:115:39)
+              at ServerResponse.onResponseComplete (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)
+              at onFinish (node:_http_outgoing:1026:10)
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:88:21)
+    }
+[2026-03-30 20:32:40.903 +0100] [32mINFO[39m (19674): [36mPOST /verify-payment/3dfe4fa4-0e14-4a2a-b29a-6871cc7f73a2 completed[39m
+    [35mreq[39m: {
+      "id": "c3142bb1-4bb2-44dd-a425-6b85591edf61",
+      "method": "POST",
+      "url": "/api/verify-payment/3dfe4fa4-0e14-4a2a-b29a-6871cc7f73a2",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.907 +0100] [32mINFO[39m (19674): [36mPOST /verify-payment/848d999d-0a3b-418a-bddf-e90a06d89b45 completed[39m
+    [35mreq[39m: {
+      "id": "91932c1c-5ac8-493b-aa15-fdfeaf14e03c",
+      "method": "POST",
+      "url": "/api/verify-payment/848d999d-0a3b-418a-bddf-e90a06d89b45",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.911 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "4889f5fe-bbfb-4ecb-bf4a-45522caeafce",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.914 +0100] [32mINFO[39m (19674): [36mPOST /api/verify-payment/d7582a76-fb0b-43d1-953b-060a1fac605a errored: failed with status code 500[39m
+    [35mreq[39m: {
+      "id": "45613cd0-0e26-421f-a978-231b60d277d3",
+      "method": "POST",
+      "url": "/api/verify-payment/d7582a76-fb0b-43d1-953b-060a1fac605a",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 500
+    }
+    [35mresponseTime[39m: 1
+    err: {
+      "type": "Error",
+      "message": "failed with status code 500",
+      "stack":
+          Error: failed with status code 500
+              at onResFinished (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:115:39)
+              at ServerResponse.onResponseComplete (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)
+              at onFinish (node:_http_outgoing:1026:10)
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:88:21)
+    }
+[2026-03-30 20:32:40.918 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "c5387511-ae65-4c6a-b4ac-20fa35e35858",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.922 +0100] [32mINFO[39m (19674): [36mPOST /api/verify-payment/e8db1784-bbc3-4cd4-a12f-99b3271e0e9e errored: failed with status code 500[39m
+    [35mreq[39m: {
+      "id": "a683dc0e-58e5-4c55-80dd-09663493a9d5",
+      "method": "POST",
+      "url": "/api/verify-payment/e8db1784-bbc3-4cd4-a12f-99b3271e0e9e",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 500
+    }
+    [35mresponseTime[39m: 1
+    err: {
+      "type": "Error",
+      "message": "failed with status code 500",
+      "stack":
+          Error: failed with status code 500
+              at onResFinished (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:115:39)
+              at ServerResponse.onResponseComplete (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)
+              at onFinish (node:_http_outgoing:1026:10)
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:88:21)
+    }
+[2026-03-30 20:32:40.928 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "d4b724fc-1125-46f1-bdc8-a266045fe385",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-03-30 20:32:40.931 +0100] [32mINFO[39m (19674): [36mGET /payment-status/2e357aec-af34-42ab-9c34-95924b7c9aa5 completed[39m
+    [35mreq[39m: {
+      "id": "5e338108-866b-48a3-bc70-33382f99490c",
+      "method": "GET",
+      "url": "/api/payment-status/2e357aec-af34-42ab-9c34-95924b7c9aa5",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.937 +0100] [32mINFO[39m (19674): [36mPOST /verify-payment/2e357aec-af34-42ab-9c34-95924b7c9aa5 completed[39m
+    [35mreq[39m: {
+      "id": "e977ee7d-af61-4ee9-9e9a-051cf2bbce38",
+      "method": "POST",
+      "url": "/api/verify-payment/2e357aec-af34-42ab-9c34-95924b7c9aa5",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.940 +0100] [32mINFO[39m (19674): [36mPOST /api/verify-payment/2e357aec-af34-42ab-9c34-95924b7c9aa5 errored: failed with status code 500[39m
+    [35mreq[39m: {
+      "id": "71a9718a-76b8-42c0-9da8-62fae45fc887",
+      "method": "POST",
+      "url": "/api/verify-payment/2e357aec-af34-42ab-9c34-95924b7c9aa5",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 500
+    }
+    [35mresponseTime[39m: 0
+    err: {
+      "type": "Error",
+      "message": "failed with status code 500",
+      "stack":
+          Error: failed with status code 500
+              at onResFinished (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:115:39)
+              at ServerResponse.onResponseComplete (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)
+              at onFinish (node:_http_outgoing:1026:10)
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:88:21)
+    }
+[2026-03-30 20:32:40.947 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "c1e8c479-2dad-41f8-a931-05f58bb2ff86",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 2
+[2026-03-30 20:32:40.955 +0100] [32mINFO[39m (19674): [36mPOST / completed[39m
+    [35mreq[39m: {
+      "id": "b6a841fd-a1d4-4f1a-b165-babe33fd6ef6",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.961 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "78cce10e-3831-4842-afff-3d1532ab1101",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.965 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "4cfce98c-d0e7-4b7e-ad79-adf215247805",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.969 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "66831f15-db83-4a99-a561-70739c3a08e3",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.974 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "40ae9c53-009e-4ea4-85da-e20f6b8b3003",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.978 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "547568ca-5760-4d06-83dc-2af183d000b5",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:40.984 +0100] [32mINFO[39m (19674): [36mGET /payments?page=1&limit=2 completed[39m
+    [35mreq[39m: {
+      "id": "764ab27f-3da6-4e4a-9f29-c15583580667",
+      "method": "GET",
+      "url": "/api/payments?page=1&limit=2",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 2
+[2026-03-30 20:32:40.988 +0100] [32mINFO[39m (19674): [36mGET /payments completed[39m
+    [35mreq[39m: {
+      "id": "1605bd96-16df-468f-9818-bd49dd759f02",
+      "method": "GET",
+      "url": "/api/payments",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.992 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "ef6afd07-c3d2-4fda-a9e1-505811ec32a8",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.995 +0100] [32mINFO[39m (19674): [36mDELETE /payments/9aa6eb7e-668f-41a5-8db4-3ce80dff8485 completed[39m
+    [35mreq[39m: {
+      "id": "590ff621-5eb3-426e-afb9-e08786a01a7d",
+      "method": "DELETE",
+      "url": "/api/payments/9aa6eb7e-668f-41a5-8db4-3ce80dff8485",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:40.999 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "1c66708c-01be-491a-a4b7-a23122d4a268",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.002 +0100] [32mINFO[39m (19674): [36mDELETE /payments/188684d7-af1b-427b-9ac1-010f7adedb9a completed[39m
+    [35mreq[39m: {
+      "id": "22747eb2-322a-45cf-9d05-077ac7452e11",
+      "method": "DELETE",
+      "url": "/api/payments/188684d7-af1b-427b-9ac1-010f7adedb9a",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.005 +0100] [32mINFO[39m (19674): [36mDELETE /payments/188684d7-af1b-427b-9ac1-010f7adedb9a completed[39m
+    [35mreq[39m: {
+      "id": "97a2de8f-b599-45da-8a80-0a12e31650b1",
+      "method": "DELETE",
+      "url": "/api/payments/188684d7-af1b-427b-9ac1-010f7adedb9a",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 410
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.009 +0100] [32mINFO[39m (19674): [36mDELETE /payments/6e63865f-8a3f-4bf7-8478-6132aefe32cc completed[39m
+    [35mreq[39m: {
+      "id": "afa09688-8683-4801-acd4-3d5cd75448cf",
+      "method": "DELETE",
+      "url": "/api/payments/6e63865f-8a3f-4bf7-8478-6132aefe32cc",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:41.013 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "c8043d58-af57-4bd7-97fb-a3eca32aa228",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.016 +0100] [32mINFO[39m (19674): [36mDELETE /payments/a0ddb5a3-4be4-48d9-b2a9-2c80b8e2528a completed[39m
+    [35mreq[39m: {
+      "id": "afddb604-c14c-4e5b-938b-6ec5ab33fc41",
+      "method": "DELETE",
+      "url": "/api/payments/a0ddb5a3-4be4-48d9-b2a9-2c80b8e2528a",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.019 +0100] [32mINFO[39m (19674): [36mGET /payment-status/a0ddb5a3-4be4-48d9-b2a9-2c80b8e2528a completed[39m
+    [35mreq[39m: {
+      "id": "55e09563-b64e-4ce7-933d-43b4cd2491f8",
+      "method": "GET",
+      "url": "/api/payment-status/a0ddb5a3-4be4-48d9-b2a9-2c80b8e2528a",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 404
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.024 +0100] [32mINFO[39m (19674): [36mPOST /sessions completed[39m
+    [35mreq[39m: {
+      "id": "6f968393-c572-4eb5-a4f8-963cfb177a2f",
+      "method": "POST",
+      "url": "/api/sessions",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:41.046 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "c6022876-4e46-4840-96fb-475c02181934",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:41.057 +0100] [32mINFO[39m (19674): [36mPOST /api/verify-payment/bd473ab4-c413-43ed-80d0-d7ad2c04a0f0 errored: failed with status code 500[39m
+    [35mreq[39m: {
+      "id": "2b061b17-54d7-42ed-912e-0d3401676e67",
+      "method": "POST",
+      "url": "/api/verify-payment/bd473ab4-c413-43ed-80d0-d7ad2c04a0f0",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 500
+    }
+    [35mresponseTime[39m: 1
+    err: {
+      "type": "Error",
+      "message": "failed with status code 500",
+      "stack":
+          Error: failed with status code 500
+              at onResFinished (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:115:39)
+              at ServerResponse.onResponseComplete (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)
+              at onFinish (node:_http_outgoing:1026:10)
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:88:21)
+    }
+[2026-03-30 20:32:41.058 +0100] [32mINFO[39m (19674): [36mPOST /verify-payment/bd473ab4-c413-43ed-80d0-d7ad2c04a0f0 completed[39m
+    [35mreq[39m: {
+      "id": "1d611574-2ab1-48ff-a24b-a79c321038f7",
+      "method": "POST",
+      "url": "/api/verify-payment/bd473ab4-c413-43ed-80d0-d7ad2c04a0f0",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 200
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.077 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "b705852c-762a-4585-bc8b-dcbc0e7aebbd",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 1
+[2026-03-30 20:32:41.083 +0100] [32mINFO[39m (19674): [36mPOST /create-payment completed[39m
+    [35mreq[39m: {
+      "id": "5bd1c7bf-58e2-4955-9f23-6055a959e933",
+      "method": "POST",
+      "url": "/api/create-payment",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 201
+    }
+    [35mresponseTime[39m: 0
+[2026-03-30 20:32:41.089 +0100] [32mINFO[39m (19674): [36mPOST /api/verify-payment/c7f6b2de-4a0e-4db7-86a8-a79305bf970c errored: failed with status code 500[39m
+    [35mreq[39m: {
+      "id": "377865b7-6492-411a-be39-c6df0fa683b2",
+      "method": "POST",
+      "url": "/api/verify-payment/c7f6b2de-4a0e-4db7-86a8-a79305bf970c",
+      "remoteAddress": "::ffff:127.0.0.1"
+    }
+    [35mres[39m: {
+      "statusCode": 500
+    }
+    [35mresponseTime[39m: 1
+    err: {
+      "type": "Error",
+      "message": "failed with status code 500",
+      "stack":
+          Error: failed with status code 500
+              at onResFinished (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:115:39)
+              at ServerResponse.onResponseComplete (/home/solodev/Documents/Stellar_Payment_API/backend/node_modules/pino-http/logger.js:178:14)
+              at ServerResponse.emit (node:events:520:35)
+              at onFinish (node:_http_outgoing:1026:10)
+              at callback (node:internal/streams/writable:764:21)
+              at afterWrite (node:internal/streams/writable:708:5)
+              at afterWriteTick (node:internal/streams/writable:694:10)
+              at processTicksAndRejections (node:internal/process/task_queues:88:21)
+    }
+ [31m❯[39m tests/integration/payments.test.js [2m([22m[2m36 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[33m 438[2mms[22m[39m
+[31m   [31m×[31m Payment Lifecycle — Integration[2m > [22mPOST /api/verify-payment/:id[2m > [22mconfirms a payment when a matching Stellar transaction is found[90m 28[2mms[22m[31m[39m
+[31m     → expected 500 to be 200 // Object.is equality[39m
+[31m   [31m×[31m Payment Lifecycle — Integration[2m > [22mWebhook delivery[2m > [22mcalls sendWebhook with the correct payload on payment confirmation[90m 8[2mms[22m[31m[39m
+[31m     → expected "spy" to be called 1 times, but got 0 times[39m
+[31m   [31m×[31m Payment Lifecycle — Integration[2m > [22mWebhook delivery[2m > [22mcalls sendWebhook with null url when no webhook_url is set[90m 8[2mms[22m[31m[39m
+[31m     → expected 500 to be 200 // Object.is equality[39m
+[31m   [31m×[31m Payment Lifecycle — Integration[2m > [22mFull payment lifecycle (end-to-end)[2m > [22mwalks through the entire payment flow[90m 18[2mms[22m[31m[39m
+[31m     → expected 500 to be 200 // Object.is equality[39m
+[31m   [31m×[31m Payment Lifecycle — Integration[2m > [22mEdge cases[2m > [22mhandles concurrent verify calls gracefully[90m 22[2mms[22m[31m[39m
+[31m     → expected 500 to be 200 // Object.is equality[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 5 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration/payments.test.js[2m > [22mPayment Lifecycle — Integration[2m > [22mPOST /api/verify-payment/:id[2m > [22mconfirms a payment when a matching Stellar transaction is found
+[31m[1mAssertionError[22m: expected 500 to be 200 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+[36m [2m❯[22m tests/integration/payments.test.js:[2m653:26[22m[39m
+    [90m651| [39m
+    [90m652| [39m      [35mif[39m (res[33m.[39mstatus [33m===[39m [34m500[39m) console[33m.[39m[34mlog[39m([32m"verify-payment 500 body:"[39m[33m,[39m …
+    [90m653| [39m      [34mexpect[39m(res[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m654| [39m      [34mexpect[39m(res[33m.[39mbody[33m.[39mstatus)[33m.[39m[34mtoBe[39m([32m"confirmed"[39m)[33m;[39m
+    [90m655| [39m      [34mexpect[39m(res[33m.[39mbody[33m.[39mtx_id)[33m.[39m[34mtoBe[39m(fakeTxHash)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration/payments.test.js[2m > [22mPayment Lifecycle — Integration[2m > [22mWebhook delivery[2m > [22mcalls sendWebhook with the correct payload on payment confirmation
+[31m[1mAssertionError[22m: expected "spy" to be called 1 times, but got 0 times[39m
+[36m [2m❯[22m tests/integration/payments.test.js:[2m767:31[22m[39m
+    [90m765| [39m
+    [90m766| [39m      [90m// sendWebhook should have been called[39m
+    [90m767| [39m      [34mexpect[39m(mockSendWebhook)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                              [31m^[39m
+    [90m768| [39m
+    [90m769| [39m      [35mconst[39m [calledUrl[33m,[39m calledPayload[33m,[39m calledSecret] [33m=[39m mockSendWebhook…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration/payments.test.js[2m > [22mPayment Lifecycle — Integration[2m > [22mWebhook delivery[2m > [22mcalls sendWebhook with null url when no webhook_url is set
+[31m[1mAssertionError[22m: expected 500 to be 200 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+[36m [2m❯[22m tests/integration/payments.test.js:[2m804:26[22m[39m
+    [90m802| [39m        [33m.[39m[35mset[39m([32m"x-api-key"[39m[33m,[39m [33mMERCHANT_API_KEY[39m)[33m;[39m
+    [90m803| [39m
+    [90m804| [39m      [34mexpect[39m(res[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m805| [39m      [34mexpect[39m(res[33m.[39mbody[33m.[39mstatus)[33m.[39m[34mtoBe[39m([32m"confirmed"[39m)[33m;[39m
+    [90m806| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration/payments.test.js[2m > [22mPayment Lifecycle — Integration[2m > [22mFull payment lifecycle (end-to-end)[2m > [22mwalks through the entire payment flow
+[31m[1mAssertionError[22m: expected 500 to be 200 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+[36m [2m❯[22m tests/integration/payments.test.js:[2m874:30[22m[39m
+    [90m872| [39m        [33m.[39m[35mset[39m([32m"x-api-key"[39m[33m,[39m [33mMERCHANT_API_KEY[39m)[33m;[39m
+    [90m873| [39m
+    [90m874| [39m      [34mexpect[39m(verify2[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m   | [39m                             [31m^[39m
+    [90m875| [39m      [34mexpect[39m(verify2[33m.[39mbody[33m.[39mstatus)[33m.[39m[34mtoBe[39m([32m"confirmed"[39m)[33m;[39m
+    [90m876| [39m      [34mexpect[39m(verify2[33m.[39mbody[33m.[39mtx_id)[33m.[39m[34mtoBe[39m(txHash)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration/payments.test.js[2m > [22mPayment Lifecycle — Integration[2m > [22mEdge cases[2m > [22mhandles concurrent verify calls gracefully
+[31m[1mAssertionError[22m: expected 500 to be 200 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+[36m [2m❯[22m tests/integration/payments.test.js:[2m1153:25[22m[39m
+    [90m1151| [39m
+    [90m1152| [39m      [90m// Both should succeed — one confirms, the other sees already-co[39m…
+    [90m1153| [39m      [34mexpect[39m(r1[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m   | [39m                        [31m^[39m
+    [90m1154| [39m      [34mexpect[39m(r2[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m1155| [39m      [34mexpect[39m(r1[33m.[39mbody[33m.[39mstatus)[33m.[39m[34mtoBe[39m([32m"confirmed"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m31 passed[39m[22m[90m (36)[39m
+[2m   Start at [22m 20:32:38
+[2m   Duration [22m 2.40s[2m (transform 286ms, setup 0ms, collect 1.22s, tests 438ms, environment 0ms, prepare 119ms)[22m
+

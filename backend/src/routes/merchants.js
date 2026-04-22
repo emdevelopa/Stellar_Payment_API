@@ -2,7 +2,8 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { randomBytes } from "crypto";
 import { supabase } from "../lib/supabase.js";
-import { requireApiKeyAuth, requireSessionAuth } from "../lib/auth.js";
+import { requireApiKeyAuth, requireSessionAuth, hashPassword } from "../lib/auth.js";
+import { generateSessionToken } from "../lib/sep10-auth.js";
 import { getMerchantApiUsage } from "../lib/api-usage.js";
 import { z } from "zod";
 import { validateRequest } from "../lib/validation.js";
@@ -11,8 +12,11 @@ import {
   sessionBrandingSchema,
   webhookSettingsSchema,
   testWebhookSchema,
+  VALID_WEBHOOK_EVENTS,
 } from "../lib/request-schemas.js";
 import { merchantService } from "../services/merchantService.js";
+import { resolveMerchantSettings } from "../lib/merchant-settings.js";
+import { renderReceiptEmail } from "../lib/email-templates.js";
 import {
   createWebhookDomainVerificationState,
   readWebhookDomainVerification,
@@ -139,6 +143,7 @@ function createMerchantsRouter({
         // Generate secure credentials
         const apiKey = `sk_${randomBytes(24).toString("hex")}`;
         const webhookSecret = `whsec_${randomBytes(24).toString("hex")}`;
+        const password_hash = await hashPassword(body.password);
 
         const payload = {
           email,
@@ -146,6 +151,7 @@ function createMerchantsRouter({
           notification_email,
           api_key: apiKey,
           webhook_secret: webhookSecret,
+          password_hash,
           merchant_settings: resolveMerchantSettings(body.merchant_settings),
           metadata: body.metadata ?? null,
           created_at: new Date().toISOString(),
@@ -157,13 +163,18 @@ function createMerchantsRouter({
           .select()
           .single();
 
-        if (insertError) {
-          insertError.status = 500;
-          throw insertError;
-        }
+    if (insertError) {
+      console.error("Supabase insert error:", JSON.stringify(insertError));
+      console.error("Supabase insert error details:", insertError.message, insertError.code, insertError.hint);
+      insertError.status = 500;
+      throw insertError;
+    }
+
+        const token = generateSessionToken(merchant.id, merchant.email);
 
         res.status(201).json({
           message: "Merchant registered successfully",
+          token,
           merchant: {
             id: merchant.id,
             email: merchant.email,
@@ -219,13 +230,6 @@ function createMerchantsRouter({
         throw error;
       }
 
-    // Check if merchant already exists
-    const { data: existing } = await supabase
-      .from("merchants")
-      .select("id")
-      .eq("email", email)
-      .is("deleted_at", null)
-      .maybeSingle();
       res.json({ api_key: newApiKey });
     } catch (err) {
       next(err);
@@ -360,6 +364,62 @@ function createMerchantsRouter({
       }
     },
   );
+
+  /**
+   * @swagger
+   * /api/preview-receipt:
+   *   post:
+   *     summary: Generate a preview HTML of the email receipt with custom branding
+   *     tags: [Merchants]
+   *     security:
+   *       - ApiKeyAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/BrandingConfig'
+   *     responses:
+   *       200:
+   *         description: HTML preview of the receipt
+   *         content:
+   *           text/html:
+   *             schema:
+   *               type: string
+   */
+  router.post(
+    "/preview-receipt",
+    requireApiKeyAuth(),
+    validateRequest({ body: sessionBrandingSchema }),
+    async (req, res) => {
+      try {
+        const brandingConfig = req.body;
+        
+        // Mock payment details for preview
+        const mockPayment = {
+          id: "preview_12345",
+          amount: 100.5,
+          asset: "USDC",
+          recipient: "GC7H...PREVIEW",
+          tx_id: "tx_preview_hash",
+          created_at: new Date().toISOString(),
+        };
+
+        const html = renderReceiptEmail({
+          payment: mockPayment,
+          merchant: {
+            business_name: req.merchant.business_name,
+            branding_config: brandingConfig,
+          },
+        });
+
+        res.setHeader("Content-Type", "text/html");
+        res.send(html);
+      } catch (err) {
+        res.status(500).json({ error: "Failed to generate preview" });
+      }
+    },
+  );
   // ─── Webhook Settings ────────────────────────────────────────────────────────
 
   router.get("/merchant-profile", async (req, res, next) => {
@@ -460,7 +520,7 @@ function createMerchantsRouter({
     try {
       const { data, error } = await supabase
         .from("merchants")
-        .select("webhook_url, webhook_secret, metadata")
+        .select("webhook_url, webhook_secret, subscribed_events, metadata")
         .eq("id", req.merchant.id)
         .single();
 
@@ -479,6 +539,8 @@ function createMerchantsRouter({
       res.json({
         webhook_url: data.webhook_url || "",
         webhook_secret_masked: maskedSecret,
+        subscribed_events: data.subscribed_events ?? null,
+        available_events: VALID_WEBHOOK_EVENTS,
         webhook_domain_verification: readWebhookDomainVerification(
           data.metadata,
           data.webhook_url || "",
@@ -523,6 +585,9 @@ function createMerchantsRouter({
         const updatePayload = { webhook_url: body.webhook_url || null };
         if ("custom_headers" in body) {
           updatePayload.webhook_custom_headers = body.custom_headers ?? null;
+        }
+        if ("subscribed_events" in body) {
+          updatePayload.subscribed_events = body.subscribed_events ?? null;
         }
         const { data: existing, error: existingError } = await supabase
           .from("merchants")

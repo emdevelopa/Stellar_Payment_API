@@ -32,36 +32,26 @@ const INDICATOR_TO_STATUS: Record<string, OperationalStatus> = {
 };
 
 const DOT_COLORS: Record<OperationalStatus, string> = {
-  loading: "bg-slate-500 animate-pulse",
-  operational: "bg-emerald-400",
-  degraded_performance: "bg-yellow-400",
+  loading: "bg-[#E8E8E8] animate-pulse",
+  operational: "bg-green-500",
+  degraded_performance: "bg-amber-400",
   partial_outage: "bg-orange-400",
-  major_outage: "bg-red-500 animate-pulse",
-  unknown: "bg-slate-500",
+  major_outage: "bg-red-500",
+  unknown: "bg-[#E8E8E8]",
 };
 
 const TEXT_COLORS: Record<OperationalStatus, string> = {
-  loading: "text-slate-500",
-  operational: "text-emerald-400",
-  degraded_performance: "text-yellow-400",
-  partial_outage: "text-orange-400",
-  major_outage: "text-red-400",
-  unknown: "text-slate-500",
+  loading: "text-[#6B6B6B]",
+  operational: "text-[#6B6B6B]",
+  degraded_performance: "text-[#6B6B6B]",
+  partial_outage: "text-[#6B6B6B]",
+  major_outage: "text-[#6B6B6B]",
+  unknown: "text-[#6B6B6B]",
 };
 
 /** Polling interval in milliseconds (2 minutes). */
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
 
-/**
- * Displays a live system status dot + label sourced from an Atlassian
- * Statuspage (or compatible) API.
- *
- * Configuration:
- *   NEXT_PUBLIC_STATUS_PAGE_URL – base URL of the status page, e.g.
- *     "https://status.example.com".  The component calls
- *     `{url}/api/v2/summary.json`.
- *     When the env var is absent the widget renders nothing.
- */
 export default function SystemStatus() {
   const [status, setStatus] = useState<OperationalStatus>("loading");
   const [label, setLabel] = useState<string>(STATUS_LABELS.loading);
@@ -120,12 +110,14 @@ export default function SystemStatus() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`System status: ${label}`}
-      className="inline-flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
+      className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-colors hover:text-[#0A0A0A]"
     >
-      <span
-        className={`h-2 w-2 rounded-full flex-shrink-0 ${DOT_COLORS[status]}`}
-        aria-hidden="true"
-      />
+      <div className="relative flex h-2 w-2 items-center justify-center">
+        <span
+            className={`absolute inline-flex h-full w-full rounded-full opacity-20 ${status === 'operational' ? 'bg-green-500' : 'bg-[#E8E8E8]'}`}
+        />
+        <span className={`relative h-1.5 w-1.5 rounded-full ${DOT_COLORS[status]}`} />
+      </div>
       <span className={TEXT_COLORS[status]}>{label}</span>
     </a>
   );

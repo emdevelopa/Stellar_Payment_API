@@ -28,6 +28,20 @@ export function createApiKeyAuth({
 } = {}) {
   return async function requireApiKeyAuth(req, res, next) {
     try {
+      // Another auth layer (for example x402 token bridge) may have already
+      // attached a merchant context. If so, honor it and continue.
+      if (req.merchant?.id) {
+        try {
+          await usageRecorder({
+            merchantId: req.merchant.id,
+            req,
+          });
+        } catch (usageError) {
+          console.warn("Failed to record merchant API usage:", usageError.message);
+        }
+        return next();
+      }
+
       const client = supabaseClient || (await import("./supabase.js")).supabase;
       const headerValue = req.get("x-api-key");
       const apiKey = typeof headerValue === "string" ? headerValue.trim() : "";
@@ -137,10 +151,16 @@ export function requireSessionAuth() {
       }
 
       const client = (await import("./supabase.js")).supabase;
+      const merchantId = payload.id || payload.merchant_id;
+      
+      if (!merchantId) {
+        return res.status(401).json({ error: "Invalid token payload: missing merchant identification" });
+      }
+
       const { data: merchant, error } = await client
         .from("merchants")
         .select("id, email, business_name, notification_email, api_key")
-        .eq("id", payload.merchant_id)
+        .eq("id", merchantId)
         .maybeSingle();
 
       if (error || !merchant) {

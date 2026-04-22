@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: ghcr.io/wheval/stellar_payment_api:latest
+    image: ghcr.io/emdevelopa/stellar_payment_api:latest
     container_name: stellar_payment_api
     ports:
       - "4000:4000"
@@ -16,3 +16,205 @@ services:
 secrets:
   db_password:
     file: ./secrets/db_password.txt
+
+
+     
+
+Project Title:
+Design a Unique Web3 Platform Website
+
+Objective:
+Create a modern, visually striking, and user-friendly Web3 website that communicates innovation, decentralization, and trust. The design should feel futuristic yet simple to navigate, appealing to both crypto-native users and beginners.
+
+
+---
+
+🎨 Design Style & Aesthetic
+
+Futuristic, sleek, and minimalistic
+
+Dark mode dominant (primary background: deep navy / black)
+
+Glassmorphism + subtle Neumorphism elements
+
+Soft glowing gradients (purple, blue, neon green accents)
+
+Smooth animations and micro-interactions
+
+Clean grid layout with plenty of whitespace
+
+
+
+---
+
+🎯 Target Feel
+
+Innovative (like early-stage crypto startups)
+
+Trustworthy (fintech-level credibility)
+
+Community-driven (Web3 ethos)
+
+Scalable and tech-forward
+
+
+
+---
+
+🧩 Core Sections to Design
+
+1. Hero Section
+
+Bold headline (clear value proposition)
+
+Subheading explaining the platform in simple terms
+
+CTA buttons (e.g., “Get Started”, “Join Early Access”)
+
+Animated background (particles, blockchain nodes, or gradients)
+
+
+
+2. About / What We Do
+
+Short, digestible explanation of the platform
+
+Use icons or illustrations for clarity
+
+
+
+3. How It Works
+
+3–4 step visual breakdown
+
+Use cards or timeline layout
+
+
+
+4. Features Section
+
+Highlight key benefits (e.g., decentralization, security, speed)
+
+Use glowing icons or 3D illustrations
+
+
+
+5. Token / Ecosystem (if applicable)
+
+Token utility explanation
+
+Charts or visual indicators
+
+
+
+6. Community / Social Proof
+
+Testimonials or user stats
+
+Logos of partners (if any)
+
+
+
+7. Roadmap
+
+Timeline with milestones
+
+Interactive or scroll-based animation
+
+
+
+8. FAQ Section
+
+Collapsible accordion style
+
+
+
+9. Footer
+
+Social links (Discord, Twitter, Telegram)
+
+Newsletter signup
+
+Legal links
+
+
+
+
+
+---
+
+🎨 Color Palette
+
+Primary: #0B0F1A (dark background)
+
+Secondary: #6C5CE7 (purple)
+
+Accent: #00F5D4 (neon green/cyan)
+
+Optional gradient: Purple → Blue → Cyan
+
+
+
+---
+
+🔤 Typography
+
+Headings: Bold, futuristic sans-serif (e.g., Space Grotesk, Sora)
+
+Body: Clean and readable (e.g., Inter, Poppins)
+
+Use large headings with strong hierarchy
+
+
+
+---
+
+🧠 UX Guidelines
+
+Keep navigation simple and intuitive
+
+Mobile-first responsive design
+
+Fast-loading visuals
+
+Clear CTA placement across sections
+
+Avoid overwhelming users with too much crypto jargon
+
+
+
+---
+
+⚙️ Micro-Interactions & Animations
+
+Hover effects with glow or gradient shift
+
+Button animations (scale or pulse)
+
+Smooth scrolling transitions
+
+Loading animations (Web3-inspired, e.g., node connections)
+
+
+
+---
+
+🔐 Web3-Specific Elements
+
+Wallet connect button (top right)
+
+Network status indicator
+
+Transaction feedback UI (success/error states)
+
+
+
+---
+
+📦 Deliverables
+
+High-fidelity UI design (Figma or similar)
+
+Style guide (colors, typography, components)
+
+Responsive layouts (desktop, tablet, mobile).

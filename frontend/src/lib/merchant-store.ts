@@ -108,9 +108,35 @@ export const useMerchantStore = create<MerchantStore>((set) => ({
 
   hydrate: () => {
     const { token, session } = readInitialToken();
-    const apiKey =
-      typeof window === "undefined" ? null : localStorage.getItem(API_KEY_KEY);
     const merchant = readInitialMerchant();
+    const apiKey =
+      (typeof window === "undefined" ? null : localStorage.getItem(API_KEY_KEY)) || 
+      merchant?.api_key || 
+      null;
+
+    // Dev Bypass: Provide mock data if enabled and no session exists
+    const isBypass = typeof window !== "undefined" && 
+      (window.location.search.includes("bypass=true") || process.env.NEXT_PUBLIC_DEV_BYPASS === "true");
+
+    if (isBypass && !session) {
+      set({
+        hydrated: true,
+        token: "mock-token",
+        session: { id: "dev-id", email: "dev@pluto.cc", exp: Math.floor(Date.now() / 1000) + 3600 },
+        apiKey: apiKey || "sk_dev_bypass_key",
+        merchant: merchant || {
+          id: "dev-id",
+          email: "dev@pluto.cc",
+          business_name: "PLUTO Dev Store",
+          notification_email: "dev@pluto.cc",
+          api_key: "sk_dev_bypass_key",
+          webhook_secret: "whsec_dev_bypass",
+          created_at: new Date().toISOString(),
+          trusted_addresses: []
+        },
+      });
+      return;
+    }
 
     set({
       hydrated: true,
@@ -157,11 +183,17 @@ export const useMerchantStore = create<MerchantStore>((set) => ({
     if (typeof window !== "undefined") {
       if (merchant) {
         localStorage.setItem(MERCHANT_KEY, JSON.stringify(merchant));
+        if (merchant.api_key) {
+           localStorage.setItem(API_KEY_KEY, merchant.api_key);
+        }
       } else {
         localStorage.removeItem(MERCHANT_KEY);
       }
     }
-    set({ merchant });
+    set((state) => ({ 
+      merchant,
+      apiKey: merchant?.api_key || state.apiKey 
+    }));
   },
 
   addTrustedAddress: (address) => {
@@ -207,8 +239,15 @@ export const useMerchantStore = create<MerchantStore>((set) => ({
   logout: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(API_KEY_KEY);
+      localStorage.removeItem(MERCHANT_KEY);
     }
-    set({ token: null, session: null });
+    set({
+      token: null,
+      session: null,
+      apiKey: null,
+      merchant: null,
+    });
   },
 }));
 
@@ -253,8 +292,10 @@ export function useMerchantLogout() {
 }
 
 export function useMerchantTrustedAddresses() {
-  return useMerchantStore((state) => state.merchant?.trusted_addresses || []);
+  return useMerchantStore((state) => state.merchant?.trusted_addresses ?? null) ?? EMPTY_ADDRESSES;
 }
+
+const EMPTY_ADDRESSES: TrustedAddress[] = [];
 
 export function useAddTrustedAddress() {
   return useMerchantStore((state) => state.addTrustedAddress);

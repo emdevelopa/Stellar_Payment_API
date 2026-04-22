@@ -8,7 +8,7 @@ import { validateUuidParam } from "../lib/validate-uuid.js";
 // Set STELLAR_HORIZON_URL to override, or STELLAR_NETWORK=public for mainnet.
 
 const HORIZON_URL =
-  process.env.STELLAR_HORIZON_URL ??
+  (process.env.STELLAR_HORIZON_URL || "").trim() ||
   (process.env.STELLAR_NETWORK === "public"
     ? "https://horizon.stellar.org"
     : "https://horizon-testnet.stellar.org");
@@ -89,7 +89,7 @@ const router = express.Router();
  *                     status:         { type: string, enum: [pending, confirmed, completed, failed] }
  *                     tx_id:          { type: string, nullable: true }
  *                     created_at:     { type: string, format: date-time }
- *                     branding_config:{ type: object, nullable: true }
+ *                     branding_config: { type: object, nullable: true }
  *                 stellar_tx:
  *                   nullable: true
  *                   type: object

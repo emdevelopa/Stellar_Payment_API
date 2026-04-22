@@ -104,7 +104,7 @@ function signaturesEqual(a, b) {
 }
 
 /**
- * Verifies a Stellar-Signature header against the merchant webhook secrets.
+ * Verifies a PLUTO-Signature header against the merchant webhook secrets.
  * Accepts the current secret and, during grace window, the previous secret.
  */
 export function verifyWebhook(rawBody, signatureHeader, merchant) {
@@ -150,13 +150,15 @@ export function verifyWebhookWithTimestamp(rawBody, signatureHeader, timestamp, 
 /**
  * Log webhook delivery attempt to database
  */
-async function logWebhookDelivery(paymentId, statusCode, responseBody) {
+async function logWebhookDelivery(paymentId, statusCode, responseBody, requestPayload = null, requestHeaders = null) {
   if (!paymentId) return;
 
   try {
     await supabase.from("webhook_delivery_logs").insert({
       payment_id: paymentId,
       status_code: statusCode,
+      request_payload: requestPayload,
+      request_headers: requestHeaders,
       response_body: responseBody ? responseBody.substring(0, 1000) : null // Limit response body size
     });
   } catch (err) {
@@ -173,8 +175,8 @@ async function attempt(url, payload, headers, paymentId) {
 
   const text = await response.text().catch(() => "");
 
-  // Log the delivery attempt
-  await logWebhookDelivery(paymentId, response.status, text);
+  // Log the delivery attempt with request details
+  await logWebhookDelivery(paymentId, response.status, text, payload, headers);
 
   return { ok: response.ok, status: response.status, body: text };
 }
@@ -208,7 +210,7 @@ function scheduleRetries(url, payload, headers, paymentId) {
  *
  * Accepted: plain object whose keys are safe ASCII header names and whose
  * values are non-empty strings.
- * Reserved system headers (Content-Type, User-Agent, Stellar-Signature) are
+ * Reserved system headers (Content-Type, User-Agent, PLUTO-Signature) are
  * silently dropped to prevent merchants from overriding security controls.
  *
  * @param {unknown} raw  The value stored in merchants.webhook_custom_headers.
@@ -221,7 +223,10 @@ export function sanitizeCustomHeaders(raw) {
   const RESERVED = new Set([
     "content-type",
     "user-agent",
+    "pluto-signature",
     "stellar-signature",
+    "pluto-timestamp",
+    "stellar-timestamp",
   ]);
 
   const result = {};
@@ -232,6 +237,22 @@ export function sanitizeCustomHeaders(raw) {
     result[key] = value;
   }
   return result;
+}
+
+/**
+ * Returns true if the merchant has subscribed to the given event type.
+ *
+ * When `subscribed_events` is null, undefined, or an empty array the merchant
+ * receives ALL event types (backward-compatible default).
+ *
+ * @param {object} merchant  - Merchant record (may include subscribed_events).
+ * @param {string} eventType - Event type to check, e.g. "payment.confirmed".
+ * @returns {boolean}
+ */
+export function isEventSubscribed(merchant, eventType) {
+  const list = merchant?.subscribed_events;
+  if (!Array.isArray(list) || list.length === 0) return true;
+  return list.includes(eventType);
 }
 
 /**
@@ -254,13 +275,13 @@ export async function sendWebhook(url, payload, secret, paymentId = null, custom
     // Merchant custom headers first so system headers always take precedence.
     ...sanitizeCustomHeaders(customHeaders),
     "Content-Type": "application/json",
-    "User-Agent": "stellar-payment-api/0.1",
-    "Stellar-Timestamp": timestamp
+    "User-Agent": "pluto-api/0.1",
+    "PLUTO-Timestamp": timestamp
   };
 
   if (signingSecret) {
     const signature = signPayload(rawBody, signingSecret);
-    headers["Stellar-Signature"] = `sha256=${signature}`;
+    headers["PLUTO-Signature"] = `sha256=${signature}`;
   }
 
   const isValid = await validateWebhookUrl(url);
@@ -281,9 +302,9 @@ export async function sendWebhook(url, payload, secret, paymentId = null, custom
   } catch (err) {
     console.error(`Webhook to ${url} encountered an error: ${err.message}. Scheduling retries.`);
 
-    // Log the error
+    // Log the error with request details
     if (paymentId) {
-      await logWebhookDelivery(paymentId, 0, err.message);
+      await logWebhookDelivery(paymentId, 0, err.message, payload, headers);
     }
 
     scheduleRetries(url, payload, headers, paymentId);

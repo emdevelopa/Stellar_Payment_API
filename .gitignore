@@ -32,5 +32,11 @@ scripts/*.py
 *.py
 task.md
 issueTmeplate.md
-package-lock.json
-**/package-lock.json
+vercelerror.md
+betterui.md
+hackathon.md
+resources.md
+x402_stellar_guide.md
+prompt.md
+backend_check_fail.md
+frontend_check_fail.md 

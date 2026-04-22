@@ -19,7 +19,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const baseClasses =
-      "group relative flex items-center justify-center rounded-xl px-6 font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50";
+      "group relative flex items-center justify-center rounded-xl px-6 font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-mint focus-visible:ring-offset-2 focus-visible:ring-offset-night";
 
     // For primary button, height 12 (h-12) was used typically, but let's allow override or set default
     const primaryClasses = "h-12 bg-mint text-black hover:bg-glow";

@@ -4,6 +4,7 @@ export const DEFAULT_BRANDING_CONFIG = {
   primary_color: "#5ef2c0",
   secondary_color: "#b8ffe2",
   background_color: "#050608",
+  logo_url: null,
 };
 
 export function sanitizeBrandingConfig(input) {
@@ -22,6 +23,9 @@ export function sanitizeBrandingConfig(input) {
   }
   if (typeof source.background_color === "string") {
     config.background_color = source.background_color.trim();
+  }
+  if (typeof source.logo_url === "string") {
+    config.logo_url = source.logo_url.trim();
   }
 
   return Object.keys(config).length > 0 ? config : null;

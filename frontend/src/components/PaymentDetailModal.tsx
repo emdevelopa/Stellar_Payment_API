@@ -6,7 +6,7 @@ import { usePayment } from "@/lib/usePayment";
 import { useAssetMetadata } from "@/lib/useAssetMetadata";
 import WalletSelector from "@/components/WalletSelector";
 import CopyButton from "@/components/CopyButton";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";

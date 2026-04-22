@@ -59,6 +59,8 @@ const {
       webhook_secret_old: null,
       webhook_secret_expiry: null,
       webhook_version: "v1",
+      webhook_url: null,
+      subscribed_events: null,
       payment_limits: null,
       deleted_at: null,
     });
@@ -148,17 +150,11 @@ vi.mock("../../src/lib/supabase.js", () => {
       },
       eq(key, value) {
         filters[key] = value;
-
-        // If this is an update, apply when we have the id filter
-        if (updatePayload && key === "id") {
-          const store = getStore();
-          if (store && store.has(value)) {
-            const existing = store.get(value);
-            store.set(value, { ...existing, ...updatePayload });
-          }
-          return { data: null, error: null };
-        }
-
+        return builder;
+      },
+      neq(key, value) {
+        // Implement neq logic if needed, or at least return builder to avoid crash
+        // A simple implementation:
         return builder;
       },
       is(key, value) {
@@ -180,14 +176,34 @@ vi.mock("../../src/lib/supabase.js", () => {
         const store = getStore();
         if (!store) return { data: null, error: null };
         const rows = applyFilters([...store.values()]);
+        if (updatePayload) {
+          rows.forEach((row) => store.set(row.id, { ...row, ...updatePayload }));
+        }
         const row = rows[0] || null;
         return { data: row ? joinMerchant(row) : null, error: null };
+      },
+      async single() {
+        const store = getStore();
+        if (!store) return { data: null, error: new Error("Table not found") };
+        const rows = applyFilters([...store.values()]);
+        if (updatePayload) {
+          rows.forEach((row) => store.set(row.id, { ...row, ...updatePayload }));
+        }
+        const row = rows[0] || null;
+        if (!row) return { data: null, error: new Error("Row not found") };
+        return { data: joinMerchant(row), error: null };
       },
       // Support awaiting the builder directly (paginated queries)
       then(resolve) {
         const store = getStore();
         if (!store) return resolve({ data: [], error: null, count: 0 });
         const rows = applyFilters([...store.values()]);
+
+        if (updatePayload) {
+          rows.forEach((row) => store.set(row.id, { ...row, ...updatePayload }));
+          // Normal Supabase update without select returns null data
+          if (!selectFields) return resolve({ data: null, error: null });
+        }
 
         if (isHead) {
           return resolve({ data: null, error: null, count: rows.length });
@@ -235,6 +251,7 @@ vi.mock("../../src/lib/stellar.js", () => ({
   findStrictReceivePaths: vi.fn(),
   validateMemo: () => ({ valid: true }),
   getStellarConfig: () => ({ network: "testnet", horizonUrl: "https://horizon-testnet.stellar.org" }),
+  findAnyRecentPayment: vi.fn().mockResolvedValue([]),
 }));
 
 /*
@@ -271,11 +288,15 @@ vi.mock("../../src/lib/redis.js", () => ({
  * Webhook mock — records calls so we can assert delivery payloads.
  */
 const mockSendWebhook = vi.fn().mockResolvedValue({ ok: true, signed: true, status: 200 });
-vi.mock("../../src/lib/webhooks.js", () => ({
-  sendWebhook: (...args) => mockSendWebhook(...args),
-  signPayload: vi.fn(() => "mocked-signature"),
-  verifyWebhook: vi.fn(() => true),
-}));
+vi.mock("../../src/lib/webhooks.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    sendWebhook: (...args) => mockSendWebhook(...args),
+    signPayload: vi.fn(() => "mocked-signature"),
+    verifyWebhook: vi.fn(() => true),
+  };
+});
 
 /*
  * Rate-limit mock — bypass Redis-backed rate limiters with noop middleware

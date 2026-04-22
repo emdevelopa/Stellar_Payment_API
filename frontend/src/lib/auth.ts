@@ -83,7 +83,7 @@ export async function login(
   password: string
 ): Promise<MerchantSession> {
   const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
   const res = await fetch(`${apiUrl}/api/auth/login`, {
     method: "POST",
@@ -96,10 +96,19 @@ export async function login(
     throw new Error(body.error ?? "Login failed");
   }
 
-  const { token } = await res.json();
+  const body = await res.json();
+  console.log("[auth] login response body:", body);
+  const token = body.token;
+  if (!token) throw new Error("No token in server response");
   saveToken(token);
 
+  // Also save merchant metadata if provided
+  if (body.merchant && typeof window !== "undefined") {
+    localStorage.setItem("merchant_metadata", JSON.stringify(body.merchant));
+  }
+
   const session = getSession();
+  console.log("[auth] parsed session:", session);
   if (!session) throw new Error("Invalid token received from server");
   return session;
 }
@@ -107,14 +116,15 @@ export async function login(
 export async function registerMerchant(
   email: string,
   business_name: string,
-  notification_email: string
-): Promise<{ message: string; merchant: Merchant }> {
+  notification_email: string,
+  password: string,
+): Promise<{ message: string; token?: string; merchant: Merchant }> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
   const res = await fetch(`${apiUrl}/api/register-merchant`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, business_name, notification_email }),
+    body: JSON.stringify({ email, business_name, notification_email, password }),
   });
 
   if (!res.ok) {

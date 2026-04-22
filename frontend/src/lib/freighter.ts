@@ -7,24 +7,54 @@ export interface FreighterSignResponse {
 }
 
 /**
- * Check if Freighter wallet is available and allowed
+ * Check if Freighter wallet is installed (not just allowed).
+ * We check for installation separately from permission so the button
+ * is enabled even before the user has granted access.
  */
-export async function isFreighterAvailable(): Promise<boolean> {
+export async function isFreighterInstalled(): Promise<boolean> {
   try {
-    return await freighter.isAllowed();
+    const result = await freighter.isConnected();
+    // isConnected returns boolean or { isConnected: boolean }
+    if (typeof result === "boolean") return result;
+    return (result as { isConnected: boolean })?.isConnected ?? false;
   } catch {
     return false;
   }
 }
 
 /**
- * Get the public key from Freighter wallet
+ * Check if Freighter wallet is available and allowed
+ */
+export async function isFreighterAvailable(): Promise<boolean> {
+  return isFreighterInstalled();
+}
+
+/**
+ * Get the public key from Freighter wallet.
+ * Calls setAllowed() first which triggers the Freighter permission popup.
  */
 export async function getFreighterPublicKey(): Promise<string> {
   try {
-    return await freighter.getPublicKey();
-  } catch {
-    throw new Error("Failed to get public key from Freighter wallet");
+    // setAllowed() triggers the Freighter popup asking user to approve the site
+    const allowed = await freighter.setAllowed();
+    if (!allowed) {
+      throw new Error("User denied Freighter access");
+    }
+
+    const result = await freighter.getPublicKey();
+    // getPublicKey returns string or { publicKey: string, error?: string }
+    if (typeof result === "string") {
+      if (!result) throw new Error("No public key returned");
+      return result;
+    }
+    const obj = result as { publicKey?: string; error?: string };
+    if (obj.error) throw new Error(obj.error);
+    if (!obj.publicKey) throw new Error("No public key returned from Freighter");
+    return obj.publicKey;
+  } catch (err) {
+    throw new Error(
+      `Freighter: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
@@ -36,18 +66,30 @@ export async function signWithFreighter(
   networkPassphrase: string
 ): Promise<FreighterSignResponse> {
   try {
-    const signedXDR = await freighter.signTransaction(transactionXDR, {
+    const result = await freighter.signTransaction(transactionXDR, {
       networkPassphrase,
     });
 
-    const publicKey = await freighter.getPublicKey();
-    
-    return {
-      signedXDR,
-      publicKey,
-    };
-  } catch {
-    throw new Error("Failed to sign transaction with Freighter wallet");
+    // Handle both string return (old) and object return (new)
+    let signedXDR: string;
+    if (typeof result === "string") {
+      signedXDR = result;
+    } else {
+      const obj = result as { signedTxXdr?: string; signedXDR?: string; error?: string };
+      if (obj.error) throw new Error(obj.error);
+      signedXDR = obj.signedTxXdr ?? obj.signedXDR ?? "";
+    }
+
+    if (!signedXDR) throw new Error("No signed XDR returned from Freighter");
+
+    const pkResult = await freighter.getPublicKey();
+    const publicKey = typeof pkResult === "string" ? pkResult : (pkResult as { publicKey?: string })?.publicKey ?? "";
+
+    return { signedXDR, publicKey };
+  } catch (err) {
+    throw new Error(
+      `Freighter sign failed: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 

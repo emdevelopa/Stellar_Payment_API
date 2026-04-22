@@ -47,7 +47,7 @@ const bulkRetrySchema = z.object({
  *       500:
  *         description: Server error
  */
-router.get("/webhook-logs", async (req, res, next) => {
+router.get("/webhook-logs", requireApiKeyAuth(), async (req, res, next) => {
   try {
     const { cursor, limit, status } = req.query;
     const result = await merchantService.getWebhookLogs(req.merchant.id, {
@@ -126,7 +126,7 @@ router.get("/notifications", requireApiKeyAuth(), async (req, res, next) => {
   }
 });
 
-router.post("/webhooks/retry-bulk", async (req, res, next) => {
+router.post("/webhooks/retry-bulk", requireApiKeyAuth(), async (req, res, next) => {
   try {
     const body = bulkRetrySchema.parse(req.body || {});
     const result = await queueBulkWebhookRetries({

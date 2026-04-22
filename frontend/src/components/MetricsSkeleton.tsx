@@ -36,7 +36,7 @@ function SummaryGridSkeleton() {
 
           {/* Value + unit on the same baseline */}
           <div className="mt-2 flex items-baseline gap-2">
-            <Skeleton width={90} height={36} borderRadius={6} />
+            <Skeleton width={104} height={36} borderRadius={6} />
             <Skeleton width={36} height={18} borderRadius={4} />
           </div>
         </div>
@@ -83,7 +83,7 @@ function ChartPanelSkeleton() {
       </div>
 
       {/* ── Chart area ── */}
-      <div className="mt-2 h-[300px]">
+      <div className="h-[300px]">
         <Skeleton height="100%" borderRadius={8} />
       </div>
     </div>

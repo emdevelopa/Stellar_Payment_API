@@ -1,8 +1,4 @@
-/**
- * SEP-0010 Stellar Web Authentication
- * Issue #148: Support wallet-based authentication for merchants
- */
-
+import jwt from "jsonwebtoken";
 import * as StellarSdk from "stellar-sdk";
 import { randomBytes } from "node:crypto";
 
@@ -13,6 +9,7 @@ const NETWORK_PASSPHRASE =
     : StellarSdk.Networks.TESTNET;
 
 const CHALLENGE_EXPIRES_IN = 300; // 5 minutes
+const JWT_SECRET = process.env.JWT_SECRET || "pluto-secret-key";
 
 /**
  * Dynamically retrieve the server signing key from environment
@@ -144,20 +141,19 @@ export function verifyChallenge(challengeXdr, clientAccountId) {
 /**
  * Generate a JWT session token for authenticated merchant
  * @param {string} merchantId - Merchant UUID
- * @param {string} stellarAddress - Merchant's Stellar public key
+ * @param {string} email - Merchant's email or Stellar address
  * @returns {string} JWT token
  */
-export function generateSessionToken(merchantId, stellarAddress) {
-  // Simple JWT-like token (in production, use proper JWT library)
-  const payload = {
-    merchant_id: merchantId,
-    stellar_address: stellarAddress,
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
-  };
-
-  const token = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  return token;
+export function generateSessionToken(merchantId, email) {
+  return jwt.sign(
+    {
+      id: merchantId,
+      email: email,
+      merchant_id: merchantId, // Keep for legacy middleware support
+    },
+    JWT_SECRET,
+    { expiresIn: "24h" },
+  );
 }
 
 /**
@@ -167,17 +163,10 @@ export function generateSessionToken(merchantId, stellarAddress) {
  */
 export function verifySessionToken(token) {
   try {
-    const payload = JSON.parse(
-      Buffer.from(token, "base64url").toString("utf-8"),
-    );
-
-    const now = Math.floor(Date.now() / 1000);
-    if (now > payload.exp) {
-      return { valid: false, error: "Token expired" };
-    }
-
+    const payload = jwt.verify(token, JWT_SECRET);
     return { valid: true, payload };
   } catch (err) {
-    return { valid: false, error: "Invalid token" };
+    return { valid: false, error: err.message || "Invalid token" };
   }
 }
+

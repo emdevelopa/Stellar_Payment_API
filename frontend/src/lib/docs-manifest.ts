@@ -8,16 +8,23 @@ export interface DocEntry {
 export const docsManifest: DocEntry[] = [
   {
     slug: "api-guide",
-    title: "How to use the API",
+    title: "Subscription API Guide",
     description:
-      "Register a merchant, create payment links, verify payments, and work with API key auth.",
-    filename: "api-guide.md",
+      "Traditional merchant integration: register, use API keys, create payment links, and manage lifecycle/webhooks.",
+    filename: "api-guide.mdx",
   },
   {
     slug: "hmac-signatures",
     title: "How to verify HMAC signatures",
     description:
       "Validate Stellar webhook requests using the exact HMAC-SHA256 scheme implemented in the backend.",
-    filename: "hmac-signatures.md",
+    filename: "hmac-signatures.mdx",
+  },
+  {
+    slug: "x402-agentic-payments",
+    title: "x402 Agentic Payments",
+    description:
+      "Use x402 as pay-per-request pricing for charged endpoints with your merchant account and API key.",
+    filename: "x402-agentic-payments.mdx",
   },
 ];

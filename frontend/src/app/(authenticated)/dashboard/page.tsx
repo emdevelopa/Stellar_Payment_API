@@ -16,12 +16,8 @@ import FirstApiKeyModal from "@/components/FirstApiKeyModal";
 import FirstPaymentCelebration from "@/components/FirstPaymentCelebration";
 
 export default function DashboardPage() {
-<<<<<<< HEAD
   const t = useTranslations("Dashboard");
-  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
-=======
-  const t = useTranslations("dashboardPage");
->>>>>>> upstream/main
+  const [, setIsWithdrawOpen] = useState(false);
   const [isFirstKeyModalOpen, setIsFirstKeyModalOpen] = useState(false);
   const hydrated = useMerchantHydrated();
   const apiKey = useMerchantApiKey();
@@ -32,12 +28,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (hydrated) {
-<<<<<<< HEAD
       const timer = setTimeout(() => setLoading(false), 1000);
       return () => clearTimeout(timer);
-=======
-      setLoading(false);
->>>>>>> upstream/main
     }
   }, [hydrated]);
 
@@ -62,54 +54,33 @@ export default function DashboardPage() {
       </header>
 
       <div className="grid gap-10 lg:grid-cols-3">
-<<<<<<< HEAD
         <div className="flex flex-col gap-10 lg:col-span-2">
           <section className="flex flex-col gap-4">
             <h2 className="text-xl font-semibold text-white">
               {t("businessOverview")}
             </h2>
-=======
-        {/* Left: Metrics + Activity */}
-        <div className="flex flex-col gap-10 lg:col-span-2">
-          <section className="flex flex-col gap-4">
-            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">Business Overview</h2>
->>>>>>> upstream/main
             <AnalyticsCards />
           </section>
 
           <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-<<<<<<< HEAD
               <h2 className="text-xl font-semibold text-white">
                 {t("liveConfirmations")}
               </h2>
               <Link href="/payments" className="text-sm text-mint hover:text-glow">
                 {t("viewAllPayments")}
-=======
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">Recent Activity</h2>
-              <Link href="/payment-history" className="text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A] underline underline-offset-4 hover:text-[#6B6B6B] transition-colors">
-                {t("viewAllPayments")} →
->>>>>>> upstream/main
               </Link>
             </div>
             <ActivityFeed />
           </section>
         </div>
 
-<<<<<<< HEAD
         <aside className="flex flex-col gap-8">
           <section className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
             <h3 className="mb-4 text-lg font-semibold text-white">
               {t("quickActions")}
             </h3>
             <div className="flex flex-col gap-3">
-=======
-        {/* Right: Quick Actions */}
-        <aside className="flex flex-col gap-6">
-          <section className="rounded-2xl border border-[#E8E8E8] bg-white p-6">
-            <h3 className="mb-5 text-xs font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">{t("quickActions")}</h3>
-            <div className="flex flex-col gap-2">
->>>>>>> upstream/main
               <Link
                 href="/create"
                 className="flex items-center gap-3 rounded-xl border border-[var(--pluto-200)] bg-[var(--pluto-50)] px-4 py-3 text-sm font-bold text-[var(--pluto-700)] transition-all hover:bg-[var(--pluto-500)] hover:text-white hover:border-[var(--pluto-500)]"
@@ -119,7 +90,6 @@ export default function DashboardPage() {
                 </svg>
                 {t("createPaymentLink")}
               </Link>
-<<<<<<< HEAD
 
               <button
                 onClick={() => setIsWithdrawOpen(true)}
@@ -141,8 +111,6 @@ export default function DashboardPage() {
                 {t("withdrawFunds")}
               </button>
 
-=======
->>>>>>> upstream/main
               <Link
                 href="/settings"
                 className="flex items-center gap-3 rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-4 py-3 text-sm font-bold text-[#0A0A0A] transition-all hover:bg-[#0A0A0A] hover:text-white hover:border-[#0A0A0A]"
@@ -163,11 +131,7 @@ export default function DashboardPage() {
                 <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
-<<<<<<< HEAD
                 {t("viewDocs")}
-=======
-                API Docs
->>>>>>> upstream/main
               </a>
             </div>
           </section>

@@ -5,13 +5,9 @@ import { useDropzone } from "react-dropzone";
 import Link from "next/link";
 import Image from "next/image";
 import CopyButton from "@/components/CopyButton";
-<<<<<<< HEAD
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import DangerZone from "@/components/DangerZone";
 import { useTranslations } from "next-intl";
-=======
-import { toast } from "sonner";
->>>>>>> upstream/main
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
@@ -20,7 +16,6 @@ import {
 } from "@/lib/merchant-store";
 import { useDisplayPreferences } from "@/lib/display-preferences";
 import WebhookHealthIndicator from "@/components/WebhookHealthIndicator";
-import DangerZone from "@/components/DangerZone";
 import { EmailReceiptPreview } from "@/components/EmailReceiptPreview";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -263,8 +258,7 @@ export default function SettingsPage() {
       const res = await fetch(`${API_URL}/api/webhooks/test`, { method: "POST", headers: { "x-api-key": apiKey } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Test webhook request failed");
-<<<<<<< HEAD
-      
+
       const statusClass = data.status >= 200 && data.status < 300 ? "text-green-400" : "text-red-400";
       toast.success(
         <div className="flex flex-col">
@@ -272,9 +266,6 @@ export default function SettingsPage() {
           <span className="text-xs text-slate-400 mt-1">Status: <span className={statusClass}>{data.status}</span></span>
         </div>
       );
-=======
-      toast.success(`Test webhook sent — status ${data.status}`);
->>>>>>> upstream/main
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to test webhook";
       toast.error(msg); setWebhookSaveError(msg);

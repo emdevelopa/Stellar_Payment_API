@@ -1,9 +1,21 @@
 {
-  "Dashboard": {
-    "title": "Painel",
-    "welcome": "Bem-vindo de volta",
-    "overview": "Visão geral de pagamentos"
-  },
+"Dashboard": {
+  "title": "Dashboard",
+  "welcome": "Welcome back",
+  "overview": "Payment overview",
+  "description": "Monitor your payments and activity in real time",
+  "businessOverview": "Business Overview",
+  "liveConfirmations": "Live Confirmations",
+  "viewAllPayments": "View all payments",
+  "quickActions": "Quick Actions",
+  "createPaymentLink": "Create Payment Link",
+  "withdrawFunds": "Withdraw Funds",
+  "settings": "Settings",
+  "viewDocs": "View Documentation",
+  "development": "Development",
+  "apiKeysTip": "Manage your API keys securely",
+  "webhookLogsTip": "Monitor webhook activity logs"
+},
   "localeSwitcher": {
     "label": "Idioma",
     "ariaLabel": "Selecionar idioma",

@@ -671,7 +671,7 @@ function createPaymentsRouter({
 
       countQuery = applyPaymentFilters(countQuery, req);
 
-      const { count: totalCount, error: countError } = await countQuery;
+      const { count: filteredCount, error: filteredCountError } = await countQuery;
 
       if (countError) {
         countError.status = 500;

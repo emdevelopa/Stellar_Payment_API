@@ -475,6 +475,14 @@ export default function PaymentPage() {
               {/* CTA */}
               {!isSettled && !isFailed && (
                 <div className="flex flex-col gap-3">
+                  <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] mb-2">
+                      {t("completePayment")}
+                    </p>
+                    <p className="text-sm text-[#6B6B6B]">
+                      {payment.description ?? t("paymentRequest")}
+                    </p>
+                  </div>
                   {activeProvider ? (
                     <>
                       <p className="text-center text-[10px] text-[#6B6B6B] font-medium">{t("connectedVia", { provider: activeProvider.name ?? "" })}</p>

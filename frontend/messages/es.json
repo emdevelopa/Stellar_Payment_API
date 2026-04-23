@@ -1,21 +1,21 @@
 {
-"Dashboard": {
-  "title": "Dashboard",
-  "welcome": "Welcome back",
-  "overview": "Payment overview",
-  "description": "Monitor your payments and activity in real time",
-  "businessOverview": "Business Overview",
-  "liveConfirmations": "Live Confirmations",
-  "viewAllPayments": "View all payments",
-  "quickActions": "Quick Actions",
-  "createPaymentLink": "Create Payment Link",
-  "withdrawFunds": "Withdraw Funds",
-  "settings": "Settings",
-  "viewDocs": "View Documentation",
-  "development": "Development",
-  "apiKeysTip": "Manage your API keys securely",
-  "webhookLogsTip": "Monitor webhook activity logs"
-},
+  "Dashboard": {
+    "title": "Panel",
+    "welcome": "Bienvenido de nuevo",
+    "overview": "Resumen de pagos",
+    "description": "Supervisa tus pagos y actividad en tiempo real",
+    "businessOverview": "Resumen del negocio",
+    "liveConfirmations": "Confirmaciones en vivo",
+    "viewAllPayments": "Ver todos los pagos",
+    "quickActions": "Acciones rápidas",
+    "createPaymentLink": "Crear enlace de pago",
+    "withdrawFunds": "Retirar fondos",
+    "settings": "Configuración",
+    "viewDocs": "Ver documentación",
+    "development": "Desarrollo",
+    "apiKeysTip": "Administra tus claves API de forma segura",
+    "webhookLogsTip": "Monitorea los registros de webhooks"
+  },
   "localeSwitcher": {
     "label": "Idioma",
     "ariaLabel": "Seleccionar idioma",
@@ -32,8 +32,8 @@
     "payments": "Pagos",
     "paymentHistory": "Historial de pagos",
     "Settings": {
-  "testWebhookSent": "¡Webhook de prueba enviado!"
-},
+      "testWebhookSent": "¡Webhook de prueba enviado!"
+    },
     "apiKeys": "Claves API",
     "webhookLogs": "Registros de webhooks",
     "login": "Iniciar sesión",

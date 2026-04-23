@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { motion } from "framer-motion";
+import { memo, useCallback, useMemo, useEffect, useRef } from "react";
 
 function getNavItems(t: ReturnType<typeof useTranslations>) {
   return [
@@ -70,7 +71,7 @@ interface SidebarProps {
   onMobileOpenChange: (open: boolean) => void;
 }
 
-function NavLinks({
+const NavLinks = memo(function NavLinks({
   pathname,
   t,
   onNavigate,
@@ -79,7 +80,7 @@ function NavLinks({
   t: ReturnType<typeof useTranslations>;
   onNavigate?: () => void;
 }) {
-  const navItems = getNavItems(t);
+  const navItems = useMemo(() => getNavItems(t), [t]);
 
   return (
     <nav aria-label="Dashboard navigation" className="flex flex-1 flex-col gap-1 px-4 py-6">
@@ -91,7 +92,7 @@ function NavLinks({
         if (isExternal) {
           return (
             <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" onClick={onNavigate}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all text-[#6B6B6B] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]">
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-pluto-600 transition-colors duration-150 hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-800)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)]">
               <span className="shrink-0">{item.icon}</span>
               <span className="text-xs font-semibold tracking-wide">{item.label}</span>
               <svg className="h-3 w-3 ml-auto opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
@@ -105,12 +106,12 @@ function NavLinks({
             href={item.href}
             prefetch={true}
             onClick={onNavigate}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all ${
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] ${
               isActive
                 ? "bg-[var(--pluto-500)] text-white"
                 : isHighlight
-                ? "border border-[var(--pluto-200)] bg-[var(--pluto-50)] text-[var(--pluto-700)] hover:bg-[var(--pluto-500)] hover:text-white hover:border-[var(--pluto-500)]"
-                : "text-[#6B6B6B] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]"
+                ? "border border-[var(--pluto-200)] bg-[var(--pluto-50)] text-[var(--pluto-700)] hover:border-[var(--pluto-500)] hover:bg-[var(--pluto-500)] hover:text-white"
+                : "text-pluto-600 hover:bg-[var(--pluto-100)] hover:text-[var(--pluto-800)]"
             }`}
           >
             <span className="shrink-0">{item.icon}</span>
@@ -119,9 +120,9 @@ function NavLinks({
         );
       })}
 
-      <div className="mt-auto pt-4 border-t border-[#E8E8E8]">
+      <div className="mt-auto pt-4 border-t border-pluto-200">
         <Link href="/" onClick={onNavigate}
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[#6B6B6B] transition-all hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-pluto-600 transition-colors duration-150 hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-800)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)]"
         >
           <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -131,7 +132,9 @@ function NavLinks({
       </div>
     </nav>
   );
-}
+});
+
+NavLinks.displayName = "NavLinks";
 
 export default function Sidebar({
   mobileOpen,
@@ -139,51 +142,87 @@ export default function Sidebar({
 }: SidebarProps) {
   const t = useTranslations("sidebar");
   const pathname = usePathname();
+  const handleNavigate = useCallback(() => onMobileOpenChange(false), [onMobileOpenChange]);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Note: Collapsible logic removed to fix linting as it's not currently used in the UI.
+  // Lock body scroll and handle ESC key when mobile sidebar is open
+  useEffect(() => {
+    if (!mobileOpen) return;
+    document.body.style.overflow = "hidden";
+    const timer = setTimeout(() => closeBtnRef.current?.focus(), 50);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onMobileOpenChange(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileOpen, onMobileOpenChange]);
 
-  const chrome = (
-    <>
-      <div className="flex h-16 items-center border-b border-[#E8E8E8] px-6">
-        <Link href="/" className="font-display text-2xl tracking-tight" style={{ color: "var(--pluto-500)" }}>
-          Pluto
-        </Link>
-      </div>
-
-      <NavLinks
-        pathname={pathname}
-        t={t}
-        onNavigate={() => onMobileOpenChange(false)}
-      />
-    </>
+  const navLinks = (
+    <NavLinks
+      pathname={pathname}
+      t={t}
+      onNavigate={handleNavigate}
+    />
   );
 
   return (
     <>
+      {/* Desktop sidebar */}
       <aside
         id="dashboard-sidebar-navigation"
-        className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-[#E8E8E8] bg-white lg:flex"
+        className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-pluto-200 bg-white lg:flex"
       >
-        {chrome}
+        <div className="flex h-16 items-center border-b border-pluto-200 px-6">
+          <Link href="/" className="font-display text-2xl tracking-tight" style={{ color: "var(--pluto-500)" }}>
+            Pluto
+          </Link>
+        </div>
+        {navLinks}
       </aside>
 
+      {/* Mobile overlay */}
       <motion.div
         initial={false}
-        id="dashboard-sidebar-mobile"
         animate={{
           opacity: mobileOpen ? 1 : 0,
           pointerEvents: mobileOpen ? "auto" : "none",
         }}
         className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm lg:hidden"
         onClick={() => onMobileOpenChange(false)}
+        aria-hidden="true"
       />
+
+      {/* Mobile sidebar drawer */}
       <motion.aside
         initial={false}
         animate={{ x: mobileOpen ? 0 : "-100%" }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        className="fixed inset-y-0 left-0 z-[60] flex w-[280px] flex-col border-r border-[#E8E8E8] bg-white lg:hidden"
+        id="dashboard-sidebar-mobile"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("close")}
+        className="fixed inset-y-0 left-0 z-[60] flex w-[min(280px,85vw)] flex-col border-r border-pluto-200 bg-white lg:hidden"
       >
-        {chrome}
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-pluto-200 px-4 sm:px-6">
+          <Link href="/" className="font-display text-2xl tracking-tight" style={{ color: "var(--pluto-500)" }}>
+            Pluto
+          </Link>
+          <button
+            ref={closeBtnRef}
+            onClick={() => onMobileOpenChange(false)}
+            aria-label={t("close")}
+            className="flex items-center justify-center rounded-lg p-2 text-pluto-600 transition-colors hover:bg-pluto-50 hover:text-pluto-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pluto-300"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        {navLinks}
       </motion.aside>
     </>
   );

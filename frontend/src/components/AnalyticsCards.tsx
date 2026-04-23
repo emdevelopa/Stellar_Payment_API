@@ -84,7 +84,7 @@ export default function AnalyticsCards() {
 
   if (loading || !hydrated) {
     return (
-      <div className="grid gap-6 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-32 rounded-lg bg-[#F5F5F5] animate-pulse" />
         ))}
@@ -93,11 +93,11 @@ export default function AnalyticsCards() {
   }
 
   return (
-    <div className="grid gap-6 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {/* Total Volume */}
-      <div className="rounded-lg border border-[#E8E8E8] bg-white p-6 transition-all hover:bg-[#F9F9F9]">
-        <div className="flex flex-col gap-1">
-          <p className="text-[clamp(28px,4vw,48px)] font-bold tracking-tight text-[#0A0A0A]">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 transition-all hover:bg-[#F9F9F9] sm:p-6">
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]">
             {formatAmount(totalVolume, locale, hideCents)}
           </p>
           <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
@@ -107,9 +107,9 @@ export default function AnalyticsCards() {
       </div>
 
       {/* Success Rate */}
-      <div className="rounded-lg border border-[#E8E8E8] bg-white p-6 transition-all hover:bg-[#F9F9F9]">
-        <div className="flex flex-col gap-1">
-          <p className="text-[clamp(28px,4vw,48px)] font-bold tracking-tight text-[#0A0A0A]">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 transition-all hover:bg-[#F9F9F9] sm:p-6">
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]">
             {successRate.toFixed(1)}%
           </p>
           <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
@@ -119,9 +119,9 @@ export default function AnalyticsCards() {
       </div>
 
       {/* Active Intents */}
-      <div className="rounded-lg border border-[#E8E8E8] bg-white p-6 transition-all hover:bg-[#F9F9F9]">
-        <div className="flex flex-col gap-1">
-          <p className="text-[clamp(28px,4vw,48px)] font-bold tracking-tight text-[#0A0A0A]">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 transition-all hover:bg-[#F9F9F9] sm:p-6">
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]">
             {activeIntents}
           </p>
           <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">

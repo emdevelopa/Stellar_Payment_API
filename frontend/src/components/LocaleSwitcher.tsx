@@ -1,20 +1,20 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  localeCookieMaxAge,
   localeCookieName,
+  type AppLocale,
   locales,
   resolveAppLocale,
-  type AppLocale,
 } from "@/i18n/config";
+import { usePathname, useRouter } from "@/i18n/navigation";
 
 interface LocaleSwitcherProps {
   className?: string;
 }
-
-const COOKIE_TTL_SECONDS = 60 * 60 * 24 * 365;
 
 export default function LocaleSwitcher({
   className = "",
@@ -22,15 +22,23 @@ export default function LocaleSwitcher({
   const t = useTranslations("localeSwitcher");
   const locale = resolveAppLocale(useLocale());
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
   const handleChange = (nextLocale: AppLocale) => {
     if (nextLocale === locale) return;
 
-    document.cookie = `${localeCookieName}=${nextLocale}; path=/; max-age=${COOKIE_TTL_SECONDS}; samesite=lax`;
+    document.cookie = `${localeCookieName}=${nextLocale}; path=/; max-age=${localeCookieMaxAge}; samesite=lax`;
+
+    const query = searchParams.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
 
     startTransition(() => {
-      router.refresh();
+      router.replace(href, {
+        locale: nextLocale,
+        scroll: false,
+      });
     });
   };
 

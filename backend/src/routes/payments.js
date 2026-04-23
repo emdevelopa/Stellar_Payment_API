@@ -947,8 +947,70 @@ function createPaymentsRouter({
    */
   router.get("/metrics/7day", async (req, res, next) => {
     try {
-      const result = await paymentService.getRollingMetrics(req.merchant.id);
-      res.json(result);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const { data: payments, error } = await supabase
+        .from("payments")
+        .select("amount, created_at, status")
+        .eq("merchant_id", req.merchant.id)
+        .gte("created_at", sevenDaysAgo.toISOString())
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        error.status = 500;
+        throw error;
+      }
+
+      const metricsMap = new Map();
+      let totalVolume = 0;
+      let confirmedCount = 0;
+
+      payments.forEach((payment) => {
+        const date = new Date(payment.created_at).toISOString().split("T")[0];
+        const volume = Number(payment.amount) || 0;
+
+        if (!metricsMap.has(date)) {
+          metricsMap.set(date, { date, volume: 0, count: 0, confirmed_count: 0 });
+        }
+
+        const dayMetric = metricsMap.get(date);
+        dayMetric.volume += volume;
+        dayMetric.count += 1;
+        
+        if (payment.status === "confirmed") {
+          dayMetric.confirmed_count += 1;
+          confirmedCount += 1;
+        }
+        
+        totalVolume += volume;
+      });
+
+      const data = [];
+      for (let i = 6; i >= 0; i -= 1) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split("T")[0];
+
+        if (metricsMap.has(dateStr)) {
+          data.push(metricsMap.get(dateStr));
+        } else {
+          data.push({ date: dateStr, volume: 0, count: 0, confirmed_count: 0 });
+        }
+      }
+
+      const totalPayments = payments.length;
+      const successRate = totalPayments > 0 
+        ? Number(((confirmedCount / totalPayments) * 100).toFixed(1)) 
+        : 0;
+
+      res.json({
+        data,
+        total_volume: Number(totalVolume.toFixed(2)),
+        total_payments: totalPayments,
+        confirmed_count: confirmedCount,
+        success_rate: successRate,
+      });
     } catch (err) {
       next(err);
     }

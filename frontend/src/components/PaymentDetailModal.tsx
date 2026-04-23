@@ -414,7 +414,7 @@ export default function PaymentDetailModal({
         aria-modal="true"
         aria-label="Payment details"
         tabIndex={-1}
-        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col bg-black/90 shadow-2xl outline-none backdrop-blur-xl transition-transform duration-300 ease-in-out ${visible ? "translate-x-0" : "translate-x-full"
+        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col bg-[#050608] shadow-2xl outline-none backdrop-blur-xl transition-transform duration-300 ease-in-out ${visible ? "translate-x-0" : "translate-x-full"
           }`}
       >
         {/* Header */}

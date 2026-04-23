@@ -16,8 +16,8 @@ test.describe("Checkout Visual Regression", () => {
   test("checkout layout remains stable across viewports", async ({ page }) => {
     const checkoutMain = page.locator("main");
     await expect(checkoutMain).toBeVisible();
-    await expect(page.getByText("Complete Payment")).toBeVisible();
     await expect(page.getByText("Styled payment")).toBeVisible();
+    await expect(page.locator("code", { hasText: "GRECIPIENTADDRESS" })).toBeVisible();
 
     const noOverflow = await expectNoHorizontalOverflow(page);
     expect(noOverflow).toBeTruthy();

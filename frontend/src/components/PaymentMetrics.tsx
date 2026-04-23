@@ -343,31 +343,17 @@ export default function PaymentMetrics({
     });
   };
 
-  const handleExport = async (
-    format: ExportFormat,
-    containerRef: RefObject<HTMLDivElement>
-  ) => {
-    setExporting(true);
-
-    try {
-      await exportChart(
-        containerRef,
-        format,
-        `multi-asset-volume-${range.toLowerCase()}`
-      );
-      toast.success(t("exportSuccess", { format: format.toUpperCase() }));
-    } catch (exportError) {
-      const message =
-        exportError instanceof Error ? exportError.message : t("exportFailed");
-      toast.error(message);
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // ── Loading / hydration gate — use the extracted skeleton ─────────────────
-  if (showSkeleton || loading || !hydrated) {
-    return <MetricsSkeleton />;
+  if (loading || !hydrated) {
+    return (
+      <div className="animate-pulse space-y-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="h-24 rounded-xl bg-white/5" />
+          <div className="h-24 rounded-xl bg-white/5" />
+          <div className="h-24 rounded-xl bg-white/5" />
+        </div>
+        <div className="h-80 w-full rounded-xl bg-white/5" />
+      </div>
+    );
   }
 
   if (error) {
@@ -411,50 +397,47 @@ export default function PaymentMetrics({
   return (
     <div className="flex flex-col gap-6">
       {summary && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
-              {t("sevenDayVolume")}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              7-Day Volume
             </p>
-            <div className="mt-2 flex items-baseline gap-1">
-              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
+            <div className="mt-2 flex items-baseline gap-2">
+              <p className="text-2xl font-bold text-mint">
                 {summary.total_volume.toLocaleString()}
               </p>
-              <p className="text-[10px] font-bold text-[#6B6B6B] uppercase">XLM</p>
+              <p className="text-xs text-slate-400 font-mono">XLM</p>
             </div>
           </div>
 
-          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
-              {t("totalPayments")}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              Confirmed Intents
             </p>
-            <div className="mt-2 flex items-baseline gap-1">
-              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
-                {summary.total_payments}
-              </p>
-              <p className="text-[10px] font-bold text-[#6B6B6B] uppercase">Intents</p>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
-              Success Rate
-            </p>
-            <div className="mt-2 flex items-baseline gap-1">
-              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
-                {summary.success_rate}%
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[#E8E8E8] bg-white p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
-              Confirmed
-            </p>
-            <div className="mt-2 flex items-baseline gap-1">
-              <p className="text-3xl font-bold tracking-tight text-[#0A0A0A]">
+            <div className="mt-2 flex items-baseline gap-2">
+              <p className="text-2xl font-bold text-mint">
                 {summary.confirmed_count}
               </p>
+              <p className="text-xs text-slate-400">
+                {summary.confirmed_count === 1 ? "intent" : "intents"}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              Success Rate
+            </p>
+            <div className="mt-2 flex items-baseline gap-2">
+              <p className="text-2xl font-bold text-mint">
+                {summary.success_rate}%
+              </p>
+              <div className="flex h-1.5 w-full max-w-[60px] overflow-hidden rounded-full bg-slate-800">
+                <div 
+                  className="bg-mint" 
+                  style={{ width: `${summary.success_rate}%` }} 
+                />
+              </div>
             </div>
           </div>
         </div>

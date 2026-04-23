@@ -121,7 +121,8 @@ export default function PaymentHistoryPage() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
         if (hoveredPayment) {
           e.preventDefault();
-          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          const origin =
+            typeof window !== "undefined" ? window.location.origin : "";
           const link = `${origin}/pay/${hoveredPayment}`;
           navigator.clipboard.writeText(link);
           toast.success(t("linkCopied"));
@@ -269,8 +270,12 @@ export default function PaymentHistoryPage() {
     return (
       <div className="flex flex-col gap-8">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
-          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">
+            History
+          </p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">
+            Payment History
+          </h1>
           <p className="mt-2 text-sm font-medium text-[#6B6B6B]">
             View and manage all your payment transactions
           </p>
@@ -325,9 +330,15 @@ export default function PaymentHistoryPage() {
     return (
       <div className="flex flex-col gap-8">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
-          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
-          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">View and manage all your payment transactions</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">
+            History
+          </p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">
+            Payment History
+          </h1>
+          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">
+            View and manage all your payment transactions
+          </p>
         </div>
 
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center">
@@ -384,9 +395,15 @@ export default function PaymentHistoryPage() {
     return (
       <div className="flex flex-col gap-8">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
-          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
-          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">View and manage all your payment transactions</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">
+            History
+          </p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">
+            Payment History
+          </h1>
+          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">
+            View and manage all your payment transactions
+          </p>
         </div>
 
         <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-8 text-center">
@@ -427,9 +444,15 @@ export default function PaymentHistoryPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">History</p>
-          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Payment History</h1>
-          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">View and manage all your payment transactions</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">
+            History
+          </p>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">
+            Payment History
+          </h1>
+          <p className="mt-2 text-sm font-medium text-[#6B6B6B]">
+            View and manage all your payment transactions
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -460,7 +483,9 @@ export default function PaymentHistoryPage() {
               <p className="text-xs font-medium uppercase tracking-wider text-[#6B6B6B]">
                 Total Payments
               </p>
-              <p className="mt-2 text-2xl font-bold text-[#0A0A0A]">{totalCount}</p>
+              <p className="mt-2 text-2xl font-bold text-[#0A0A0A]">
+                {totalCount}
+              </p>
             </div>
             <div className="rounded-full bg-mint/10 p-3">
               <svg
@@ -865,10 +890,11 @@ export default function PaymentHistoryPage() {
                 onClick={() => handlePaymentClick(payment.id)}
                 onMouseEnter={() => setHoveredPayment(payment.id)}
                 onMouseLeave={() => setHoveredPayment(null)}
-                className={`group relative cursor-pointer transition-colors hover:bg-[#F9F9F9] ${flashedIds.has(payment.id)
-                  ? "animate-payment-confirmed bg-green-500/10"
-                  : ""
-                  }`}
+                className={`group relative cursor-pointer transition-all duration-200 ease-in-out hover:bg-[#F9F9F9] hover:shadow-sm hover:border-l-2 hover:border-l-[var(--pluto-500)] active:bg-[#F5F5F5] active:scale-[0.995] ${
+                  flashedIds.has(payment.id)
+                    ? "animate-payment-confirmed bg-green-500/10"
+                    : ""
+                }`}
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
@@ -891,14 +917,15 @@ export default function PaymentHistoryPage() {
                 </td>
                 <td className="px-4 py-3">
                   <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${payment.status === "confirmed"
-                      ? "bg-green-500/20 text-green-400"
-                      : payment.status === "failed"
-                        ? "bg-red-500/20 text-red-400"
-                        : payment.status === "refunded"
-                          ? "bg-blue-500/20 text-blue-400"
-                          : "bg-yellow-500/20 text-yellow-400"
-                      }`}
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      payment.status === "confirmed"
+                        ? "bg-green-500/20 text-green-400"
+                        : payment.status === "failed"
+                          ? "bg-red-500/20 text-red-400"
+                          : payment.status === "refunded"
+                            ? "bg-blue-500/20 text-blue-400"
+                            : "bg-yellow-500/20 text-yellow-400"
+                    }`}
                   >
                     {toStatusLabel(t, payment.status)}
                   </span>
@@ -921,11 +948,11 @@ export default function PaymentHistoryPage() {
                 <td className="px-4 py-3">
                   <button
                     onClick={() => handlePaymentClick(payment.id)}
-                    className="inline-flex items-center gap-1 font-mono text-xs text-mint transition-colors hover:text-glow"
+                    className="inline-flex items-center gap-1 font-mono text-xs text-[var(--pluto-600)] transition-all duration-200 hover:text-[var(--pluto-800)] hover:gap-2 hover:translate-x-0.5 active:scale-95"
                   >
                     View
                     <svg
-                      className="w-3 h-3"
+                      className="w-3 h-3 transition-transform duration-200 group-hover:translate-x-0.5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"

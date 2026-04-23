@@ -5,15 +5,24 @@ const createNextIntlPlugin = require("next-intl/plugin");
 const withSentryConfig = (config) => config;
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
-const withPWA = require("@ducanh2912/next-pwa").default({
-  dest: "public",
-  disable: process.env.NODE_ENV === "development",
-  register: true,
-  skipWaiting: true,
-  fallbacks: {
-    offline: "/offline",
-  },
-});
+let withPWA = (config) => config;
+
+try {
+  withPWA = require("@ducanh2912/next-pwa").default({
+    dest: "public",
+    disable: process.env.NODE_ENV === "development",
+    register: true,
+    skipWaiting: true,
+    fallbacks: {
+      offline: "/offline",
+    },
+  });
+} catch (error) {
+  console.warn(
+    "next-pwa is unavailable; continuing without PWA support.",
+    error?.message ?? error,
+  );
+}
 
 const nextConfig = {
   reactStrictMode: true,

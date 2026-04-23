@@ -4,6 +4,9 @@ module.exports = {
   content: ["./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      screens: {
+        xs: "475px",
+      },
       colors: {
         night: "var(--color-night)",
         tide: "var(--color-tide)",
@@ -13,7 +16,7 @@ module.exports = {
         secondary: "var(--color-secondary)",
         accent: "var(--color-accent)",
         pluto: {
-          50:  "var(--pluto-50)",
+          50: "var(--pluto-50)",
           100: "var(--pluto-100)",
           200: "var(--pluto-200)",
           300: "var(--pluto-300)",
@@ -32,12 +35,12 @@ module.exports = {
         heading: ["var(--font-heading)", "system-ui", "sans-serif"],
         body: ["var(--font-sans)", "system-ui", "sans-serif"],
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        mono: ["var(--font-mono)", "ui-monospace", "monospace"]
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       keyframes: {
         "payment-confirmed": {
-          "0%":   { backgroundColor: "rgba(34, 197, 94, 0.3)" },
-          "50%":  { backgroundColor: "rgba(34, 197, 94, 0.15)" },
+          "0%": { backgroundColor: "rgba(34, 197, 94, 0.3)" },
+          "50%": { backgroundColor: "rgba(34, 197, 94, 0.15)" },
           "100%": { backgroundColor: "transparent" },
         },
       },
@@ -47,7 +50,7 @@ module.exports = {
       backgroundColor: {
         dark: "#000000",
       },
-    }
+    },
   },
-  plugins: []
+  plugins: [],
 };

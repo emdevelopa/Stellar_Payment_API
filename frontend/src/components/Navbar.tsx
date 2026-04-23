@@ -61,7 +61,7 @@ export default function Navbar() {
       transition={{ type: "spring", stiffness: 100, damping: 20, delay: 0.1 }}
       className="fixed top-3 left-0 right-0 z-50 flex justify-center px-4 sm:px-6"
     >
-      <nav className="flex h-14 items-center justify-between gap-5 rounded-full border border-[#E8E8E8] bg-white/90 px-4 sm:px-6 backdrop-blur-xl shadow-[0_10px_30px_rgb(0,0,0,0.06)] transition-all max-w-[1280px] w-full mx-auto">
+      <nav aria-label="Main navigation" className="flex h-14 items-center justify-between gap-5 rounded-full border border-pluto-200 bg-white/90 px-4 sm:px-6 backdrop-blur-xl shadow-[0_10px_30px_rgb(0,0,0,0.06)] transition-all max-w-[1280px] w-full mx-auto">
         <Link href="/" className="flex items-center gap-2">
           <span className="font-display text-lg sm:text-xl font-bold tracking-tighter text-[#0A0A0A] uppercase">
             PLUTO
@@ -77,15 +77,15 @@ export default function Navbar() {
                 aria-current={isActive(pathname, link.href) ? "page" : undefined}
                 className={`group relative rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
                   isActive(pathname, link.href)
-                    ? "text-[#0A0A0A]"
-                    : "text-[#6B6B6B] hover:text-[#0A0A0A]"
+                    ? "text-pluto-900"
+                    : "text-pluto-600 hover:text-pluto-900"
                 }`}
               >
                 {link.label}
                 {isActive(pathname, link.href) && (
                   <motion.div
                     layoutId="navbar-active"
-                    className="absolute inset-0 z-[-1] rounded-full bg-[#F5F5F5]"
+                    className="absolute inset-0 z-[-1] rounded-full bg-pluto-50"
                     transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
                   />
                 )}
@@ -93,7 +93,7 @@ export default function Navbar() {
             ))}
           </div>
 
-          <div className="h-4 w-px bg-[#E8E8E8] hidden md:block" />
+          <div className="h-4 w-px bg-pluto-200 hidden md:block" aria-hidden="true" />
 
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden items-center gap-3 md:flex">
@@ -104,22 +104,26 @@ export default function Navbar() {
             <button
               ref={triggerRef}
               onClick={toggleMenu}
-              className="flex flex-col gap-1 md:hidden p-2 text-[#0A0A0A]"
+              className="flex flex-col gap-1 md:hidden p-2 text-pluto-900 rounded-lg hover:bg-pluto-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pluto-300"
               aria-label={t("toggleMenu")}
               aria-expanded={isMenuOpen}
               aria-controls="mobile-nav-menu"
+              aria-haspopup="true"
             >
               <motion.div 
                 animate={isMenuOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
-                className="h-0.5 w-5 bg-[#0A0A0A]" 
+                className="h-0.5 w-5 bg-pluto-900" 
+                aria-hidden="true"
               />
               <motion.div 
                 animate={isMenuOpen ? { opacity: 0 } : { opacity: 1 }}
-                className="h-0.5 w-5 bg-[#0A0A0A]" 
+                className="h-0.5 w-5 bg-pluto-900" 
+                aria-hidden="true"
               />
               <motion.div 
                 animate={isMenuOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
-                className="h-0.5 w-5 bg-[#0A0A0A]" 
+                className="h-0.5 w-5 bg-pluto-900" 
+                aria-hidden="true"
               />
             </button>
           </div>
@@ -133,7 +137,8 @@ export default function Navbar() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="absolute left-0 right-0 top-16 flex flex-col gap-4 rounded-3xl border border-[#E8E8E8] bg-white p-5 shadow-xl md:hidden"
+              aria-label="Mobile navigation menu"
+              className="absolute left-0 right-0 top-16 flex flex-col gap-4 rounded-3xl border border-pluto-200 bg-white p-5 shadow-xl md:hidden"
             >
               <div className="flex flex-col gap-2">
                 {appNavLinks.map((link) => (
@@ -141,13 +146,18 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     onClick={() => setIsMenuOpen(false)}
-                    className="rounded-xl px-4 py-3 text-sm font-bold text-[#0A0A0A] hover:bg-[#F5F5F5] transition-colors"
+                    aria-current={isActive(pathname, link.href) ? "page" : undefined}
+                    className={`rounded-xl px-4 py-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pluto-300 ${
+                      isActive(pathname, link.href)
+                        ? "bg-pluto-50 text-pluto-900"
+                        : "text-pluto-900 hover:bg-pluto-50"
+                    }`}
                   >
                     {link.label}
                   </Link>
                 ))}
               </div>
-              <div className="h-px bg-[#E8E8E8]" />
+              <div className="h-px bg-pluto-200" aria-hidden="true" />
               <div className="flex items-center justify-end px-2">
                 <ApiHealthBadge />
               </div>

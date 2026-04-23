@@ -6,6 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import CopyButton from "@/components/CopyButton";
 import { toast } from "sonner";
+import DangerZone from "@/components/DangerZone";
+import { useTranslations } from "next-intl";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
@@ -14,7 +16,6 @@ import {
 } from "@/lib/merchant-store";
 import { useDisplayPreferences } from "@/lib/display-preferences";
 import WebhookHealthIndicator from "@/components/WebhookHealthIndicator";
-import DangerZone from "@/components/DangerZone";
 import { EmailReceiptPreview } from "@/components/EmailReceiptPreview";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -89,6 +90,7 @@ const NAV_ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode; danger
 ];
 
 export default function SettingsPage() {
+  const t = useTranslations("Settings");
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const setApiKey = useSetMerchantApiKey();
@@ -256,7 +258,14 @@ export default function SettingsPage() {
       const res = await fetch(`${API_URL}/api/webhooks/test`, { method: "POST", headers: { "x-api-key": apiKey } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Test webhook request failed");
-      toast.success(`Test webhook sent — status ${data.status}`);
+
+      const statusClass = data.status >= 200 && data.status < 300 ? "text-green-400" : "text-red-400";
+      toast.success(
+        <div className="flex flex-col">
+          <span>{t("testWebhookSent")}</span>
+          <span className="text-xs text-slate-400 mt-1">Status: <span className={statusClass}>{data.status}</span></span>
+        </div>
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to test webhook";
       toast.error(msg); setWebhookSaveError(msg);

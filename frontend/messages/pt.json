@@ -1,151 +1,47 @@
 {
+  "Dashboard": {
+    "title": "Painel",
+    "welcome": "Bem-vindo de volta",
+    "overview": "Visão geral de pagamentos",
+    "description": "Monitore seus pagamentos e atividades em tempo real",
+    "businessOverview": "Visão geral do negócio",
+    "liveConfirmations": "Confirmações ao vivo",
+    "viewAllPayments": "Ver todos os pagamentos",
+    "quickActions": "Ações rápidas",
+    "createPaymentLink": "Criar link de pagamento",
+    "withdrawFunds": "Sacar fundos",
+    "settings": "Configurações",
+    "viewDocs": "Ver documentação",
+    "development": "Desenvolvimento",
+    "apiKeysTip": "Gerencie suas chaves de API com segurança",
+    "webhookLogsTip": "Monitore os logs de webhook"
+  },
   "localeSwitcher": {
     "label": "Idioma",
     "ariaLabel": "Selecionar idioma",
     "options": {
-      "en": "English",
-      "es": "Espanol",
-      "pt": "Portugues"
+      "en": "Inglês",
+      "es": "Espanhol",
+      "pt": "Português",
+      "fr": "Francês"
     }
   },
   "nav": {
-    "home": "Inicio",
-    "docs": "Docs",
-    "login": "Entrar",
-    "register": "Cadastrar",
-    "toggleMenu": "Abrir menu"
-  },
-  "sidebar": {
-    "overview": "Visao geral",
+    "home": "Início",
+    "dashboard": "Painel",
     "payments": "Pagamentos",
-    "webhookLogs": "Logs de Webhook",
-    "apiKeys": "Chaves API",
-    "settings": "Configuracoes",
-    "workspace": "Area autenticada",
-    "shortcuts": "Atalhos",
-    "createPayment": "Criar pagamento",
-    "network": "Mainnet-testnet",
-    "collapse": "Recolher barra lateral",
-    "expand": "Expandir barra lateral",
-    "close": "Fechar navegacao"
-  },
-  "breadcrumbs": {
-    "home": "Inicio",
-    "segments": {
-      "dashboard": "Painel",
-      "create": "Criar",
-      "payments": "Pagamentos",
-      "settings": "Configuracoes",
-      "webhook-logs": "Logs de Webhook",
-      "api-keys": "Chaves API"
-    }
-  },
-  "copyButton": {
-    "ariaLabel": "Copiar para a area de transferencia",
-    "copied": "Copiado",
-    "copiedState": "Copiado"
-  },
-  "dashboardPage": {
-    "title": "Visao geral do lojista",
-    "description": "Acompanhe seu volume de transacoes, monitore pagamentos em tempo real e gerencie sua integracao Stellar.",
-    "paymentMetrics": "Metricas de pagamento",
-    "recentActivity": "Atividade recente",
-    "viewAllPayments": "Ver todos os pagamentos",
-    "quickActions": "Acoes rapidas",
-    "createPaymentLink": "Criar link de pagamento",
-    "withdrawFunds": "Sacar fundos (SEP-24)",
-    "development": "Desenvolvimento",
-    "apiKeysTip": "Use a pagina de Chaves API para rotacionar seu token secreto periodicamente.",
-    "webhookLogsTip": "Confira os Logs de Webhook se os pagamentos nao estiverem acionando seu backend."
-  },
-  "createPaymentPage": {
-    "eyebrow": "Painel",
-    "title": "Criar link de pagamento",
-    "description": "Defina um valor, escolha um ativo e informe um endereco Stellar para gerar um link compartilhavel.",
-    "newHere": "Novo aqui?",
-    "registerMerchant": "Cadastrar uma conta de lojista"
-  },
-  "createPaymentForm": {
-    "invalidAmount": "O valor deve ser um numero positivo.",
-    "invalidRecipient": "O destinatario deve ser uma chave publica Stellar valida (56 caracteres, comeca com G).",
-    "invalidHexColor": "{field} deve ser uma cor hexadecimal valida.",
-    "failedCreate": "Falha ao criar o link de pagamento",
-    "createdToast": "Link de pagamento criado",
-    "noApiKeyTitle": "Nenhuma chave API encontrada",
-    "noApiKeyDescription": "Cadastre uma conta de lojista para receber sua chave API e comecar a criar links de pagamento.",
-    "registerAsMerchant": "Cadastrar como lojista",
-    "readyEyebrow": "Link pronto",
-    "readyTitle": "Link criado com sucesso",
-    "readyDescription": "Compartilhe este link com seu cliente para receber o pagamento.",
-    "shareLink": "Compartilhar link",
-    "shareTitle": "Link de pagamento pronto",
-    "shareText": "Abra este link de pagamento Stellar.",
-    "shareFailed": "O compartilhamento nativo nao esta disponivel agora.",
-    "paymentLink": "Link de pagamento",
-    "paymentId": "ID do pagamento",
-    "status": "Status",
-    "createAnother": "Criar outro link de pagamento",
-    "amount": "Valor",
-    "amountPlaceholder": "Digite {exampleAmount} {asset}",
-    "asset": "Ativo",
-    "selectAsset": "Selecionar ativo",
-    "issuer": "Emissor",
-    "trustedAddresses": "Selecionar entre enderecos confiaveis",
-    "selectSavedAddress": "-- Selecione um endereco salvo --",
-    "recipientAddress": "Endereco do destinatario",
-    "recipientPlaceholder": "Cole a carteira de destino para {asset}",
-    "recipientPlaceholderSelected": "{label} selecionado para {asset}",
-    "descriptionLabel": "Descricao",
-    "optional": "opcional",
-    "descriptionPlaceholder": "Qual e o contexto desta cobranca em {asset}?",
-    "brandingTitle": "Personalizacao desta sessao",
-    "brandingDescription": "Aplique cores personalizadas somente neste link de pagamento.",
-    "enabled": "Ativado",
-    "disabled": "Desativado",
-    "primary": "Primaria",
-    "secondary": "Secundaria",
-    "background": "Fundo",
-    "checkoutPreview": "Previa do checkout",
-    "payNow": "Pagar agora",
-    "generating": "Gerando...",
-    "generate": "Gerar link de pagamento",
-    "rateLimitError": "Você está criando links rápido demais. Tente novamente em {seconds} segundos.",
-    "retryWait": "Aguarde {seconds}s…",
-    "integrationCode": "Código de Integração",
-    "snippetsHelper": "Os trechos de código são atualizados automaticamente com os valores do formulário."
-  },
-  "paymentMetrics": {
-    "downloadImage": "Baixar imagem",
-    "downloadPng": "Baixar PNG",
-    "downloadSvg": "Baixar SVG",
-    "exporting": "Exportando...",
-    "exportSuccess": "Grafico baixado como {format}",
-    "exportFailed": "Falha ao exportar o grafico.",
-    "fetchMetricsFailed": "Falha ao buscar metricas",
-    "fetchVolumeFailed": "Falha ao buscar dados de volume",
-    "retry": "Tentar novamente",
-    "sevenDayVolume": "Volume de 7 dias",
-    "totalPayments": "Total de pagamentos",
-    "paymentsCount": "{count, plural, one {pagamento} other {pagamentos}}",
-    "chartTitle": "Comparacao de volume por ativo",
-    "chartSubtitle": "Volume diario de transacoes por ativo",
-    "heatmapTitle": "Mapa de calor de pagamentos",
-    "heatmapSubtitle": "Intensidade de atividade estilo GitHub nos ultimos 365 dias",
-    "heatmapTotal": "{count, plural, one {# pagamento no ultimo ano} other {# pagamentos no ultimo ano}}",
-    "heatmapTooltip": "{count, plural, one {# pagamento} other {# pagamentos}} em {date}",
-    "heatmapAriaLabel": "Mapa de calor de pagamentos de 365 dias",
-    "heatmapEmptyDay": "Nenhum pagamento registrado",
-    "heatmapLegendLess": "Menos",
-    "heatmapLegendMore": "Mais",
-    "heatmapWeekdays": {
-      "sun": "D",
-      "mon": "S",
-      "tue": "T",
-      "wed": "Q",
-      "thu": "Q",
-      "fri": "S",
-      "sat": "S"
+    "paymentHistory": "Histórico de pagamentos",
+    "Settings": {
+      "testWebhookSent": "Webhook de teste enviado!"
     },
+<<<<<<< HEAD
+    "apiKeys": "Chaves de API",
+    "webhookLogs": "Logs de webhook",
+    "login": "Entrar",
+    "register": "Registrar",
+    "docs": "Documentação",
+    "toggleMenu": "Alternar menu"
+=======
     "showRange": "Mostrar {range}",
     "toggleAssetVisibility": "Alternar visibilidade do ativo",
     "showAsset": "Mostrar {asset}",
@@ -301,5 +197,6 @@
       "completed": "Concluido",
       "failed": "Falhou"
     }
+>>>>>>> upstream/main
   }
 }

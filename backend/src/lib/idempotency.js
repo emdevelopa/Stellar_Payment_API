@@ -2,96 +2,72 @@ import crypto from "node:crypto";
 import { getRedisClient } from "./redis.js";
 
 /**
- * TTL for idempotency cache entries in seconds.
+ * TTL for idempotency keys (10 minutes)
  */
-const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+const IDEMPOTENCY_TTL_SECONDS = 10 * 60; // 600 seconds
 
-/**
- * Idempotency middleware that checks and enforces idempotent requests.
- * Tracks the key tied to the payload hash and response.
- * Returns a cached 201 response if the key matches a previous request.
- * Stores cached state in Redis for 24h.
- */
 export async function idempotencyMiddleware(req, res, next) {
-  // Only process POST requests as per requirements
+  // Only apply to POST requests
   if (req.method !== "POST") {
     return next();
   }
 
   const idempotencyKey = req.get("Idempotency-Key");
 
-  if (idempotencyKey === undefined) {
-    // Idempotency-Key is optional but allows safe retries when present
-    return next();
-  }
-
-  if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length === 0) {
+  // 🔴 NOW REQUIRED
+  if (!idempotencyKey || typeof idempotencyKey !== "string" || idempotencyKey.trim().length === 0) {
     return res.status(400).json({
-      error: "Idempotency-Key header must be a non-empty string",
+      error: "Idempotency-Key header is required and must be a non-empty string",
     });
   }
 
-
-  // Ensure merchant context is available (assumes requireApiKeyAuth was run)
+  // Ensure merchant context exists
   const merchantId = req.merchant?.id;
   if (!merchantId) {
-    // If authentication hasn't run or failed to set merchant, we can't safely track idempotency per merchant
-    return res.status(401).json({ error: "Merchant authentication required" });
+    return res.status(401).json({
+      error: "Merchant authentication required",
+    });
   }
 
   const redisClient = getRedisClient();
   const redisKey = `idempotency:${merchantId}:${idempotencyKey}`;
-  
-  // Calculate hash of payload to ensure consistency
+
+  // Optional: still keep hash for safety (prevents misuse)
   const payloadHash = crypto
     .createHash("sha256")
     .update(JSON.stringify(req.body || {}))
     .digest("hex");
 
   try {
-    const cachedValue = await redisClient.get(redisKey);
+    const existing = await redisClient.get(redisKey);
 
-    if (cachedValue) {
-      const { hash, response } = JSON.parse(cachedValue);
+    if (existing) {
+      const { hash } = JSON.parse(existing);
 
-      // Verify if the payload matches the original request
+      // Same key but different payload → reject
       if (hash !== payloadHash) {
         return res.status(400).json({
-          error: "Idempotency-Key already used with a different request payload"
+          error: "Idempotency-Key already used with a different request payload",
         });
       }
 
-      // Return cached response with 201 status code as requested
-      return res.status(201).json(response);
+      // 🔴 MAIN CHANGE: reject duplicates
+      return res.status(409).json({
+        error: "Duplicate request: Idempotency-Key already used",
+      });
     }
 
-    // Capture the original json method to intercept the response
-    const originalJson = res.json.bind(res);
+    // Store key immediately (no response caching)
+    await redisClient.set(
+      redisKey,
+      JSON.stringify({ hash: payloadHash }),
+      { EX: IDEMPOTENCY_TTL_SECONDS }
+    );
 
-    res.json = function (data) {
-      // Only cache successful creation-like responses (2xx)
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        redisClient
-          .set(
-            redisKey,
-            JSON.stringify({
-              hash: payloadHash,
-              response: data,
-            }),
-            { EX: IDEMPOTENCY_TTL_SECONDS }
-          )
-          .catch((err) => {
-            console.error("Failed to cache idempotency response:", err.message);
-          });
-      }
-      return originalJson(data);
-    };
-
-    next();
+    return next();
   } catch (err) {
-    // If Redis is unavailable, log error and proceed without idempotency (fail-safe)
+    // Fail-safe: allow request if Redis fails
     console.error("Idempotency check failed (Redis error):", err.message);
-    next();
+    return next();
   }
 }
-

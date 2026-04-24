@@ -18,9 +18,9 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import { QRCodeSVG } from "qrcode.react";
 import { localeToLanguageTag } from "@/i18n/config";
-import Confetti from "react-confetti";
 import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
 import { Modal } from "@/components/ui/Modal";
+import PaymentSuccessAnimation from "@/components/PaymentSuccessAnimation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet";
@@ -155,7 +155,6 @@ export default function PaymentPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -170,16 +169,13 @@ export default function PaymentPage() {
   const [sourceAsset, setSourceAsset] = useState<string>("XLM");
   const [sortedSourceAssets, setSortedSourceAssets] = useState<string[]>([]);
   const [walletPublicKey, setWalletPublicKey] = useState<string | null>(null);
+  const [isOptimisticSettled, setIsOptimisticSettled] = useState(false);
   const previousWalletPublicKey = useRef<string | null>(null);
 
   const { activeProvider } = useWallet();
   const { isProcessing, status: txStatus, error: paymentError, processPayment, processPathPayment } = usePayment(activeProvider);
   const { assets: assetMetadata } = useAssetMetadata();
   const activeViewers = useCheckoutPresence(paymentId);
-
-  useEffect(() => {
-    if (payment && (payment.status === "confirmed" || payment.status === "completed")) setShowConfetti(true);
-  }, [payment]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -319,18 +315,53 @@ export default function PaymentPage() {
     if (!payment) return;
     setIsPayModalOpen(false); setActionError(null);
     try {
+      const onSigned = (txHash: string) => {
+        // TRIGGER OPTIMISTIC SUCCESS
+        setIsOptimisticSettled(true);
+        setPayment(p => p ? { ...p, tx_id: txHash } : null);
+      };
+
       let result: { hash: string };
       if (usePathPayment && pathQuote) {
-        result = await processPathPayment({ recipient: payment.recipient, destAmount: pathQuote.destination_amount, destAssetCode: pathQuote.destination_asset, destAssetIssuer: pathQuote.destination_asset_issuer, sendMax: pathQuote.send_max, sendAssetCode: pathQuote.source_asset, sendAssetIssuer: pathQuote.source_asset_issuer, path: pathQuote.path, memo: payment.memo, memoType: payment.memo_type });
+        result = await processPathPayment({
+          recipient: payment.recipient,
+          destAmount: pathQuote.destination_amount,
+          destAssetCode: pathQuote.destination_asset,
+          destAssetIssuer: pathQuote.destination_asset_issuer,
+          sendMax: pathQuote.send_max,
+          sendAssetCode: pathQuote.source_asset,
+          sendAssetIssuer: pathQuote.source_asset_issuer,
+          path: pathQuote.path,
+          memo: payment.memo,
+          memoType: payment.memo_type,
+          onSigned,
+        });
       } else {
-        result = await processPayment({ recipient: payment.recipient, amount: String(payment.amount), assetCode: payment.asset, assetIssuer: payment.asset_issuer, memo: payment.memo, memoType: payment.memo_type });
+        result = await processPayment({
+          recipient: payment.recipient,
+          amount: String(payment.amount),
+          assetCode: payment.asset,
+          assetIssuer: payment.asset_issuer,
+          memo: payment.memo,
+          memoType: payment.memo_type,
+          onSigned,
+        });
       }
       setPayment({ ...payment, status: "completed", tx_id: result.hash });
+      setIsOptimisticSettled(false); // No longer optimistic, it's real now
       toast.success(t("paymentSent"));
-      setTimeout(async () => { try { await fetch(`${API_URL}/api/verify-payment/${paymentId}`, { method: "POST" }); } catch { } }, 2000);
+      setTimeout(async () => {
+        try {
+          await fetch(`${API_URL}/api/verify-payment/${paymentId}`, {
+            method: "POST",
+          });
+        } catch {}
+      }, 2000);
     } catch {
+      setIsOptimisticSettled(false);
       const msg = paymentError ?? t("paymentFailed");
-      setActionError(msg); toast.error(msg);
+      setActionError(msg);
+      toast.error(msg);
     }
   };
 
@@ -364,7 +395,7 @@ export default function PaymentPage() {
     );
   }
 
-  const isSettled = payment.status === "confirmed" || payment.status === "completed";
+  const isSettled = payment.status === "confirmed" || payment.status === "completed" || isOptimisticSettled;
   const isFailed = payment.status === "failed";
   const paymentIntentUri = buildSep7Uri(payment);
   const branding = resolveBranding(payment.branding_config || {});
@@ -372,8 +403,6 @@ export default function PaymentPage() {
 
   return (
     <>
-      {showConfetti && <div className="pointer-events-none fixed inset-0 z-50"><Confetti recycle={false} numberOfPieces={350} /></div>}
-
       {isProcessing && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white/95 backdrop-blur-sm">
           <Spinner size="xl" />
@@ -547,17 +576,33 @@ export default function PaymentPage() {
 
               {isSettled && (
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center flex flex-col items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
-                      <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                    </div>
-                    <p className="text-sm font-bold text-emerald-800">{t("receivedTitle")}</p>
-                    <p className="text-xs text-emerald-600">{t("receivedDescription")}</p>
-                  </div>
-                  <button type="button" onClick={handleDownloadReceipt} disabled={isDownloadingReceipt}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8E8] bg-white text-sm font-bold text-[#0A0A0A] hover:bg-[#F5F5F5] disabled:opacity-50 transition-all">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    {isDownloadingReceipt ? t("downloadReceiptLoading") : t("downloadReceipt")}
+                  <PaymentSuccessAnimation
+                    amount={payment.amount}
+                    asset={payment.asset}
+                    optimistic={isOptimisticSettled}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDownloadReceipt}
+                    disabled={isDownloadingReceipt || isOptimisticSettled}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8E8] bg-white text-sm font-bold text-[#0A0A0A] hover:bg-[#F5F5F5] disabled:opacity-50 transition-all"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                    {isDownloadingReceipt
+                      ? t("downloadReceiptLoading")
+                      : t("downloadReceipt")}
                   </button>
                 </div>
               )}

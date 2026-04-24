@@ -39,7 +39,7 @@ export default function HeroSection() {
         </div>
       </div> */}
 
-      <h1 className="text-5xl leading-[1.05] font-bold text-[#0A0A0A] mb-6 tracking-tighter uppercase">
+      <h1 id="hero-heading" className="text-5xl leading-[1.05] font-bold text-[#0A0A0A] mb-6 tracking-tighter uppercase">
         Commerce <br />
         <span className="text-[#6B6B6B]">Re-Engineered</span>
       </h1>

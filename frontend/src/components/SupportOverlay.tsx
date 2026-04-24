@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SupportPanel } from "./SupportPanel";
 
 const SUPPORT_EMAIL = "support@stellarpayment.app";
 
@@ -24,14 +25,16 @@ export default function SupportOverlay() {
               Need help with payments?
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-300">
-              This is a placeholder support widget for future Intercom/Crisp integration.
-              Reach our team directly for now.
+              Need help? Send us a message or tip to get priority support.
             </p>
+            <div className="mt-4">
+              <SupportPanel />
+            </div>
             <a
               href={`mailto:${SUPPORT_EMAIL}`}
-              className="mt-4 inline-flex rounded-xl border border-mint/35 bg-mint/10 px-4 py-2 text-sm font-semibold text-mint transition-colors hover:bg-mint/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-mint/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              className="mt-6 inline-flex w-full justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-[10px] uppercase tracking-widest font-semibold text-slate-400 transition-colors hover:bg-white/10"
             >
-              Contact support
+              Contact via Email
             </a>
           </section>
         )}

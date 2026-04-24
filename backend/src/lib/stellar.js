@@ -541,29 +541,177 @@ export async function getStellarConfig() {
 }
 
 /**
- * Verifies that a transaction was correctly signed by its source account or appropriate signers.
- * This is used by the Ledger Monitor to ensure transactions from Horizon are authentic.
+ * Result object returned by verifyTransactionSignature.
+ * @typedef {Object} SignatureVerificationResult
+ * @property {boolean} valid          - Whether the transaction passes all checks.
+ * @property {string}  reason         - Human-readable explanation of the result.
+ * @property {boolean} isMultiSig     - Whether the source account uses multi-sig.
+ * @property {number}  signatureCount - Number of signatures present in the envelope.
+ * @property {boolean} thresholdMet   - Whether the signing weight meets the medium threshold.
+ */
+
+/**
+ * Performs full cryptographic signature verification for a Stellar transaction.
+ *
+ * Verification steps:
+ *  1. Fetch the transaction envelope from Horizon.
+ *  2. Deserialise the XDR envelope and confirm at least one signature is present.
+ *  3. Load the source account to obtain its current signer list and thresholds.
+ *  4. For each signature in the envelope, derive the signer's public key via
+ *     Ed25519 key-recovery and check it against the account's authorised signers.
+ *  5. Accumulate signing weight and verify it meets the account's medium threshold
+ *     (used for payment operations).
+ *
+ * Falls back gracefully: if the account cannot be loaded (e.g. Horizon is
+ * temporarily unavailable) the function returns `valid: false` rather than
+ * throwing, so the Ledger Monitor can skip the payment safely.
+ *
  * @param {string} txHash - The transaction hash to verify.
- * @returns {Promise<boolean>}
+ * @returns {Promise<SignatureVerificationResult>}
  */
 export async function verifyTransactionSignature(txHash) {
-  try {
-    const tx = await server.transactions().transaction(txHash).call();
-    const envelopeXdr = tx.envelope_xdr;
-    const passphrase =
-      NETWORK === "public"
-        ? StellarSdk.Networks.PUBLIC
-        : StellarSdk.Networks.TESTNET;
-
-    const transaction = new StellarSdk.Transaction(envelopeXdr, passphrase);
-
-    // We expect at least one valid signature.
-    // In a more complex setup, we would check against the source account's 
-    // current signers/thresholds, but for basic verification, checking
-    // that the envelope itself is well-formed and signed is a good first step.
-    return transaction.signatures.length > 0;
-  } catch (err) {
-    console.error(`Signature verification failed for tx ${txHash}:`, err.message);
-    return false;
+  if (!txHash || typeof txHash !== "string") {
+    return {
+      valid: false,
+      reason: "Invalid transaction hash provided",
+      isMultiSig: false,
+      signatureCount: 0,
+      thresholdMet: false,
+    };
   }
+
+  const passphrase =
+    NETWORK === "public"
+      ? StellarSdk.Networks.PUBLIC
+      : StellarSdk.Networks.TESTNET;
+
+  // ── Step 1: Fetch transaction envelope from Horizon ──────────────────────
+  let tx;
+  try {
+    tx = await server.transactions().transaction(txHash).call();
+  } catch (err) {
+    const wrapped = handleHorizonError(err, `transaction ${txHash}`);
+    console.error(`verifyTransactionSignature: failed to fetch tx ${txHash}: ${wrapped.message}`);
+    return {
+      valid: false,
+      reason: `Failed to fetch transaction from Horizon: ${wrapped.message}`,
+      isMultiSig: false,
+      signatureCount: 0,
+      thresholdMet: false,
+    };
+  }
+
+  // ── Step 2: Deserialise XDR envelope ─────────────────────────────────────
+  let transaction;
+  try {
+    transaction = new StellarSdk.Transaction(tx.envelope_xdr, passphrase);
+  } catch (err) {
+    console.error(`verifyTransactionSignature: failed to parse XDR for tx ${txHash}: ${err.message}`);
+    return {
+      valid: false,
+      reason: `Failed to parse transaction XDR: ${err.message}`,
+      isMultiSig: false,
+      signatureCount: 0,
+      thresholdMet: false,
+    };
+  }
+
+  const signatures = transaction.signatures;
+  if (!signatures || signatures.length === 0) {
+    return {
+      valid: false,
+      reason: "Transaction envelope contains no signatures",
+      isMultiSig: false,
+      signatureCount: 0,
+      thresholdMet: false,
+    };
+  }
+
+  // ── Step 3: Load source account signers & thresholds ─────────────────────
+  const sourceAccountId = transaction.source;
+  let accountData;
+  try {
+    accountData = await server.loadAccount(sourceAccountId);
+  } catch (err) {
+    // Non-fatal: if we cannot load the account we cannot verify weights.
+    // Return valid=false so the caller can decide whether to skip or retry.
+    console.warn(`verifyTransactionSignature: could not load account ${sourceAccountId}: ${err.message}`);
+    return {
+      valid: false,
+      reason: `Could not load source account for weight verification: ${err.message}`,
+      isMultiSig: false,
+      signatureCount: signatures.length,
+      thresholdMet: false,
+    };
+  }
+
+  const signers = accountData.signers ?? [];
+  const medThreshold = accountData.thresholds?.med_threshold ?? 0;
+  const isMultiSig = signers.length > 1 || medThreshold > 1;
+
+  // Build a lookup map: publicKey → weight for O(1) access
+  const signerWeightMap = new Map(
+    signers.map((s) => [s.key, s.weight])
+  );
+
+  // ── Step 4: Verify each signature cryptographically ──────────────────────
+  // The transaction hash is the payload that was signed.
+  const txHashBytes = transaction.hash();
+
+  let totalWeight = 0;
+  let validSignatureCount = 0;
+  const usedSigners = new Set(); // Prevent signature replay
+
+  for (const decoratedSig of signatures) {
+    // hint is the last 4 bytes of the public key — use it to narrow candidates
+    const hint = decoratedSig.hint();
+    const sigBytes = decoratedSig.signature();
+
+    for (const [publicKey, weight] of signerWeightMap) {
+      if (usedSigners.has(publicKey)) continue;
+
+      // Quick hint check before expensive crypto
+      const keyPair = StellarSdk.Keypair.fromPublicKey(publicKey);
+      const keyHint = keyPair.signatureHint();
+
+      if (!hint.equals(keyHint)) continue;
+
+      // Full Ed25519 signature verification
+      try {
+        const isValid = keyPair.verify(txHashBytes, sigBytes);
+        if (isValid) {
+          totalWeight += weight;
+          validSignatureCount += 1;
+          usedSigners.add(publicKey);
+          break; // move to next signature
+        }
+      } catch {
+        // Malformed signature bytes — skip
+      }
+    }
+  }
+
+  // ── Step 5: Check medium threshold ───────────────────────────────────────
+  // Payment operations require medium threshold authorisation.
+  // A threshold of 0 means any single valid signature suffices.
+  const effectiveThreshold = medThreshold > 0 ? medThreshold : 1;
+  const thresholdMet = totalWeight >= effectiveThreshold;
+
+  if (!thresholdMet) {
+    return {
+      valid: false,
+      reason: `Insufficient signing weight: accumulated ${totalWeight}, required ${effectiveThreshold} (medium threshold)`,
+      isMultiSig,
+      signatureCount: signatures.length,
+      thresholdMet: false,
+    };
+  }
+
+  return {
+    valid: true,
+    reason: `Signature verification passed: weight ${totalWeight} >= threshold ${effectiveThreshold}`,
+    isMultiSig,
+    signatureCount: signatures.length,
+    thresholdMet: true,
+  };
 }

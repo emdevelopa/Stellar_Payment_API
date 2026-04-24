@@ -75,7 +75,7 @@ export default function Navbar() {
                 key={link.href}
                 href={link.href}
                 aria-current={isActive(pathname, link.href) ? "page" : undefined}
-                className={`group relative rounded-full px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                className={`group relative rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest transition-all ${
                   isActive(pathname, link.href)
                     ? "text-pluto-900"
                     : "text-pluto-600 hover:text-pluto-900"

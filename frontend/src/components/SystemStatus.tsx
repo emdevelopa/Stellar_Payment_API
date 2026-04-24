@@ -1,35 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-type OperationalStatus =
-  | "loading"
-  | "operational"
-  | "degraded_performance"
-  | "partial_outage"
-  | "major_outage"
-  | "unknown";
-
-interface StatusPageSummary {
-  status: { indicator: string; description: string };
-  page: { name: string };
-}
-
-const STATUS_LABELS: Record<OperationalStatus, string> = {
-  loading: "Checking status…",
-  operational: "All Systems Operational",
-  degraded_performance: "Degraded Performance",
-  partial_outage: "Partial Outage",
-  major_outage: "Major Outage",
-  unknown: "Status Unknown",
-};
-
-const INDICATOR_TO_STATUS: Record<string, OperationalStatus> = {
-  none: "operational",
-  minor: "degraded_performance",
-  major: "partial_outage",
-  critical: "major_outage",
-};
+import { useEffect, useReducer } from "react";
+import type { OperationalStatus, StatusPageSummary } from "@/lib/system-status";
+import {
+  initialSystemStatusState,
+  resolveSystemStatusSnapshot,
+  systemStatusReducer,
+} from "@/lib/system-status";
 
 const DOT_COLORS: Record<OperationalStatus, string> = {
   loading: "bg-[#E8E8E8] animate-pulse",
@@ -53,25 +30,27 @@ const TEXT_COLORS: Record<OperationalStatus, string> = {
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
 
 export default function SystemStatus() {
-  const [status, setStatus] = useState<OperationalStatus>("loading");
-  const [label, setLabel] = useState<string>(STATUS_LABELS.loading);
-
+  const [state, dispatch] = useReducer(
+    systemStatusReducer,
+    initialSystemStatusState,
+  );
   const baseUrl = process.env.NEXT_PUBLIC_STATUS_PAGE_URL;
 
   useEffect(() => {
-    // No status page configured → silently skip.
     if (!baseUrl) {
-      setStatus("unknown");
-      setLabel(STATUS_LABELS.unknown);
+      dispatch({ type: "unconfigured" });
       return;
     }
 
     let mounted = true;
 
     async function poll() {
+      if (mounted) {
+        dispatch({ type: "request" });
+      }
+
       try {
         const res = await fetch(`${baseUrl}/api/v2/summary.json`, {
-          // Short timeout so a slow status page never hangs the UI.
           signal: AbortSignal.timeout(5_000),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -79,46 +58,61 @@ export default function SystemStatus() {
         const data: StatusPageSummary = await res.json();
         if (!mounted) return;
 
-        const indicator = data?.status?.indicator ?? "unknown";
-        const resolved: OperationalStatus =
-          INDICATOR_TO_STATUS[indicator] ?? "unknown";
-
-        setStatus(resolved);
-        setLabel(data?.status?.description ?? STATUS_LABELS[resolved]);
+        dispatch({
+          type: "success",
+          snapshot: resolveSystemStatusSnapshot(data),
+        });
       } catch {
         if (mounted) {
-          setStatus("unknown");
-          setLabel(STATUS_LABELS.unknown);
+          dispatch({ type: "failure" });
         }
       }
     }
 
-    poll();
-    const id = setInterval(poll, POLL_INTERVAL_MS);
+    void poll();
+    const id = setInterval(() => {
+      void poll();
+    }, POLL_INTERVAL_MS);
+
     return () => {
       mounted = false;
       clearInterval(id);
     };
   }, [baseUrl]);
 
-  // No URL configured → render nothing.
-  if (!baseUrl && status === "unknown") return null;
+  if (!baseUrl && state.current.status === "unknown") return null;
+
+  const { status, label } = state.current;
+  const ariaPrefix = state.isRefreshing
+    ? "Refreshing system status"
+    : state.isStale
+      ? "Last known system status"
+      : "System status";
+  const pulseColor =
+    status === "operational"
+      ? "bg-green-500"
+      : DOT_COLORS[status].split(" ")[0] ?? "bg-[#E8E8E8]";
 
   return (
     <a
       href={baseUrl ?? "#"}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`System status: ${label}`}
+      aria-label={`${ariaPrefix}: ${label}`}
       className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest transition-colors hover:text-[#0A0A0A]"
     >
       <div className="relative flex h-2 w-2 items-center justify-center">
         <span
-            className={`absolute inline-flex h-full w-full rounded-full opacity-20 ${status === 'operational' ? 'bg-green-500' : 'bg-[#E8E8E8]'}`}
+          className={`absolute inline-flex h-full w-full rounded-full opacity-20 ${pulseColor} ${state.isRefreshing ? "animate-ping" : ""}`}
         />
-        <span className={`relative h-1.5 w-1.5 rounded-full ${DOT_COLORS[status]}`} />
+        <span
+          className={`relative h-1.5 w-1.5 rounded-full ${DOT_COLORS[status]}`}
+        />
       </div>
-      <span className={TEXT_COLORS[status]}>{label}</span>
+      <span className={TEXT_COLORS[status]}>
+        {label}
+        {state.isRefreshing ? " (Refreshing)" : ""}
+      </span>
     </a>
   );
 }

@@ -7,12 +7,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const BASE_CLASSES =
-  "group relative flex items-center justify-center rounded-xl px-6 font-bold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-pluto-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none active:scale-95 active:transition-transform";
+  "group relative flex items-center justify-center rounded-xl px-4 sm:px-6 text-sm sm:text-base font-bold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-mint focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:pointer-events-none active:scale-[0.98] min-h-[44px] touch-manipulation";
 
 const VARIANT_CLASSES: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  primary: "h-12 bg-pluto-500 text-white hover:bg-pluto-600",
+  primary: "h-11 sm:h-12 bg-mint text-black hover:bg-glow",
   secondary:
-    "h-12 border border-pluto-200 bg-pluto-50 text-pluto-700 hover:border-pluto-500 hover:bg-pluto-500 hover:text-white",
+    "h-11 sm:h-12 border border-white/10 bg-transparent text-white hover:border-white/20 hover:text-white",
 };
 
 const ButtonBase = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -43,17 +43,14 @@ const ButtonBase = React.forwardRef<HTMLButtonElement, ButtonProps>(
           <span className="flex items-center gap-1.5 sm:gap-2">
             <Spinner
               size="sm"
-              className={
-                variant === "primary" ? "text-white" : "text-pluto-500"
-              }
+              className={variant === "primary" ? "text-black" : "text-mint"}
             />
-            <span className="hidden xs:inline">Loading...</span>
           </span>
         ) : (
           children
         )}
         {showPrimaryGlow && (
-          <div className="absolute inset-0 -z-10 bg-pluto-500/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
+          <div className="absolute inset-0 -z-10 bg-mint/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
         )}
       </button>
     );

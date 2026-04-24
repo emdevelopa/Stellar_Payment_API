@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { recordMerchantApiUsage } from "./api-usage.js";
+import { verifyApiGatewayRequestSignature } from "./api-gateway-signature.js";
 
 const SALT_ROUNDS = 12;
 
@@ -25,6 +26,7 @@ export async function verifyPassword(plaintext, hash) {
 export function createApiKeyAuth({
   supabaseClient = null,
   usageRecorder = recordMerchantApiUsage,
+  verifyGatewaySignature = verifyApiGatewayRequestSignature,
 } = {}) {
   return async function requireApiKeyAuth(req, res, next) {
     try {
@@ -45,9 +47,36 @@ export function createApiKeyAuth({
       const client = supabaseClient || (await import("./supabase.js")).supabase;
       const headerValue = req.get("x-api-key");
       const apiKey = typeof headerValue === "string" ? headerValue.trim() : "";
+      const signatureHeader = req.get("x-api-signature");
+      const timestampHeader = req.get("x-api-timestamp");
 
       if (!apiKey) {
         return res.status(401).json({ error: "Missing x-api-key header" });
+      }
+
+      // Backward-compatible API gateway hardening: verify request HMAC
+      // signature only when signature headers are supplied by the client.
+      const hasSignatureHeader =
+        typeof signatureHeader === "string" && signatureHeader.trim().startsWith("sha256=");
+      const hasTimestampHeader = typeof timestampHeader === "string" && timestampHeader.trim().length > 0;
+      const signatureProvided = hasSignatureHeader && hasTimestampHeader;
+      if (signatureProvided) {
+        const signatureResult = verifyGatewaySignature({
+          secret: apiKey,
+          method: req.method,
+          path: req.originalUrl,
+          timestampHeader,
+          signatureHeader,
+          body: req.body,
+        });
+
+        if (!signatureResult.valid) {
+          return res.status(401).json({
+            error: "Invalid API gateway signature",
+            code: "API_SIGNATURE_INVALID",
+            reason: signatureResult.reason,
+          });
+        }
       }
 
       // First try to find merchant by current API key

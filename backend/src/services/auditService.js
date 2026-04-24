@@ -1,4 +1,12 @@
 import { pool } from "../lib/db.js";
+import {
+  consumeAuditLogRateLimit,
+  createAuditLogRateLimitKey,
+  hashAuditPayload,
+  sanitizeAuditKey,
+  sanitizeAuditValue,
+  signAuditPayload,
+} from "../lib/audit-security.js";
 
 export const auditService = {
   async getAuditLogs(merchantId, page = 1, limit = 50) {
@@ -47,17 +55,42 @@ export const auditService = {
     userAgent,
   }) {
     try {
+      const rateLimitKey = createAuditLogRateLimitKey({
+        merchantId,
+        action,
+        ipAddress,
+      });
+      const rateLimitResult = consumeAuditLogRateLimit(rateLimitKey);
+      if (!rateLimitResult.allowed) {
+        return;
+      }
+
+      const payload = {
+        merchant_id: merchantId,
+        action: sanitizeAuditValue(action),
+        field_changed: sanitizeAuditKey(fieldChanged),
+        old_value: sanitizeAuditValue(oldValue),
+        new_value: sanitizeAuditValue(newValue),
+        ip_address: sanitizeAuditValue(ipAddress),
+        user_agent: sanitizeAuditValue(userAgent),
+      };
+
+      const payloadHash = hashAuditPayload(payload);
+      const signature = signAuditPayload(payload);
+
       await pool.query(
-        `INSERT INTO audit_logs (merchant_id, action, field_changed, old_value, new_value, ip_address, user_agent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO audit_logs (merchant_id, action, field_changed, old_value, new_value, ip_address, user_agent, payload_hash, signature)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
-          merchantId,
-          action,
-          fieldChanged,
-          oldValue,
-          newValue,
-          ipAddress,
-          userAgent,
+          payload.merchant_id,
+          payload.action,
+          payload.field_changed,
+          payload.old_value,
+          payload.new_value,
+          payload.ip_address,
+          payload.user_agent,
+          payloadHash,
+          signature,
         ]
       );
     } catch (err) {

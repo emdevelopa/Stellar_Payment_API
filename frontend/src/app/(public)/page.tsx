@@ -80,7 +80,7 @@ function HeroSection() {
       <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-transparent via-transparent to-white" />
 
       <div className="relative z-10 flex flex-col items-center gap-6">
-        <span className="inline-flex items-center gap-2 rounded-full border border-[#E8E8E8] bg-white/80 px-5 py-2 font-bold text-[10px] uppercase tracking-[0.2em] text-[#6B6B6B] shadow-sm">
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#E8E8E8] bg-white/80 px-5 py-2 font-bold text-xs uppercase tracking-[0.2em] text-[#6B6B6B] shadow-sm">
           <span className="h-1.5 w-1.5 rounded-full bg-[#0A0A0A]" />
           Surgical Precision Payments
         </span>
@@ -114,7 +114,7 @@ function HeroSection() {
           </Link>
         </div>
 
-        <div className="mt-20 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">
+        <div className="mt-20 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-xs font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">
           {["Non-custodial", "5-minute integration", "Sandbox included"].map((t) => (
             <span key={t} className="flex items-center gap-2">
               <span className="h-1 w-1 rounded-full bg-[#0A0A0A]" />
@@ -131,7 +131,7 @@ function FeaturesSection() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-32 lg:py-48">
       <div className="mb-20 text-center">
-        <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">Engineered for Performance</p>
+        <p className="mb-4 font-bold text-xs uppercase tracking-[0.4em] text-[#6B6B6B]">Engineered for Performance</p>
         <h2 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">
           Everything you need to scale
         </h2>
@@ -145,7 +145,7 @@ function FeaturesSection() {
           >
             <div className="flex items-center justify-between">
               <span className="text-3xl text-[#0A0A0A] transition-transform duration-300 group-hover:scale-110">{f.icon}</span>
-              <span className="rounded-full border border-[#E8E8E8] px-4 py-1.5 font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B]">
+              <span className="rounded-full border border-[#E8E8E8] px-4 py-1.5 font-bold text-xs uppercase tracking-widest text-[#6B6B6B]">
                 {f.tag}
               </span>
             </div>
@@ -172,7 +172,7 @@ function HowItWorksSection() {
     <div className="border-y border-[#E8E8E8] bg-[#F9F9F9]">
       <div className="mx-auto max-w-7xl px-6 py-32 lg:py-48">
         <div className="mb-20 text-center">
-          <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">Simple Workflow</p>
+          <p className="mb-4 font-bold text-xs uppercase tracking-[0.4em] text-[#6B6B6B]">Simple Workflow</p>
           <h2 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">Four steps to scale</h2>
         </div>
 
@@ -185,7 +185,7 @@ function HowItWorksSection() {
                   <div className="absolute left-full top-1/2 hidden h-px w-[calc(100%+3rem)] -translate-y-1/2 bg-[#E8E8E8] lg:block" />
                 )}
               </div>
-              <h3 className="mb-3 text-[10px] font-bold text-[#0A0A0A] uppercase tracking-[0.4em]">{step.title}</h3>
+              <h3 className="mb-3 text-xs font-bold text-[#0A0A0A] uppercase tracking-[0.4em]">{step.title}</h3>
               <p className="text-sm font-medium leading-relaxed text-[#6B6B6B]">{step.description}</p>
             </div>
           ))}
@@ -199,26 +199,26 @@ function IntegrationModesSection() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-24 lg:py-32">
       <div className="mb-12 text-center">
-        <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">Agentic Payments</p>
+        <p className="mb-4 font-bold text-xs uppercase tracking-[0.4em] text-[#6B6B6B]">Agentic Payments</p>
         <h2 className="mx-auto max-w-4xl text-4xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-6xl">
           Build with x402 mode
         </h2>
       </div>
 
       <div className="mx-auto max-w-3xl rounded-[2rem] border border-[var(--pluto-200)] bg-[var(--pluto-50)] p-8 shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[var(--pluto-600)]">x402</p>
+        <p className="text-xs font-bold uppercase tracking-[0.3em] text-[var(--pluto-600)]">x402</p>
         <h3 className="mt-3 text-3xl font-bold tracking-tight text-[var(--pluto-800)]">Pay-per-request API access</h3>
         <p className="mt-4 text-sm text-[var(--pluto-700)]">
           Start integrating with x402-protected create-payment calls and let your backend handle 402 challenge, on-chain payment, verification, and retry.
         </p>
-        <ul className="mt-6 flex flex-col gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-700)]">
+        <ul className="mt-6 flex flex-col gap-2 text-xs font-bold uppercase tracking-widest text-[var(--pluto-700)]">
           <li>Request with x402 pricing mode</li>
           <li>Pay challenge on Stellar</li>
           <li>Retry with payment token</li>
         </ul>
         <Link
           href="/docs/x402-agentic-payments"
-          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[var(--pluto-500)] px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-white transition-colors hover:bg-[var(--pluto-600)]"
+          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[var(--pluto-500)] px-5 py-3 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-[var(--pluto-600)]"
         >
           View x402 Guide →
         </Link>
@@ -280,7 +280,7 @@ function PricingSection() {
       />
       <div className="relative z-10 mx-auto max-w-7xl px-6 py-24 lg:py-32">
         <div className="mb-20 text-center">
-          <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[var(--pluto-600)]">Pricing</p>
+          <p className="mb-4 font-bold text-xs uppercase tracking-[0.4em] text-[var(--pluto-600)]">Pricing</p>
           <h2 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.1] tracking-tight text-[#0A0A0A] sm:text-7xl">
             Predictable pricing.<br />Infinite scale.
           </h2>
@@ -326,7 +326,7 @@ function PricingSection() {
 
                 <Link
                   href={plan.cta.href}
-                  className={`mt-auto inline-flex items-center justify-center rounded-2xl px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                  className={`mt-auto inline-flex items-center justify-center rounded-2xl px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-[0.98] ${
                     plan.cta.primary 
                       ? "bg-[var(--pluto-500)] text-white shadow-xl shadow-[var(--pluto-500)]/20 hover:bg-[var(--pluto-600)]" 
                       : "border border-[#E8E8E8] bg-white text-[#0A0A0A] hover:bg-[#F9F9F9]"
@@ -350,7 +350,7 @@ function CodeSnippetSection() {
     <div className="mx-auto max-w-7xl px-6 py-32 lg:py-48">
       <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
         <div>
-          <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">Developer First</p>
+          <p className="mb-4 font-bold text-xs uppercase tracking-[0.4em] text-[#6B6B6B]">Developer First</p>
           <h2 className="mb-8 text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">
             One endpoint.<br />Total control.
           </h2>
@@ -359,7 +359,7 @@ function CodeSnippetSection() {
           </p>
           <ul className="flex flex-col gap-4">
             {["Atomic transactions", "HMAC-SHA256 signed webhooks", "Customizable metadata", "Scalable architecture"].map((item) => (
-              <li key={item} className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+              <li key={item} className="flex items-center gap-3 text-xs font-bold uppercase tracking-widest text-[#6B6B6B]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#0A0A0A] shrink-0" />
                 {item}
               </li>
@@ -373,7 +373,7 @@ function CodeSnippetSection() {
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`relative px-8 py-4 font-bold text-[10px] uppercase tracking-widest transition-colors ${tab === t ? "bg-white text-[#0A0A0A]" : "text-[#6B6B6B] hover:text-[#0A0A0A]"}`}
+                className={`relative px-8 py-4 font-bold text-xs uppercase tracking-widest transition-colors ${tab === t ? "bg-white text-[#0A0A0A]" : "text-[#6B6B6B] hover:text-[#0A0A0A]"}`}
               >
                 {t}
                 {tab === t && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0A0A0A]" />}
@@ -401,7 +401,7 @@ function PayWithLinkDemo() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-32 lg:py-48">
       <div className="mb-20 text-center">
-        <p className="mb-4 font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">User Experience</p>
+        <p className="mb-4 font-bold text-xs uppercase tracking-[0.4em] text-[#6B6B6B]">User Experience</p>
         <h2 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.1] text-[#0A0A0A] sm:text-7xl">Precision Checkout</h2>
         <p className="mx-auto mt-6 max-w-lg text-base font-medium text-[#6B6B6B]">
           A sleek, branded checkout experience generated instantly through the PLUTO API.
@@ -416,12 +416,12 @@ function PayWithLinkDemo() {
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F9F9F9] border border-[#E8E8E8] text-lg">⬡</div>
             <div>
               <p className="text-sm font-bold text-[#0A0A0A]">Acme Store</p>
-              <p className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest">Order #8842</p>
+              <p className="text-xs font-bold text-[#6B6B6B] uppercase tracking-widest">Order #8842</p>
             </div>
           </div>
 
           <div className="mb-8 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">Amount Due</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">Amount Due</p>
             <p className="mt-1 text-5xl font-bold tracking-tight text-[#0A0A0A]">
               25.00 <span className="text-lg font-medium text-[#6B6B6B]">USDC</span>
             </p>
@@ -429,7 +429,7 @@ function PayWithLinkDemo() {
 
           <div className="mb-8 space-y-3 rounded-2xl border border-[#E8E8E8] bg-[#F9F9F9] p-5">
             {[["Network", "Stellar Mainnet"], ["Expires In", "29:42"]].map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest">
+              <div key={k} className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                 <span className="text-[#6B6B6B]">{k}</span>
                 <span className="text-[#0A0A0A]">{v}</span>
               </div>
@@ -439,7 +439,7 @@ function PayWithLinkDemo() {
           {!paid ? (
             <button
               onClick={() => setPaid(true)}
-              className="w-full rounded-2xl bg-[var(--pluto-500)] py-5 text-[10px] font-bold uppercase tracking-[0.3em] text-white shadow-xl shadow-[var(--pluto-500)]/10 transition-all hover:bg-[var(--pluto-600)] active:scale-[0.97]"
+              className="w-full rounded-2xl bg-[var(--pluto-500)] py-5 text-xs font-bold uppercase tracking-[0.3em] text-white shadow-xl shadow-[var(--pluto-500)]/10 transition-all hover:bg-[var(--pluto-600)] active:scale-[0.97]"
             >
               Complete Payment
             </button>
@@ -476,11 +476,11 @@ function CTASection() {
         <div className="mt-14 flex flex-col items-center gap-6 sm:flex-row">
           <Link
             href="/register"
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--pluto-500)] px-12 py-6 text-[10px] font-bold uppercase tracking-widest text-white shadow-2xl shadow-[var(--pluto-500)]/10 transition-all hover:bg-[var(--pluto-600)] active:scale-[0.97]"
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--pluto-500)] px-12 py-6 text-xs font-bold uppercase tracking-widest text-white shadow-2xl shadow-[var(--pluto-500)]/10 transition-all hover:bg-[var(--pluto-600)] active:scale-[0.97]"
           >
             Create Free Account →
           </Link>
-          <Link href="/login" className="font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B] transition-colors hover:text-[#0A0A0A]">
+          <Link href="/login" className="font-bold text-xs uppercase tracking-widest text-[#6B6B6B] transition-colors hover:text-[#0A0A0A]">
             Sign in →
           </Link>
         </div>
@@ -497,7 +497,7 @@ function Footer() {
           <span className="font-serif text-xl font-bold tracking-tight text-[#0A0A0A]">PLUTO</span>
           <SystemStatus />
         </div>
-        <div className="flex gap-10 font-bold text-[10px] uppercase tracking-widest text-[#6B6B6B]">
+        <div className="flex gap-10 font-bold text-xs uppercase tracking-widest text-[#6B6B6B]">
           {[["Login", "/login"], ["Register", "/register"], ["Dashboard", "/dashboard"], ["Docs", "/docs"]].map(([label, href]) => (
             <Link key={label} href={href} className="transition-colors hover:text-[#0A0A0A]">{label}</Link>
           ))}

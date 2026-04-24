@@ -49,6 +49,7 @@ describe("createApiKeyAuth", () => {
   let supabaseClient;
   let middleware;
   let usageRecorder;
+  let verifyGatewaySignature;
   let res;
   let next;
 
@@ -75,7 +76,12 @@ describe("createApiKeyAuth", () => {
 
     supabaseClient = { from };
     usageRecorder = vi.fn();
-    middleware = createApiKeyAuth({ supabaseClient, usageRecorder });
+    verifyGatewaySignature = vi.fn(() => ({ valid: true }));
+    middleware = createApiKeyAuth({
+      supabaseClient,
+      usageRecorder,
+      verifyGatewaySignature,
+    });
     res = createResponse();
     res.status.mockReturnValue(res);
     next = vi.fn();
@@ -90,6 +96,7 @@ describe("createApiKeyAuth", () => {
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: "Missing x-api-key header" });
     expect(next).not.toHaveBeenCalled();
+    expect(verifyGatewaySignature).not.toHaveBeenCalled();
   });
 
   it("rejects requests with an invalid API key", async () => {
@@ -131,6 +138,90 @@ describe("createApiKeyAuth", () => {
     });
     expect(next).toHaveBeenCalledWith();
     expect(res.status).not.toHaveBeenCalled();
+    expect(verifyGatewaySignature).not.toHaveBeenCalled();
+  });
+
+  it("enforces signature verification when signature headers are present", async () => {
+    const merchant = {
+      id: "merchant-123",
+      email: "merchant@example.com",
+    };
+    maybeSingle.mockResolvedValue({ data: merchant, error: null });
+
+    const req = {
+      method: "POST",
+      originalUrl: "/api/payments",
+      body: { amount: 1 },
+      get(name) {
+        const headers = {
+          "x-api-key": "signed-api-key",
+          "x-api-signature": "sha256=abcd",
+          "x-api-timestamp": "1713916800",
+        };
+        return headers[String(name).toLowerCase()];
+      },
+    };
+
+    await middleware(req, res, next);
+
+    expect(verifyGatewaySignature).toHaveBeenCalledWith({
+      secret: "signed-api-key",
+      method: "POST",
+      path: "/api/payments",
+      timestampHeader: "1713916800",
+      signatureHeader: "sha256=abcd",
+      body: { amount: 1 },
+    });
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it("rejects request when gateway signature verification fails", async () => {
+    verifyGatewaySignature.mockReturnValue({
+      valid: false,
+      reason: "Request signature verification failed",
+    });
+
+    const req = {
+      method: "GET",
+      originalUrl: "/api/metrics/summary",
+      body: {},
+      get(name) {
+        const headers = {
+          "x-api-key": "signed-api-key",
+          "x-api-signature": "sha256=bad",
+          "x-api-timestamp": "1713916800",
+        };
+        return headers[String(name).toLowerCase()];
+      },
+    };
+
+    await middleware(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Invalid API gateway signature",
+      code: "API_SIGNATURE_INVALID",
+      reason: "Request signature verification failed",
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("does not enforce signature verification when signature headers are absent", async () => {
+    const merchant = {
+      id: "merchant-123",
+      email: "merchant@example.com",
+      business_name: "Merchant Co",
+      notification_email: "ops@example.com",
+    };
+    maybeSingle.mockResolvedValue({ data: merchant, error: null });
+
+    const req = createRequest({ "x-api-key": "valid-key" });
+
+    await middleware(req, res, next);
+
+    expect(verifyGatewaySignature).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it("continues auth flow when usage tracking fails", async () => {

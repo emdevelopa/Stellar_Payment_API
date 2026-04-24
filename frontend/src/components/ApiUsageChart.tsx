@@ -170,14 +170,23 @@ export default function ApiUsageChart() {
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "rgba(0, 0, 0, 0.9)",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                borderRadius: "8px",
-                color: "#fff",
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
+                border: "1px solid var(--pluto-100)",
+                borderRadius: "16px",
+                padding: "12px 16px",
+                boxShadow: "0 20px 50px rgba(0, 0, 0, 0.12)",
+                backdropFilter: "blur(8px)",
+              }}
+              itemStyle={{
+                color: "var(--pluto-600)",
+                fontSize: "12px",
+                fontWeight: "600",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
               }}
               formatter={(value: number) => [value.toLocaleString(locale), "Requests"]}
               labelFormatter={formatTooltipLabel}
-              labelStyle={{ color: "#94a3b8" }}
+              labelStyle={{ color: "var(--text-secondary)", fontSize: "10px", fontWeight: "600", marginBottom: "4px" }}
             />
               <Bar dataKey="requests" fill="#5ef2c0" radius={[4, 4, 0, 0]} maxBarSize={isCompact ? 22 : 32} />
             </BarChart>

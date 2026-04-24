@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, useRef, useReducer, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import confetti from "canvas-confetti";
@@ -15,6 +15,11 @@ import {
   useMerchantHydrated,
   useMerchantTrustedAddresses,
 } from "@/lib/merchant-store";
+import {
+  createPaymentFlowReducer,
+  initialCreatePaymentFlowState,
+  type CreatedPayment,
+} from "@/lib/create-payment-flow";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -34,12 +39,6 @@ const DEFAULT_BRANDING = {
 function normalizeHexInput(value: string) {
   const trimmed = value.trim();
   return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
-}
-
-interface CreatedPayment {
-  payment_id: string;
-  payment_link: string;
-  status: string;
 }
 
 // ─── Animation variants ───────────────────────────────────────────────────────
@@ -341,34 +340,36 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
 export default function CreatePaymentForm() {
   const t = useTranslations("createPaymentForm");
   const [view, setView] = useState<"form" | "code">("form");
-  const [amount, setAmount] = useLocalStorage("payment_amount", "");
-  const [asset, setAsset] = useLocalStorage<"XLM" | "USDC">(
+  const [amount, setAmount, removeAmount] = useLocalStorage("payment_amount", "");
+  const [asset, setAsset, removeAsset] = useLocalStorage<"XLM" | "USDC">(
     "payment_asset",
     "XLM",
   );
-  const [recipient, setRecipient] = useLocalStorage("payment_recipient", "");
-  const [description, setDescription] = useLocalStorage(
+  const [recipient, setRecipient, removeRecipient] = useLocalStorage("payment_recipient", "");
+  const [description, setDescription, removeDescription] = useLocalStorage(
     "payment_description",
     "",
   );
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [recipientError, setRecipientError] = useState<string | null>(null);
   const [webhookUrlError, setWebhookUrlError] = useState<string | null>(null);
-  const [created, setCreated] = useState<CreatedPayment | null>(null);
+  const [paymentFlow, dispatchPaymentFlow] = useReducer(
+    createPaymentFlowReducer,
+    initialCreatePaymentFlowState,
+  );
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const trustedAddresses = useMerchantTrustedAddresses();
-  const [useSessionBranding, setUseSessionBranding] = useLocalStorage(
+  const [useSessionBranding, setUseSessionBranding, removeUseSessionBranding] = useLocalStorage(
     "payment_use_branding",
     false,
   );
-  const [branding, setBranding] = useLocalStorage(
+  const [branding, setBranding, removeBranding] = useLocalStorage(
     "payment_branding",
     DEFAULT_BRANDING,
   );
-  const [selectedTrustedAddress, setSelectedTrustedAddress] = useLocalStorage(
+  const [selectedTrustedAddress, setSelectedTrustedAddress, removeSelectedTrustedAddress] = useLocalStorage(
     "payment_trusted_address",
     "",
   );
@@ -421,6 +422,8 @@ export default function CreatePaymentForm() {
     !validateWebhookUrl(description) &&
     amount.trim().length > 0 &&
     recipient.trim().length > 0;
+  const isSubmitting = paymentFlow.stage === "submitting";
+  const isSuccessView = paymentFlow.stage === "success" && !!paymentFlow.created;
 
   // ── Rate-limit countdown ──────────────────────────────────
   const [retryAfter, setRetryAfter] = useState(0);
@@ -465,7 +468,6 @@ export default function CreatePaymentForm() {
 
     const numAmount = parseFloat(amount);
 
-    setLoading(true);
     try {
       const body: Record<string, unknown> = {
         amount: numAmount,
@@ -478,12 +480,13 @@ export default function CreatePaymentForm() {
         for (const [key, color] of Object.entries(branding)) {
           if (!HEX_COLOR_REGEX.test(color as string)) {
             setError(t("invalidHexColor", { field: key }));
-            setLoading(false);
             return;
           }
         }
         body.branding_overrides = branding;
       }
+
+      dispatchPaymentFlow({ type: "submit" });
 
       const res = await fetch(`${API_URL}/api/create-payment`, {
         method: "POST",
@@ -497,33 +500,25 @@ export default function CreatePaymentForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? t("failedCreate"));
 
-      setCreated(data);
+      dispatchPaymentFlow({ type: "success", created: data });
       toast.success(t("createdToast"));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t("failedCreate");
+      dispatchPaymentFlow({ type: "failure" });
       setError(message);
       toast.error(message);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleReset = () => {
-    setCreated(null);
-    setAmount("");
-    setRecipient("");
-    setDescription("");
-    setAsset("XLM");
-    setUseSessionBranding(false);
-    setBranding(DEFAULT_BRANDING);
-    setSelectedTrustedAddress("");
-    localStorage.removeItem("payment_amount");
-    localStorage.removeItem("payment_asset");
-    localStorage.removeItem("payment_recipient");
-    localStorage.removeItem("payment_description");
-    localStorage.removeItem("payment_use_branding");
-    localStorage.removeItem("payment_branding");
-    localStorage.removeItem("payment_trusted_address");
+    dispatchPaymentFlow({ type: "reset" });
+    removeAmount();
+    removeRecipient();
+    removeDescription();
+    removeAsset();
+    removeUseSessionBranding();
+    removeBranding();
+    removeSelectedTrustedAddress();
     setError(null);
     setAmountError(null);
     setRecipientError(null);
@@ -572,10 +567,10 @@ export default function CreatePaymentForm() {
      * the form finishes exiting before the success card enters.
      */
     <AnimatePresence mode="wait">
-      {created ? (
+      {isSuccessView && paymentFlow.created ? (
         <SuccessCard
           key="success"
-          created={created}
+          created={paymentFlow.created}
           onReset={handleReset}
           t={t}
         />
@@ -932,10 +927,10 @@ export default function CreatePaymentForm() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading || !isFormValid}
+            disabled={isSubmitting || !isFormValid}
             className="group relative flex h-12 items-center justify-center rounded-xl bg-mint px-6 font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? (
+            {isSubmitting ? (
               <span className="flex items-center gap-2">
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
                   <circle

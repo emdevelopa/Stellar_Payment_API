@@ -24,7 +24,7 @@ export default function MerchantProfileCard() {
     return (
       <Link
         href="/login"
-        className="inline-flex h-10 items-center gap-2 rounded-full border border-[#E8E8E8] bg-white px-4 text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A] transition-colors hover:bg-[#F5F5F5]"
+        className="inline-flex h-10 items-center gap-2 rounded-full border border-[#E8E8E8] bg-white px-4 text-xs font-bold uppercase tracking-widest text-[#0A0A0A] transition-colors hover:bg-[#F5F5F5]"
       >
         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9 9 0 1118.879 17.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -52,6 +52,8 @@ export default function MerchantProfileCard() {
         onClick={() => setShowDropdown((v) => !v)}
         className="group flex h-10 items-center gap-2.5 rounded-full border border-[#E8E8E8] bg-white px-2.5 pr-3.5 transition-all hover:border-[#DADADA] hover:bg-[#F8F8F8]"
         aria-label="Open profile menu"
+        aria-expanded={showDropdown}
+        aria-haspopup="true"
       >
         <Avatar
           size={30}
@@ -62,7 +64,7 @@ export default function MerchantProfileCard() {
           <p className="truncate text-xs font-bold text-[#0A0A0A]">
             {displayName}
           </p>
-          <p className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-[#6B6B6B]">{email}</p>
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-[#6B6B6B]">{email}</p>
         </div>
         <svg
           className={`h-3.5 w-3.5 text-[#8A8A8A] transition-transform duration-300 ${
@@ -71,6 +73,7 @@ export default function MerchantProfileCard() {
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-hidden="true"
         >
           <path
             strokeLinecap="round"
@@ -89,7 +92,11 @@ export default function MerchantProfileCard() {
             onClick={() => setShowDropdown(false)}
           />
           
-          <div className="absolute right-0 z-50 mt-3 w-72 origin-top-right rounded-2xl border border-[#E8E8E8] bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.12)]">
+          <div 
+            className="absolute right-0 z-50 mt-3 w-72 origin-top-right rounded-2xl border border-[#E8E8E8] bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
+            role="menu"
+            aria-orientation="vertical"
+          >
             {/* Profile Header */}
             <div className="mb-5 flex items-center gap-3.5 border-b border-[#F0F0F0] pb-5">
               <Avatar
@@ -110,13 +117,15 @@ export default function MerchantProfileCard() {
               <Link
                 href="/dashboard"
                 onClick={() => setShowDropdown(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-[#0A0A0A] bg-[#F5F5F5] transition-all hover:bg-[#E8E8E8]"
+                role="menuitem"
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest text-[#0A0A0A] bg-[#F5F5F5] transition-all hover:bg-[#E8E8E8]"
               >
                 <svg
                   className="h-4 w-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -131,14 +140,15 @@ export default function MerchantProfileCard() {
               <Link
                 href="/settings"
                 onClick={() => setShowDropdown(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-[#6B6B6B] transition-all hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
+                role="menuitem"
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest text-[#6B6B6B] transition-all hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
               >
-                {/* icon svg same */}
                 <svg
                   className="h-4 w-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -159,13 +169,15 @@ export default function MerchantProfileCard() {
               <Link
                 href="/dashboard/create"
                 onClick={() => setShowDropdown(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-[#6B6B6B] transition-all hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
+                role="menuitem"
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-widest text-[#6B6B6B] transition-all hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
               >
                 <svg
                   className="h-4 w-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"
@@ -179,13 +191,15 @@ export default function MerchantProfileCard() {
 
               <button
                 onClick={handleLogout}
-                className="mt-2 flex items-center gap-3 rounded-xl bg-red-50 px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-red-600 transition-all hover:bg-red-100"
+                role="menuitem"
+                className="mt-2 flex items-center gap-3 rounded-xl bg-red-50 px-3 py-2.5 text-xs font-bold uppercase tracking-widest text-red-600 transition-all hover:bg-red-100"
               >
                 <svg
                   className="h-4 w-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
                 >
                   <path
                     strokeLinecap="round"

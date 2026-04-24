@@ -44,6 +44,8 @@ describe("logLoginAttempt", () => {
       "success",
       "192.168.1.1",
       "Mozilla/5.0",
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+      null,
     ]);
   });
 
@@ -61,6 +63,7 @@ describe("logLoginAttempt", () => {
     const [, params] = mockQuery.mock.calls[0];
     expect(params[1]).toBe("login");
     expect(params[2]).toBe("failure");
+    expect(params[5]).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("inserts a row with null merchantId", async () => {
@@ -77,6 +80,7 @@ describe("logLoginAttempt", () => {
     const [, params] = mockQuery.mock.calls[0];
     expect(params[0]).toBeNull();
     expect(params[2]).toBe("failure");
+    expect(params[5]).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("stores null ip_address and user_agent when not provided", async () => {
@@ -92,6 +96,26 @@ describe("logLoginAttempt", () => {
     const [, params] = mockQuery.mock.calls[0];
     expect(params[3]).toBeNull();
     expect(params[4]).toBeNull();
+    expect(params[6]).toBeNull();
+  });
+
+  it("applies a cryptographic signature when audit signing secret is configured", async () => {
+    const original = process.env.AUDIT_LOG_SIGNING_SECRET;
+    process.env.AUDIT_LOG_SIGNING_SECRET = "test-audit-secret";
+
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await logLoginAttempt({
+      merchantId: "merchant-uuid-005",
+      ipAddress: "127.0.0.1",
+      userAgent: "vitest",
+      status: "success",
+    });
+
+    const [, params] = mockQuery.mock.calls[0];
+    expect(params[6]).toMatch(/^[a-f0-9]{64}$/);
+
+    process.env.AUDIT_LOG_SIGNING_SECRET = original;
   });
 
   it("does not throw when the DB query fails", async () => {

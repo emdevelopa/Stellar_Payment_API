@@ -2,17 +2,18 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import express from "express";
-import rateLimit from "express-rate-limit";
 import { paymentService } from "../services/paymentService.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import {
   paymentSessionZodSchema,
+  paymentZodSchema,
   refundConfirmSchema,
   pathPaymentQuoteQuerySchema,
   paymentsListQuerySchema
 } from "../lib/request-schemas.js";
 import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
+import { createVerifyPaymentRateLimit } from "../lib/rate-limit.js";
 import { recaptchaMiddleware } from "../lib/recaptcha.js";
 import { sendWebhook, isEventSubscribed } from "../lib/webhooks.js";
 import { sendReceiptEmail } from "../lib/email.js";
@@ -46,13 +47,7 @@ import {
 
 const createPaymentRateLimit = createCreatePaymentRateLimit();
 
-const defaultVerifyPaymentRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute window
-  max: 30,             // 30 requests per minute per IP (covers 10s polling)
-  message: { error: "Too many verification requests, please try again later." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const defaultVerifyPaymentRateLimit = createVerifyPaymentRateLimit();
 
 
 
@@ -280,8 +275,8 @@ function createPaymentsRouter({
         asset_issuer: body.asset_issuer || null,
         recipient: body.recipient,
         description: body.description || null,
-        memo: body.memo || null,
-        memo_type: body.memo_type || null,
+        memo: body.message || body.memo || null,
+        memo_type: body.message ? "text" : (body.memo_type || null),
         webhook_url: body.webhook_url || null,
         client_id: body.client_id || null,
         status: "pending",
@@ -324,6 +319,7 @@ function createPaymentsRouter({
 
   router.post("/create-payment", createPaymentRateLimit, recaptchaMiddleware(), validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
   router.post("/sessions", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
+  router.post("/support-transactions", createPaymentRateLimit, validateRequest({ body: paymentZodSchema }), sanitizeMetadataMiddleware, createSession);
 
   /**
    * @swagger

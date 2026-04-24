@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import Skeleton from "react-loading-skeleton";
@@ -15,6 +15,14 @@ import {
   useMerchantApiKey,
   useMerchantId,
 } from "@/lib/merchant-store";
+import {
+  buildPaymentHistorySearchParams,
+  DEFAULT_PAYMENT_HISTORY_FILTERS,
+  filtersFromSearchParams,
+  hasActivePaymentHistoryFilters,
+  type PaymentHistoryFilterKey,
+  paymentHistoryFiltersReducer,
+} from "@/lib/payment-history-filters";
 import { usePaymentSocket } from "@/lib/usePaymentSocket";
 
 interface Payment {
@@ -31,14 +39,6 @@ interface PaginatedResponse {
   total_count: number;
 }
 
-interface FilterState {
-  search: string;
-  status: string;
-  asset: string;
-  dateFrom: string;
-  dateTo: string;
-}
-
 const LIMIT = 50;
 const STATUS_OPTIONS = [
   "all",
@@ -48,38 +48,9 @@ const STATUS_OPTIONS = [
   "refunded",
 ] as const;
 const ASSET_OPTIONS = ["all", "XLM", "USDC"] as const;
-const DEFAULT_FILTERS: FilterState = {
-  search: "",
-  status: "all",
-  asset: "all",
-  dateFrom: "",
-  dateTo: "",
-};
 
 function toStatusLabel(t: ReturnType<typeof useTranslations>, status: string) {
   return t.has(`statuses.${status}`) ? t(`statuses.${status}`) : status;
-}
-
-function filtersFromSearchParams(searchParams: URLSearchParams): FilterState {
-  return {
-    search: searchParams.get("search") ?? "",
-    status: searchParams.get("status") ?? "all",
-    asset: searchParams.get("asset") ?? "all",
-    dateFrom: searchParams.get("date_from") ?? "",
-    dateTo: searchParams.get("date_to") ?? "",
-  };
-}
-
-function buildSearchParams(filters: FilterState): URLSearchParams {
-  const params = new URLSearchParams();
-
-  if (filters.search) params.set("search", filters.search);
-  if (filters.status !== "all") params.set("status", filters.status);
-  if (filters.asset !== "all") params.set("asset", filters.asset);
-  if (filters.dateFrom) params.set("date_from", filters.dateFrom);
-  if (filters.dateTo) params.set("date_to", filters.dateTo);
-
-  return params;
 }
 
 export default function PaymentHistoryPage() {
@@ -93,16 +64,15 @@ export default function PaymentHistoryPage() {
 
   useHydrateMerchantStore();
 
-  const filters = useMemo(
+  const activeFilters = useMemo(
     () => filtersFromSearchParams(searchParams),
     [searchParams],
   );
-  const hasActiveFilters =
-    filters.search ||
-    filters.status !== "all" ||
-    filters.asset !== "all" ||
-    filters.dateFrom ||
-    filters.dateTo;
+  const [draftFilters, dispatchDraftFilters] = useReducer(
+    paymentHistoryFiltersReducer,
+    activeFilters,
+  );
+  const hasActiveFilters = hasActivePaymentHistoryFilters(activeFilters);
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,6 +84,10 @@ export default function PaymentHistoryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [flashedIds, setFlashedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    dispatchDraftFilters({ type: "sync", filters: activeFilters });
+  }, [activeFilters]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,8 +109,8 @@ export default function PaymentHistoryPage() {
   }, [hoveredPayment, t]);
 
   const updateFilters = useCallback(
-    (nextFilters: FilterState) => {
-      const params = buildSearchParams(nextFilters);
+    (nextFilters: typeof activeFilters) => {
+      const params = buildPaymentHistorySearchParams(nextFilters);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, {
         scroll: false,
@@ -145,25 +119,47 @@ export default function PaymentHistoryPage() {
     [pathname, router],
   );
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (draftFilters.search !== activeFilters.search) {
+        updateFilters({ ...draftFilters });
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [activeFilters.search, draftFilters, updateFilters]);
+
   const handleFilterChange = useCallback(
-    (key: keyof FilterState, value: string) => {
-      updateFilters({ ...filters, [key]: value });
+    (key: PaymentHistoryFilterKey, value: string) => {
+      const nextFilters = paymentHistoryFiltersReducer(draftFilters, {
+        type: "set",
+        key,
+        value,
+      });
+      dispatchDraftFilters({ type: "set", key, value });
+
+      if (key !== "search") {
+        updateFilters(nextFilters);
+      }
     },
-    [filters, updateFilters],
+    [draftFilters, updateFilters],
   );
 
   const clearFilter = useCallback(
-    (key: keyof FilterState) => {
-      updateFilters({
-        ...filters,
-        [key]: key === "status" || key === "asset" ? "all" : "",
+    (key: PaymentHistoryFilterKey) => {
+      const nextFilters = paymentHistoryFiltersReducer(draftFilters, {
+        type: "clear",
+        key,
       });
+      dispatchDraftFilters({ type: "clear", key });
+      updateFilters(nextFilters);
     },
-    [filters, updateFilters],
+    [draftFilters, updateFilters],
   );
 
   const clearAllFilters = useCallback(() => {
-    updateFilters(DEFAULT_FILTERS);
+    dispatchDraftFilters({ type: "reset" });
+    updateFilters(DEFAULT_PAYMENT_HISTORY_FILTERS);
   }, [updateFilters]);
 
   const handleConfirmed = useCallback(
@@ -215,7 +211,7 @@ export default function PaymentHistoryPage() {
 
         const apiUrl =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-        const params = buildSearchParams(filters);
+        const params = buildPaymentHistorySearchParams(activeFilters);
         params.set("page", page.toString());
         params.set("limit", LIMIT.toString());
 
@@ -249,7 +245,7 @@ export default function PaymentHistoryPage() {
     fetchPayments();
 
     return () => controller.abort();
-  }, [apiKey, filters, t]);
+  }, [activeFilters, apiKey, t]);
 
   const handlePaymentClick = (paymentId: string) => {
     setSelectedPayment(paymentId);
@@ -604,7 +600,7 @@ export default function PaymentHistoryPage() {
               <input
                 id="search"
                 type="text"
-                value={filters.search}
+                value={draftFilters.search}
                 onChange={(event) =>
                   handleFilterChange("search", event.target.value)
                 }
@@ -637,7 +633,7 @@ export default function PaymentHistoryPage() {
               </label>
               <select
                 id="status"
-                value={filters.status}
+                value={draftFilters.status}
                 onChange={(event) =>
                   handleFilterChange("status", event.target.value)
                 }
@@ -662,7 +658,7 @@ export default function PaymentHistoryPage() {
               </label>
               <select
                 id="asset"
-                value={filters.asset}
+                value={draftFilters.asset}
                 onChange={(event) =>
                   handleFilterChange("asset", event.target.value)
                 }
@@ -686,7 +682,7 @@ export default function PaymentHistoryPage() {
               <input
                 id="dateFrom"
                 type="date"
-                value={filters.dateFrom}
+                value={draftFilters.dateFrom}
                 onChange={(event) =>
                   handleFilterChange("dateFrom", event.target.value)
                 }
@@ -704,7 +700,7 @@ export default function PaymentHistoryPage() {
               <input
                 id="dateTo"
                 type="date"
-                value={filters.dateTo}
+                value={draftFilters.dateTo}
                 onChange={(event) =>
                   handleFilterChange("dateTo", event.target.value)
                 }
@@ -717,9 +713,9 @@ export default function PaymentHistoryPage() {
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <span className="text-xs text-[#6B6B6B]">Active filters:</span>
 
-              {filters.search && (
+              {activeFilters.search && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Search: &quot;{filters.search}&quot;
+                  Search: &quot;{activeFilters.search}&quot;
                   <button
                     onClick={() => clearFilter("search")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
@@ -741,9 +737,9 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.status !== "all" && (
+              {activeFilters.status !== "all" && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Status: {filters.status}
+                  Status: {activeFilters.status}
                   <button
                     onClick={() => clearFilter("status")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
@@ -765,9 +761,9 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.asset !== "all" && (
+              {activeFilters.asset !== "all" && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Asset: {filters.asset}
+                  Asset: {activeFilters.asset}
                   <button
                     onClick={() => clearFilter("asset")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
@@ -789,9 +785,9 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.dateFrom && (
+              {activeFilters.dateFrom && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  From: {filters.dateFrom}
+                  From: {activeFilters.dateFrom}
                   <button
                     onClick={() => clearFilter("dateFrom")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
@@ -813,9 +809,9 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.dateTo && (
+              {activeFilters.dateTo && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  To: {filters.dateTo}
+                  To: {activeFilters.dateTo}
                   <button
                     onClick={() => clearFilter("dateTo")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"

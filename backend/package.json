@@ -38,6 +38,7 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.3.1",
     "framer-motion": "^12.38.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "knex": "^3.2.6",
     "morgan": "^1.10.0",

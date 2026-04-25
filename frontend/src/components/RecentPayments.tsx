@@ -465,10 +465,16 @@ export default function RecentPayments({
   return (
     <div className="flex flex-col gap-4">
       {/* Filters */}
-      <div className="rounded-2xl border border-[#E8E8E8] bg-white p-3 sm:p-5 flex flex-col gap-3 sm:gap-4">
+      <fieldset className="rounded-2xl border border-[#E8E8E8] bg-white p-3 sm:p-5 flex flex-col gap-3 sm:gap-4">
+        <legend className="sr-only">{t("filterLegend") || "Transaction filters"}</legend>
         <div className="relative">
+          <label htmlFor="payment-search" className="sr-only">
+            {t("searchLabel") || "Search payments"}
+          </label>
           <input
+            id="payment-search"
             type="text"
+            aria-label="Search by ID, description or recipient"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by ID, description or recipient…"
@@ -490,44 +496,76 @@ export default function RecentPayments({
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <select
-            value={filters.status}
-            onChange={(e) => handleFilterChange("status", e.target.value)}
-            className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all"
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s === "all" ? t("allStatuses") : t(`statuses.${s}`)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.asset}
-            onChange={(e) => handleFilterChange("asset", e.target.value)}
-            className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all"
-          >
-            {ASSET_OPTIONS.map((a) => (
-              <option key={a} value={a}>
-                {a === "all" ? t("allAssets") : a}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
-            className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all [color-scheme:light] touch-manipulation"
-          />
-          <input
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => handleFilterChange("dateTo", e.target.value)}
-            className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all [color-scheme:light] touch-manipulation"
-          />
+          <div>
+            <label htmlFor="status-filter" className="sr-only">
+              {t("statusFilterLabel") || "Filter by status"}
+            </label>
+            <select
+              id="status-filter"
+              value={filters.status}
+              onChange={(e) => handleFilterChange("status", e.target.value)}
+              aria-label={t("statusFilterAria") || "Filter payments by status"}
+              className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all"
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s === "all" ? t("allStatuses") : t(`statuses.${s}`)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="asset-filter" className="sr-only">
+              {t("assetFilterLabel") || "Filter by asset"}
+            </label>
+            <select
+              id="asset-filter"
+              value={filters.asset}
+              onChange={(e) => handleFilterChange("asset", e.target.value)}
+              aria-label={t("assetFilterAria") || "Filter payments by asset"}
+              className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all"
+            >
+              {ASSET_OPTIONS.map((a) => (
+                <option key={a} value={a}>
+                  {a === "all" ? t("allAssets") : a}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="date-from-filter" className="sr-only">
+              {t("dateFromLabel") || "Filter from date"}
+            </label>
+            <input
+              id="date-from-filter"
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
+              aria-label={t("dateFromAria") || "Filter payments from date"}
+              className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all [color-scheme:light] touch-manipulation"
+            />
+          </div>
+          <div>
+            <label htmlFor="date-to-filter" className="sr-only">
+              {t("dateToLabel") || "Filter to date"}
+            </label>
+            <input
+              id="date-to-filter"
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => handleFilterChange("dateTo", e.target.value)}
+              aria-label={t("dateToAria") || "Filter payments to date"}
+              className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all [color-scheme:light] touch-manipulation"
+            />
+          </div>
         </div>
 
         {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div
+            role="region"
+            aria-live="polite"
+            className="flex flex-wrap items-center gap-2"
+          >
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
               {t("activeFilters")}
             </span>
@@ -568,8 +606,8 @@ export default function RecentPayments({
               {t("clearAll")}
             </button>
           </div>
-        )}
-      </div>
+        </fieldset>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

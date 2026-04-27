@@ -25,7 +25,6 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
     disconnect: vi.fn(),
 }));
 
-// Mock Recharts to avoid SVG rendering issues in JSDOM
 vi.mock("recharts", () => ({
     ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
     LineChart: ({ children }: any) => <div>{children}</div>,

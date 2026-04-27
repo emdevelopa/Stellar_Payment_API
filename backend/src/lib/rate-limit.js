@@ -1,7 +1,10 @@
-import rateLimit from "express-rate-limit";
+import { createHash } from "node:crypto";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 
 export const RATE_LIMIT_REDIS_PREFIX = "rl:";
+export const VERIFY_PAYMENT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+export const VERIFY_PAYMENT_RATE_LIMIT_MAX = 30;
 
 function setStandardRateLimitHeaders(res, rateLimitState) {
   if (!res || !rateLimitState) {
@@ -34,23 +37,46 @@ export function createRedisRateLimitStore({
   });
 }
 
+export function getVerifyPaymentRateLimitKey(req) {
+  const paymentId =
+    typeof req?.params?.id === "string" && req.params.id.length > 0
+      ? req.params.id
+      : "unknown-payment";
+  const merchantId =
+    typeof req?.merchant?.id === "string" && req.merchant.id.length > 0
+      ? `merchant:${req.merchant.id}`
+      : null;
+  const apiKey =
+    typeof req?.headers?.["x-api-key"] === "string" &&
+    req.headers["x-api-key"].length > 0
+      ? `api:${createHash("sha256").update(req.headers["x-api-key"]).digest("hex")}`
+      : null;
+  const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
+  const actor = merchantId ?? apiKey ?? `ip:${ipKey}`;
+
+  return `${paymentId}:${actor}`;
+}
+
 export function createVerifyPaymentRateLimit({
   store,
   rateLimitFactory = rateLimit,
 } = {}) {
   return rateLimitFactory({
-    windowMs: 15 * 60 * 1000,
-    max: 10,
+    windowMs: VERIFY_PAYMENT_RATE_LIMIT_WINDOW_MS,
+    max: VERIFY_PAYMENT_RATE_LIMIT_MAX,
     message: {
       error: "Too many verification requests, please try again later.",
     },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { ip: false },
+    keyGenerator: getVerifyPaymentRateLimitKey,
     requestWasSuccessful: (req, res) => {
       setStandardRateLimitHeaders(res, req.rateLimit);
       return res.statusCode < 400;
     },
     store,
+    passOnStoreError: true,
   });
 }
 
@@ -72,5 +98,6 @@ export function createMerchantRegistrationRateLimit({
       return res.statusCode < 400;
     },
     store,
+    passOnStoreError: true,
   });
 }

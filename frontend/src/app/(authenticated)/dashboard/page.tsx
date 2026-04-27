@@ -9,8 +9,9 @@ import {
   useMerchantApiKey,
 } from "@/lib/merchant-store";
 import FirstApiKeyModal from "@/components/FirstApiKeyModal";
+import FirstPaymentCelebration from "@/components/FirstPaymentCelebration";
 import PaymentMetrics from "@/components/PaymentMetrics";
-import RecentPayments from "@/components/RecentPayments";
+import PaymentsTabs from "@/components/PaymentsTabs";
 
 export default function DashboardPage() {
   const [isFirstKeyModalOpen, setIsFirstKeyModalOpen] = useState(false);
@@ -132,34 +133,58 @@ export default function DashboardPage() {
           <PaymentMetrics />
         </section>
 
-        {/* Activity Table Section */}
+        {/* Payments + webhook delivery logs */}
         <section className="flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">
-              Recent Activity
-            </h2>
-            <Link
-              href="/payments"
-              className="group flex items-center gap-1.5 text-sm text-mint hover:text-glow transition-all"
-            >
-              View all payments
-              <svg
-                className="h-4 w-4 transition-transform group-hover:translate-x-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Activity</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Recent payments and webhook delivery attempts (status codes) for your integrations.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/payments"
+                className="group flex items-center gap-1.5 text-sm text-mint hover:text-glow transition-all"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M14 5l7 7-7 7"
-                />
-              </svg>
-            </Link>
+                View all payments
+                <svg
+                  className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M14 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+              <Link
+                href="/webhook-logs"
+                className="group flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-all"
+              >
+                Full webhook history
+                <svg
+                  className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M14 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+            </div>
           </div>
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-1">
-            <RecentPayments />
+          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+            <PaymentsTabs />
           </div>
         </section>
       </div>
@@ -168,6 +193,7 @@ export default function DashboardPage() {
         isOpen={isFirstKeyModalOpen}
         onClose={() => setIsFirstKeyModalOpen(false)}
       />
+      <FirstPaymentCelebration />
     </div>
   );
 }

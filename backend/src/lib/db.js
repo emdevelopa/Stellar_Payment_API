@@ -7,6 +7,35 @@ import {
 } from './metrics.js';
 
 const { Pool } = pg;
+const DEFAULT_RETRY_ATTEMPTS = Number.parseInt(
+  process.env.DB_POOL_RETRY_ATTEMPTS || '2',
+  10,
+);
+const DEFAULT_RETRY_DELAY_MS = Number.parseInt(
+  process.env.DB_POOL_RETRY_DELAY_MS || '150',
+  10,
+);
+const RETRYABLE_PG_CODES = new Set([
+  '08000',
+  '08003',
+  '08006',
+  '08P01',
+  '40001',
+  '40P01',
+  '53300',
+  '57P01',
+  '57P02',
+  '57P03',
+]);
+const RETRYABLE_ERROR_PATTERNS = [
+  /connection terminated/i,
+  /connection ended unexpectedly/i,
+  /connection timeout/i,
+  /timeout exceeded/i,
+  /too many clients/i,
+  /server closed the connection unexpectedly/i,
+  /terminating connection due to administrator command/i,
+];
 
 /**
  * Singleton pg.Pool connecting through Supabase's Transaction Pooler (port 6543).
@@ -34,6 +63,59 @@ const pool = new Pool({
 pool.on('error', (err) => {
   console.error('pg pool unexpected error:', err.message);
 });
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function isRetryablePoolError(err) {
+  if (!err) {
+    return false;
+  }
+
+  if (typeof err.code === 'string' && RETRYABLE_PG_CODES.has(err.code)) {
+    return true;
+  }
+
+  return RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(String(err.message || '')));
+}
+
+function getBackoffDelay(attempt, baseDelayMs) {
+  return baseDelayMs * (attempt + 1);
+}
+
+export async function queryWithRetry(
+  text,
+  values = [],
+  {
+    label = 'query',
+    retryAttempts = DEFAULT_RETRY_ATTEMPTS,
+    retryDelayMs = DEFAULT_RETRY_DELAY_MS,
+  } = {},
+) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= retryAttempts; attempt += 1) {
+    try {
+      return await pool.query(text, values);
+    } catch (err) {
+      lastError = err;
+      const shouldRetry = attempt < retryAttempts && isRetryablePoolError(err);
+
+      if (!shouldRetry) {
+        throw err;
+      }
+
+      const delayMs = getBackoffDelay(attempt, retryDelayMs);
+      console.warn(
+        `pg pool ${label} failed (attempt ${attempt + 1}/${retryAttempts + 1}): ${err.message}. Retrying in ${delayMs}ms.`,
+      );
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError;
+}
 
 /**
  * Get current pool statistics for monitoring.

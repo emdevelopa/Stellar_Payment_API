@@ -1,82 +1,54 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import { filterPaletteCommands, paletteCommands } from "./commandPaletteData";
 
-// ── Replicate the filter logic from CommandPalette.tsx ─────────────────────
-// (Pure function — no React needed)
+describe("Command palette data", () => {
+  it("contains required quick actions", () => {
+    const ids = paletteCommands.map((command) => command.id);
+    expect(ids).toContain("create-new-payment");
+    expect(ids).toContain("copy-api-key");
+    expect(ids).toContain("toggle-theme");
+  });
 
-interface Command {
-  id: string;
-  label: string;
-  description: string;
-  href: string;
-  keywords: string[];
-}
+  it("contains required high-level navigation routes", () => {
+    const commandById = new Map(paletteCommands.map((command) => [command.id, command]));
 
-const commands: Command[] = [
-  { id: "dashboard", label: "Dashboard", description: "View payments, metrics and activity", href: "/dashboard", keywords: ["dashboard", "home", "overview", "payments", "activity"] },
-  { id: "api-keys", label: "API Keys", description: "Manage and rotate your API keys", href: "/settings#api-keys", keywords: ["api", "keys", "key", "rotate", "secret", "token"] },
-  { id: "webhooks", label: "Webhooks", description: "Configure webhook URL and view delivery logs", href: "/settings#webhooks", keywords: ["webhook", "webhooks", "delivery", "logs", "url", "endpoint"] },
-  { id: "settings", label: "Settings", description: "API keys, webhook URL & merchant config", href: "/settings", keywords: ["settings", "config", "api", "keys", "webhook", "merchant"] },
-  { id: "create-payment", label: "Create Payment", description: "Generate a new Stellar payment link", href: "/dashboard/create", keywords: ["create", "payment", "new", "link", "pay", "generate"] },
-  { id: "home", label: "Home", description: "Return to the landing page", href: "/", keywords: ["home", "landing", "dashboard", "main"] },
-  { id: "register", label: "Register Merchant", description: "Register a new merchant account", href: "/register", keywords: ["register", "merchant", "signup", "account", "new"] },
-];
+    expect(commandById.get("dashboard")?.href).toBe("/dashboard");
+    expect(commandById.get("settings")?.href).toBe("/settings");
+    expect(commandById.get("docs")?.href).toBe("/docs");
+  });
+});
 
-function filterCommands(query: string): Command[] {
-  if (query.length === 0) return commands;
-  const q = query.toLowerCase();
-  return commands.filter(
-    (cmd) =>
-      cmd.label.toLowerCase().includes(q) ||
-      cmd.description.toLowerCase().includes(q) ||
-      cmd.keywords.some((kw) => kw.includes(q)),
-  );
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────
-
-describe("CommandPalette fuzzy search", () => {
+describe("Command palette fuzzy search", () => {
   it("returns all commands when query is empty", () => {
-    expect(filterCommands("").length).toBe(commands.length);
+    expect(filterPaletteCommands("")).toHaveLength(paletteCommands.length);
   });
 
-  it("matches by label (case-insensitive)", () => {
-    const results = filterCommands("DASHBOARD");
-    expect(results.map((c) => c.id)).toContain("dashboard");
+  it("finds create payment with fuzzy query", () => {
+    const results = filterPaletteCommands("crt pmt");
+    expect(results.map((command) => command.id)).toContain("create-new-payment");
   });
 
-  it("matches by description substring", () => {
-    const results = filterCommands("delivery logs");
-    expect(results.map((c) => c.id)).toContain("webhooks");
+  it("finds copy API key with fuzzy query", () => {
+    const results = filterPaletteCommands("cpy key");
+    expect(results.map((command) => command.id)).toContain("copy-api-key");
   });
 
-  it("matches by keyword", () => {
-    const results = filterCommands("rotate");
-    expect(results.map((c) => c.id)).toContain("api-keys");
+  it("finds theme toggle with fuzzy query", () => {
+    const results = filterPaletteCommands("tgle thm");
+    expect(results.map((command) => command.id)).toContain("toggle-theme");
   });
 
-  it("returns empty array for unrecognised query", () => {
-    expect(filterCommands("xyzzy-nonexistent-term")).toHaveLength(0);
+  it("finds help topics", () => {
+    const results = filterPaletteCommands("help hmac");
+    expect(results.map((command) => command.id)).toContain("help-hmac-signatures");
   });
 
-  it("navigates to correct href for Dashboard", () => {
-    const dash = commands.find((c) => c.id === "dashboard");
-    expect(dash?.href).toBe("/dashboard");
+  it("returns docs as top result for docs query", () => {
+    const results = filterPaletteCommands("docs");
+    expect(results[0]?.id).toBe("docs");
   });
 
-  it("navigates to correct href for API Keys", () => {
-    const keys = commands.find((c) => c.id === "api-keys");
-    expect(keys?.href).toBe("/settings#api-keys");
-  });
-
-  it("navigates to correct href for Webhooks", () => {
-    const hooks = commands.find((c) => c.id === "webhooks");
-    expect(hooks?.href).toBe("/settings#webhooks");
-  });
-
-  it("'web' matches both webhooks and settings", () => {
-    const results = filterCommands("web");
-    const ids = results.map((c) => c.id);
-    expect(ids).toContain("webhooks");
-    expect(ids).toContain("settings");
+  it("returns empty array for unmatched query", () => {
+    expect(filterPaletteCommands("zzqv unmatched command")).toHaveLength(0);
   });
 });

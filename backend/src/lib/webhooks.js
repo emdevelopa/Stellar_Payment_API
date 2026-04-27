@@ -2,7 +2,16 @@ import 'dotenv/config';
 import { createHmac, timingSafeEqual } from "crypto";
 import { promises as dns } from "dns";
 import { isIP } from "net";
-import { supabase } from "./supabase.js";
+
+let supabaseClientPromise;
+
+async function getSupabaseClient() {
+  if (!supabaseClientPromise) {
+    supabaseClientPromise = import("./supabase.js").then((module) => module.supabase);
+  }
+
+  return supabaseClientPromise;
+}
 
 /**
  * Checks if a given IP address is private or loopback.
@@ -154,6 +163,7 @@ async function logWebhookDelivery(paymentId, statusCode, responseBody, requestPa
   if (!paymentId) return;
 
   try {
+    const supabase = await getSupabaseClient();
     await supabase.from("webhook_delivery_logs").insert({
       payment_id: paymentId,
       status_code: statusCode,

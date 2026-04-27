@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { recordMerchantApiUsage } from "./api-usage.js";
+import { verifyApiGatewayRequestSignature } from "./api-gateway-signature.js";
 
 const SALT_ROUNDS = 12;
 
@@ -25,6 +26,7 @@ export async function verifyPassword(plaintext, hash) {
 export function createApiKeyAuth({
   supabaseClient = null,
   usageRecorder = recordMerchantApiUsage,
+  verifyGatewaySignature = verifyApiGatewayRequestSignature,
 } = {}) {
   return async function requireApiKeyAuth(req, res, next) {
     try {
@@ -45,71 +47,98 @@ export function createApiKeyAuth({
       const client = supabaseClient || (await import("./supabase.js")).supabase;
       const headerValue = req.get("x-api-key");
       const apiKey = typeof headerValue === "string" ? headerValue.trim() : "";
+      const signatureHeader = req.get("x-api-signature");
+      const timestampHeader = req.get("x-api-timestamp");
 
       if (!apiKey) {
         return res.status(401).json({ error: "Missing x-api-key header" });
       }
 
-      // First try to find merchant by current API key
-      let { data: merchant, error } = await client
-        .from("merchants")
-        .select(
-          "id, email, business_name, notification_email, branding_config, merchant_settings, webhook_secret, webhook_secret_old, webhook_secret_expiry, webhook_version, payment_limits, api_key, api_key_expires_at, api_key_old, api_key_old_expires_at"
-        )
-        .eq("api_key", apiKey)
-        .is("deleted_at", null)
-        .maybeSingle();
+      // Backward-compatible API gateway hardening: verify request HMAC
+      // signature only when signature headers are supplied by the client.
+      const hasSignatureHeader =
+        typeof signatureHeader === "string" && signatureHeader.trim().startsWith("sha256=");
+      const hasTimestampHeader = typeof timestampHeader === "string" && timestampHeader.trim().length > 0;
+      const signatureProvided = hasSignatureHeader && hasTimestampHeader;
+      if (signatureProvided) {
+        const signatureResult = verifyGatewaySignature({
+          secret: apiKey,
+          method: req.method,
+          path: req.originalUrl,
+          timestampHeader,
+          signatureHeader,
+          body: req.body,
+        });
 
-      if (error) {
-        error.status = 500;
-        throw error;
-      }
-
-      // If not found by current key, check if it's the old key during rotation overlap
-      if (!merchant) {
-        const { data: oldKeyMerchant, error: oldKeyError } = await client
-          .from("merchants")
-          .select(
-            "id, email, business_name, notification_email, branding_config, merchant_settings, webhook_secret, webhook_secret_old, webhook_secret_expiry, webhook_version, payment_limits, api_key, api_key_expires_at, api_key_old, api_key_old_expires_at"
-          )
-          .eq("api_key_old", apiKey)
-          .maybeSingle();
-
-        if (oldKeyError) {
-          oldKeyError.status = 500;
-          throw oldKeyError;
-        }
-
-        if (!oldKeyMerchant) {
-          return res.status(401).json({ error: "Invalid API key" });
-        }
-
-        // Check if old key has expired (overlap period ended)
-        const now = new Date();
-        if (
-          oldKeyMerchant.api_key_old_expires_at &&
-          new Date(oldKeyMerchant.api_key_old_expires_at) < now
-        ) {
+        if (!signatureResult.valid) {
           return res.status(401).json({
-            error: "API key has expired. Please rotate to a new key.",
-            code: "API_KEY_EXPIRED"
-          });
-        }
-
-        merchant = oldKeyMerchant;
-      } else {
-        // Check if current API key has expired
-        const now = new Date();
-        if (
-          merchant.api_key_expires_at &&
-          new Date(merchant.api_key_expires_at) < now
-        ) {
-          return res.status(401).json({
-            error: "API key has expired. Please rotate to a new key.",
-            code: "API_KEY_EXPIRED"
+            error: "Invalid API gateway signature",
+            code: "API_SIGNATURE_INVALID",
+            reason: signatureResult.reason,
           });
         }
       }
+
+// First try to find merchant by current API key
+let { data: merchant, error } = await client
+  .from("merchants")
+  .select(
+    "id, email, business_name, notification_email, branding_config, merchant_settings, webhook_secret, webhook_secret_old, webhook_secret_expiry, webhook_version, payment_limits, api_key, api_key_expires_at, api_key_old, api_key_old_expires_at"
+  )
+  .eq("api_key", apiKey)
+  .is("deleted_at", null)
+  .maybeSingle();
+
+if (error) {
+  error.status = 500;
+  throw error;
+}
+
+// If not found by current key, check if it's the old key during rotation overlap
+if (!merchant) {
+  const { data: oldKeyMerchant, error: oldKeyError } = await client
+    .from("merchants")
+    .select(
+      "id, email, business_name, notification_email, branding_config, merchant_settings, webhook_secret, webhook_secret_old, webhook_secret_expiry, webhook_version, payment_limits, api_key, api_key_expires_at, api_key_old, api_key_old_expires_at"
+    )
+    .eq("api_key_old", apiKey)
+    .maybeSingle();
+
+  if (oldKeyError) {
+    oldKeyError.status = 500;
+    throw oldKeyError;
+  }
+
+  if (!oldKeyMerchant) {
+    return res.status(401).json({ error: "Invalid API key" });
+  }
+
+  // Check if old key has expired (overlap period ended)
+  const now = new Date();
+  if (
+    oldKeyMerchant.api_key_old_expires_at &&
+    new Date(oldKeyMerchant.api_key_old_expires_at) < now
+  ) {
+    return res.status(401).json({
+      error: "API key has expired. Please rotate to a new key.",
+      code: "API_KEY_EXPIRED"
+    });
+  }
+
+  merchant = oldKeyMerchant;
+} else {
+  // Check if current API key has expired
+  const now = new Date();
+  if (
+    merchant.api_key_expires_at &&
+    new Date(merchant.api_key_expires_at) < now
+  ) {
+    return res.status(401).json({
+      error: "API key has expired. Please rotate to a new key.",
+      code: "API_KEY_EXPIRED"
+    });
+  }
+}
 
       req.merchant = merchant;
 

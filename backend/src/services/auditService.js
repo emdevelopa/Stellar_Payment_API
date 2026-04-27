@@ -1,4 +1,72 @@
-import { pool } from "../lib/db.js";
+import { pool, isRetryablePoolError } from "../lib/db.js";
+import {
+  consumeAuditLogRateLimit,
+  createAuditLogRateLimitKey,
+  hashAuditPayload,
+  sanitizeAuditKey,
+  sanitizeAuditValue,
+  signAuditPayload,
+} from "../lib/audit-security.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const AUDIT_FALLBACK_LOG_PATH = process.env.AUDIT_FALLBACK_LOG_PATH || path.join(__dirname, "../../logs/audit_fallback.log");
+const AUDIT_DB_RETRY_ATTEMPTS = Number.parseInt(process.env.AUDIT_DB_RETRY_ATTEMPTS || "2", 10);
+const AUDIT_DB_RETRY_DELAY_MS = Number.parseInt(process.env.AUDIT_DB_RETRY_DELAY_MS || "100", 10);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function writeFallbackLog(payload, error) {
+  const timestamp = new Date().toISOString();
+  const entry = `${timestamp} | ${JSON.stringify(payload)} | error: ${error.message}\n`;
+  try {
+    const dir = path.dirname(AUDIT_FALLBACK_LOG_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.appendFileSync(AUDIT_FALLBACK_LOG_PATH, entry);
+  } catch (fallbackErr) {
+    console.error("Failed to write audit fallback log:", fallbackErr.message);
+  }
+}
+
+async function insertAuditLog({ payload, payloadHash, signature }) {
+  for (let attempt = 0; attempt <= AUDIT_DB_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      await pool.query(
+        `INSERT INTO audit_logs (merchant_id, action, field_changed, old_value, new_value, ip_address, user_agent, payload_hash, signature)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          payload.merchant_id,
+          payload.action,
+          payload.field_changed,
+          payload.old_value,
+          payload.new_value,
+          payload.ip_address,
+          payload.user_agent,
+          payloadHash,
+          signature,
+        ],
+      );
+      return { success: true };
+    } catch (err) {
+      const isRetryable = attempt < AUDIT_DB_RETRY_ATTEMPTS && isRetryablePoolError(err);
+      if (!isRetryable) {
+        return { success: false, error: err };
+      }
+      const delayMs = AUDIT_DB_RETRY_DELAY_MS * (attempt + 1);
+      console.warn(
+        `Audit log DB failed (attempt ${attempt + 1}/${AUDIT_DB_RETRY_ATTEMPTS + 1}): ${err.message}. Retrying in ${delayMs}ms.`,
+      );
+      await sleep(delayMs);
+    }
+  }
+  return { success: false, error: new Error("Max retry attempts exceeded") };
+}
 
 export const auditService = {
   async getAuditLogs(merchantId, page = 1, limit = 50) {
@@ -46,22 +114,34 @@ export const auditService = {
     ipAddress,
     userAgent,
   }) {
-    try {
-      await pool.query(
-        `INSERT INTO audit_logs (merchant_id, action, field_changed, old_value, new_value, ip_address, user_agent)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          merchantId,
-          action,
-          fieldChanged,
-          oldValue,
-          newValue,
-          ipAddress,
-          userAgent,
-        ]
-      );
-    } catch (err) {
-      console.error("Failed to log audit event:", err);
+    const rateLimitKey = createAuditLogRateLimitKey({
+      merchantId,
+      action,
+      ipAddress,
+    });
+    const rateLimitResult = consumeAuditLogRateLimit(rateLimitKey);
+    if (!rateLimitResult.allowed) {
+      return;
+    }
+
+    const payload = {
+      merchant_id: merchantId,
+      action: sanitizeAuditValue(action),
+      field_changed: sanitizeAuditKey(fieldChanged),
+      old_value: sanitizeAuditValue(oldValue),
+      new_value: sanitizeAuditValue(newValue),
+      ip_address: sanitizeAuditValue(ipAddress),
+      user_agent: sanitizeAuditValue(userAgent),
+    };
+
+    const payloadHash = hashAuditPayload(payload);
+    const signature = signAuditPayload(payload);
+
+    const result = await insertAuditLog({ payload, payloadHash, signature });
+
+    if (!result.success) {
+      writeFallbackLog(payload, result.error);
+      console.error("Failed to log audit event:", result.error.message);
     }
   },
 };

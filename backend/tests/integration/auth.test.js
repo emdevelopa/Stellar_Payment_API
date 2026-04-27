@@ -1,6 +1,7 @@
 import request from "supertest";
-import { createApp } from "../../src/app.js";
-import { closePool } from "../../src/lib/db.js";
+process.env.SUPABASE_URL ||= "https://example.supabase.co";
+process.env.SUPABASE_SERVICE_ROLE_KEY ||= "test-service-role-key";
+process.env.DATABASE_URL ||= "postgresql://postgres:postgres@127.0.0.1:5432/postgres";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 
 /**
@@ -15,8 +16,14 @@ const mockRedisClient = {
 describe("Unauthorized Access", () => {
   let app;
   let io;
+  let closePool;
 
   beforeAll(async () => {
+    const [{ createApp }, { closePool: importedClosePool }] = await Promise.all([
+      import("../../src/app.js"),
+      import("../../src/lib/db.js"),
+    ]);
+    closePool = importedClosePool;
     ({ app, io } = await createApp({ redisClient: mockRedisClient }));
   });
 

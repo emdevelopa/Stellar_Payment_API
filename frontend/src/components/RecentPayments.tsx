@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, memo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import Skeleton from "react-loading-skeleton";
@@ -162,7 +162,7 @@ function SortBtn({
   );
 }
 
-export default function RecentPayments({
+export const RecentPayments = memo(function RecentPayments({
   showSkeleton = false,
 }: {
   showSkeleton?: boolean;
@@ -465,7 +465,11 @@ export default function RecentPayments({
   return (
     <div className="flex flex-col gap-4">
       {/* Filters */}
-      <div className="rounded-2xl border border-[#E8E8E8] bg-white p-3 sm:p-5 flex flex-col gap-3 sm:gap-4">
+      <div
+        role="region"
+        aria-label="Transaction Filters"
+        className="rounded-2xl border border-[#E8E8E8] bg-white p-3 sm:p-5 flex flex-col gap-3 sm:gap-4"
+      >
         <div className="relative">
           <input
             type="text"
@@ -473,6 +477,7 @@ export default function RecentPayments({
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by ID, description or recipient…"
             className="w-full rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] py-2.5 pl-10 pr-4 text-sm text-[#0A0A0A] placeholder-[#A0A0A0] focus:border-[#0A0A0A] focus:bg-white focus:outline-none transition-all touch-manipulation"
+            aria-label="Search transactions"
           />
           <svg
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A0A0A0] pointer-events-none"
@@ -494,6 +499,7 @@ export default function RecentPayments({
             value={filters.status}
             onChange={(e) => handleFilterChange("status", e.target.value)}
             className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all"
+            aria-label="Filter by status"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
@@ -505,6 +511,7 @@ export default function RecentPayments({
             value={filters.asset}
             onChange={(e) => handleFilterChange("asset", e.target.value)}
             className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all"
+            aria-label="Filter by asset"
           >
             {ASSET_OPTIONS.map((a) => (
               <option key={a} value={a}>
@@ -517,13 +524,24 @@ export default function RecentPayments({
             value={filters.dateFrom}
             onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
             className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all [color-scheme:light] touch-manipulation"
+            aria-label="Filter from date"
           />
           <input
             type="date"
             value={filters.dateTo}
             onChange={(e) => handleFilterChange("dateTo", e.target.value)}
             className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2.5 text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-all [color-scheme:light] touch-manipulation"
+            aria-label="Filter to date"
           />
+        </div>
+
+        {/* Screen reader announcement for filter changes */}
+        <div
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+        >
+          {hasActiveFilters ? `Filters active: ${Object.entries(filters).filter(([k,v]) => v && v !== 'all' && k !== 'page' && k !== 'limit').map(([k,v]) => `${k}: ${v}`).join(', ')}` : "No filters active"}
         </div>
 
         {hasActiveFilters && (
@@ -812,3 +830,5 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
     </span>
   );
 }
+e x p o r t   d e f a u l t   R e c e n t P a y m e n t s ;  
+ 

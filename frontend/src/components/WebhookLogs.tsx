@@ -17,8 +17,11 @@ function statusClasses(statusCode: number) {
   if (statusCode >= 200 && statusCode < 300) {
     return "bg-green-500/20 text-green-300 border border-green-500/40";
   }
-  if (statusCode >= 400 && statusCode < 500) {
+  if (statusCode >= 400) {
     return "bg-red-500/20 text-red-300 border border-red-500/40";
+  }
+  if (statusCode >= 300 && statusCode < 400) {
+    return "bg-amber-500/15 text-amber-200 border border-amber-500/35";
   }
   return "bg-yellow-500/20 text-yellow-300 border border-yellow-500/40";
 }
@@ -61,7 +64,7 @@ export default function WebhookLogs() {
 
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-        const response = await fetch(`${apiUrl}/api/webhook-logs`, {
+        const response = await fetch(`${apiUrl}/api/webhook-logs?limit=50`, {
           signal: controller.signal,
           headers: {
             "x-api-key": apiKey,

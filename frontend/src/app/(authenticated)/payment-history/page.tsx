@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import Skeleton from "react-loading-skeleton";
@@ -8,6 +8,7 @@ import "react-loading-skeleton/dist/skeleton.css";
 import PaymentDetailModal from "@/components/PaymentDetailModal";
 import PaymentDetailsSheet from "@/components/PaymentDetailsSheet";
 import ExportCsvButton from "@/components/ExportCsvButton";
+import TransactionFilterSidebar from "@/components/TransactionFilterSidebar";
 import { localeToLanguageTag } from "@/i18n/config";
 import { toast } from "sonner";
 import {
@@ -15,6 +16,14 @@ import {
   useMerchantApiKey,
   useMerchantId,
 } from "@/lib/merchant-store";
+import {
+  buildPaymentHistorySearchParams,
+  DEFAULT_PAYMENT_HISTORY_FILTERS,
+  filtersFromSearchParams,
+  hasActivePaymentHistoryFilters,
+  type PaymentHistoryFilterKey,
+  paymentHistoryFiltersReducer,
+} from "@/lib/payment-history-filters";
 import { usePaymentSocket } from "@/lib/usePaymentSocket";
 
 interface Payment {
@@ -31,14 +40,6 @@ interface PaginatedResponse {
   total_count: number;
 }
 
-interface FilterState {
-  search: string;
-  status: string;
-  asset: string;
-  dateFrom: string;
-  dateTo: string;
-}
-
 const LIMIT = 50;
 const STATUS_OPTIONS = [
   "all",
@@ -48,38 +49,45 @@ const STATUS_OPTIONS = [
   "refunded",
 ] as const;
 const ASSET_OPTIONS = ["all", "XLM", "USDC"] as const;
-const DEFAULT_FILTERS: FilterState = {
-  search: "",
-  status: "all",
-  asset: "all",
-  dateFrom: "",
-  dateTo: "",
-};
 
 function toStatusLabel(t: ReturnType<typeof useTranslations>, status: string) {
   return t.has(`statuses.${status}`) ? t(`statuses.${status}`) : status;
 }
 
-function filtersFromSearchParams(searchParams: URLSearchParams): FilterState {
-  return {
-    search: searchParams.get("search") ?? "",
-    status: searchParams.get("status") ?? "all",
-    asset: searchParams.get("asset") ?? "all",
-    dateFrom: searchParams.get("date_from") ?? "",
-    dateTo: searchParams.get("date_to") ?? "",
+function StatCard({ label, value, icon, color }: { label: string; value: number | string; icon: React.ReactNode; color: string }) {
+  const colorMap: Record<string, string> = {
+    mint: "text-mint bg-mint/10",
+    green: "text-green-400 bg-green-500/10",
+    yellow: "text-yellow-400 bg-yellow-500/10",
+    red: "text-red-400 bg-red-500/10",
   };
+  return (
+    <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] mb-1">{label}</p>
+          <p className="text-2xl font-bold text-[#0A0A0A]">{value}</p>
+        </div>
+        <div className={`rounded-full p-3 ${colorMap[color] || "text-slate-400 bg-slate-100"}`}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">{icon}</svg>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function buildSearchParams(filters: FilterState): URLSearchParams {
-  const params = new URLSearchParams();
-
-  if (filters.search) params.set("search", filters.search);
-  if (filters.status !== "all") params.set("status", filters.status);
-  if (filters.asset !== "all") params.set("asset", filters.asset);
-  if (filters.dateFrom) params.set("date_from", filters.dateFrom);
-  if (filters.dateTo) params.set("date_to", filters.dateTo);
-
-  return params;
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    confirmed: "bg-green-500/20 text-green-400",
+    failed: "bg-red-500/20 text-red-400",
+    refunded: "bg-blue-500/20 text-blue-400",
+    pending: "bg-yellow-500/20 text-yellow-400",
+  };
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${styles[status] || "bg-slate-500/20 text-slate-400"}`}>
+      {status}
+    </span>
+  );
 }
 
 export default function PaymentHistoryPage() {
@@ -93,16 +101,20 @@ export default function PaymentHistoryPage() {
 
   useHydrateMerchantStore();
 
-  const filters = useMemo(
+  const activeFilters = useMemo(
     () => filtersFromSearchParams(searchParams),
     [searchParams],
   );
-  const hasActiveFilters =
-    filters.search ||
-    filters.status !== "all" ||
-    filters.asset !== "all" ||
-    filters.dateFrom ||
-    filters.dateTo;
+  const [draftFilters, dispatchDraftFilters] = useReducer(
+    paymentHistoryFiltersReducer,
+    activeFilters,
+  );
+  const hasActiveFilters = hasActivePaymentHistoryFilters(activeFilters);
+  const draftHasActiveFilters = useMemo(
+    () => hasActivePaymentHistoryFilters(draftFilters),
+    [draftFilters],
+  );
+  const searchSyncPending = draftFilters.search !== activeFilters.search;
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,7 +125,12 @@ export default function PaymentHistoryPage() {
   const [hoveredPayment, setHoveredPayment] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [flashedIds, setFlashedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    dispatchDraftFilters({ type: "sync", filters: activeFilters });
+  }, [activeFilters]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,8 +152,8 @@ export default function PaymentHistoryPage() {
   }, [hoveredPayment, t]);
 
   const updateFilters = useCallback(
-    (nextFilters: FilterState) => {
-      const params = buildSearchParams(nextFilters);
+    (nextFilters: typeof activeFilters) => {
+      const params = buildPaymentHistorySearchParams(nextFilters);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, {
         scroll: false,
@@ -145,25 +162,47 @@ export default function PaymentHistoryPage() {
     [pathname, router],
   );
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (draftFilters.search !== activeFilters.search) {
+        updateFilters({ ...draftFilters });
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [activeFilters.search, draftFilters, updateFilters]);
+
   const handleFilterChange = useCallback(
-    (key: keyof FilterState, value: string) => {
-      updateFilters({ ...filters, [key]: value });
+    (key: PaymentHistoryFilterKey, value: string) => {
+      const nextFilters = paymentHistoryFiltersReducer(draftFilters, {
+        type: "set",
+        key,
+        value,
+      });
+      dispatchDraftFilters({ type: "set", key, value });
+
+      if (key !== "search") {
+        updateFilters(nextFilters);
+      }
     },
-    [filters, updateFilters],
+    [draftFilters, updateFilters],
   );
 
   const clearFilter = useCallback(
-    (key: keyof FilterState) => {
-      updateFilters({
-        ...filters,
-        [key]: key === "status" || key === "asset" ? "all" : "",
+    (key: PaymentHistoryFilterKey) => {
+      const nextFilters = paymentHistoryFiltersReducer(draftFilters, {
+        type: "clear",
+        key,
       });
+      dispatchDraftFilters({ type: "clear", key });
+      updateFilters(nextFilters);
     },
-    [filters, updateFilters],
+    [draftFilters, updateFilters],
   );
 
   const clearAllFilters = useCallback(() => {
-    updateFilters(DEFAULT_FILTERS);
+    dispatchDraftFilters({ type: "reset" });
+    updateFilters(DEFAULT_PAYMENT_HISTORY_FILTERS);
   }, [updateFilters]);
 
   const handleConfirmed = useCallback(
@@ -215,7 +254,7 @@ export default function PaymentHistoryPage() {
 
         const apiUrl =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-        const params = buildSearchParams(filters);
+        const params = buildPaymentHistorySearchParams(activeFilters);
         params.set("page", page.toString());
         params.set("limit", LIMIT.toString());
 
@@ -249,7 +288,7 @@ export default function PaymentHistoryPage() {
     fetchPayments();
 
     return () => controller.abort();
-  }, [apiKey, filters, t]);
+  }, [activeFilters, apiKey, t]);
 
   const handlePaymentClick = (paymentId: string) => {
     setSelectedPayment(paymentId);
@@ -440,9 +479,9 @@ export default function PaymentHistoryPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 min-h-screen">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">
             History
@@ -456,6 +495,20 @@ export default function PaymentHistoryPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsFilterOpen(true)}
+            className="inline-flex lg:hidden items-center gap-2 rounded-xl border border-[#E8E8E8] bg-white px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A] hover:bg-[#F5F5F5] transition-all"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Filters
+            {draftHasActiveFilters && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--pluto-500)] text-[8px] text-white">
+                !
+              </span>
+            )}
+          </button>
           <ExportCsvButton
             transactions={payments.map((payment) => ({
               id: payment.id,
@@ -475,6 +528,18 @@ export default function PaymentHistoryPage() {
         </div>
       </div>
 
+      <div className="flex flex-col lg:flex-row gap-10">
+        <TransactionFilterSidebar
+          filters={draftFilters}
+          onFilterChange={handleFilterChange}
+          onClearFilter={clearFilter}
+          onClearAll={clearAllFilters}
+          hasActiveFilters={draftHasActiveFilters}
+          searchSyncPending={searchSyncPending}
+          isOpen={isFilterOpen}
+          onClose={() => setIsFilterOpen(false)}
+        />
+        <div className="flex-1 flex flex-col gap-8 min-w-0">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-6">
@@ -604,7 +669,7 @@ export default function PaymentHistoryPage() {
               <input
                 id="search"
                 type="text"
-                value={filters.search}
+                value={draftFilters.search}
                 onChange={(event) =>
                   handleFilterChange("search", event.target.value)
                 }
@@ -637,7 +702,7 @@ export default function PaymentHistoryPage() {
               </label>
               <select
                 id="status"
-                value={filters.status}
+                value={draftFilters.status}
                 onChange={(event) =>
                   handleFilterChange("status", event.target.value)
                 }
@@ -662,7 +727,7 @@ export default function PaymentHistoryPage() {
               </label>
               <select
                 id="asset"
-                value={filters.asset}
+                value={draftFilters.asset}
                 onChange={(event) =>
                   handleFilterChange("asset", event.target.value)
                 }
@@ -686,7 +751,7 @@ export default function PaymentHistoryPage() {
               <input
                 id="dateFrom"
                 type="date"
-                value={filters.dateFrom}
+                value={draftFilters.dateFrom}
                 onChange={(event) =>
                   handleFilterChange("dateFrom", event.target.value)
                 }
@@ -704,7 +769,7 @@ export default function PaymentHistoryPage() {
               <input
                 id="dateTo"
                 type="date"
-                value={filters.dateTo}
+                value={draftFilters.dateTo}
                 onChange={(event) =>
                   handleFilterChange("dateTo", event.target.value)
                 }
@@ -712,15 +777,21 @@ export default function PaymentHistoryPage() {
               />
             </div>
           </div>
+        </div>
+      </div>
 
-          {hasActiveFilters && (
-            <div className="flex flex-wrap items-center gap-2 pt-2">
-              <span className="text-xs text-[#6B6B6B]">Active filters:</span>
-
-              {filters.search && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Search: &quot;{filters.search}&quot;
+          {draftHasActiveFilters && (
+            <div className="hidden lg:flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] mr-1">
+                Active Filters:
+              </span>
+              {draftFilters.search && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint ${draftFilters.search !== activeFilters.search ? "ring-1 ring-mint/40" : ""}`}
+                >
+                  Search: &quot;{draftFilters.search}&quot;
                   <button
+                    type="button"
                     onClick={() => clearFilter("search")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
                     aria-label="Clear search filter"
@@ -741,10 +812,13 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.status !== "all" && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Status: {filters.status}
+              {draftFilters.status !== "all" && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint ${draftFilters.status !== activeFilters.status ? "ring-1 ring-mint/40" : ""}`}
+                >
+                  Status: {draftFilters.status}
                   <button
+                    type="button"
                     onClick={() => clearFilter("status")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
                     aria-label="Clear status filter"
@@ -765,10 +839,13 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.asset !== "all" && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Asset: {filters.asset}
+              {draftFilters.asset !== "all" && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint ${draftFilters.asset !== activeFilters.asset ? "ring-1 ring-mint/40" : ""}`}
+                >
+                  Asset: {draftFilters.asset}
                   <button
+                    type="button"
                     onClick={() => clearFilter("asset")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
                     aria-label="Clear asset filter"
@@ -789,10 +866,13 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.dateFrom && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  From: {filters.dateFrom}
+              {draftFilters.dateFrom && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint ${draftFilters.dateFrom !== activeFilters.dateFrom ? "ring-1 ring-mint/40" : ""}`}
+                >
+                  From: {draftFilters.dateFrom}
                   <button
+                    type="button"
                     onClick={() => clearFilter("dateFrom")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
                     aria-label="Clear from date filter"
@@ -813,10 +893,13 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-              {filters.dateTo && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  To: {filters.dateTo}
+              {draftFilters.dateTo && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint ${draftFilters.dateTo !== activeFilters.dateTo ? "ring-1 ring-mint/40" : ""}`}
+                >
+                  To: {draftFilters.dateTo}
                   <button
+                    type="button"
                     onClick={() => clearFilter("dateTo")}
                     className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
                     aria-label="Clear to date filter"
@@ -837,240 +920,107 @@ export default function PaymentHistoryPage() {
                   </button>
                 </span>
               )}
-
               <button
+                type="button"
                 onClick={clearAllFilters}
-                className="ml-auto text-xs font-medium text-[#6B6B6B] underline underline-offset-4 hover:text-[#0A0A0A]"
+                className="text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-500)] hover:underline ml-2"
               >
-                Clear All
+                Reset All
               </button>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Results Info */}
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-[#6B6B6B]">
-          Showing {payments.length} of {totalCount} payments
-          {hasActiveFilters && " (filtered)"}
-        </p>
-      </div>
-
-      {/* Payment List (Mobile Card View) */}
-      <div className="flex flex-col gap-4 sm:hidden">
-        {payments.map((payment) => (
-          <div
-            key={payment.id}
-            onClick={() => handlePaymentClick(payment.id)}
-            className={`cursor-pointer rounded-2xl border border-[#E8E8E8] bg-white p-5 transition-all active:scale-[0.98] shadow-sm ${
-              flashedIds.has(payment.id)
-                ? "animate-payment-confirmed bg-green-500/10 border-green-500/30"
-                : ""
-            }`}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <span
-                className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                  payment.status === "confirmed"
-                    ? "bg-green-500/20 text-green-400"
-                    : payment.status === "failed"
-                    ? "bg-red-500/20 text-red-400"
-                    : payment.status === "refunded"
-                    ? "bg-blue-500/20 text-blue-400"
-                    : "bg-yellow-500/20 text-yellow-400"
-                }`}
-              >
-                {toStatusLabel(t, payment.status)}
-              </span>
-              <p className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest">
-                {new Date(payment.created_at).toLocaleDateString(locale, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+          {/* Main Content Area */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between px-2">
+              <p className="text-xs text-[#6B6B6B] font-medium">
+                {t("showingResults", { shown: payments.length, total: totalCount })}
               </p>
             </div>
-            <div className="flex items-end justify-between">
-              <div className="min-w-0">
-                <p className="text-xl font-bold text-[#0A0A0A] tracking-tight truncate">
-                  {payment.amount} {payment.asset}
-                </p>
-                <p className="mt-1 text-xs font-medium text-[#6B6B6B] truncate">
-                  {payment.description || "No description"}
-                </p>
-              </div>
-              <div className="shrink-0 text-[var(--pluto-500)]">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Payment Table (Desktop View) */}
-      <div className="hidden sm:block overflow-x-auto rounded-xl border border-[#E8E8E8]">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-[#E8E8E8] bg-[#F9F9F9]">
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
-                ID
-              </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
-                Status
-              </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
-                Amount
-              </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B] sm:table-cell">
-                Description
-              </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B] md:table-cell">
-                Date
-              </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#6B6B6B]">
-                Actions
-              </th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-[#E8E8E8]">
-            {payments.map((payment) => (
-              <tr
-                key={payment.id}
-                onClick={() => handlePaymentClick(payment.id)}
-                onMouseEnter={() => setHoveredPayment(payment.id)}
-                onMouseLeave={() => setHoveredPayment(null)}
-                className={`group relative cursor-pointer transition-all duration-200 ease-in-out hover:bg-[#F9F9F9] hover:shadow-sm hover:border-l-2 hover:border-l-[var(--pluto-500)] active:bg-[#F5F5F5] active:scale-[0.995] ${
-                  flashedIds.has(payment.id)
-                    ? "animate-payment-confirmed bg-green-500/10"
-                    : ""
-                }`}
-              >
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs text-[#6B6B6B]">
-                      {payment.id.slice(0, 8)}...
-                    </code>
-                    {hoveredPayment === payment.id && (
-                      <span className="animate-in fade-in zoom-in duration-200 pointer-events-none absolute left-2 top-1 z-10 hidden rounded-md border border-[#E8E8E8] bg-black/80 px-2 py-0.5 text-[10px] font-medium text-[#0A0A0A] shadow-xl lg:flex items-center gap-1.5 backdrop-blur-sm">
-                        <kbd className="rounded border border-white/20 bg-[#F9F9F9] px-1 font-sans text-[9px] text-[#0A0A0A]">
-                          ⌘
-                        </kbd>{" "}
-                        +{" "}
-                        <kbd className="rounded border border-white/20 bg-[#F9F9F9] px-1 font-sans text-[9px] text-[#0A0A0A]">
-                          C
-                        </kbd>{" "}
-                        to copy link
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      payment.status === "confirmed"
-                        ? "bg-green-500/20 text-green-400"
-                        : payment.status === "failed"
-                          ? "bg-red-500/20 text-red-400"
-                          : payment.status === "refunded"
-                            ? "bg-blue-500/20 text-blue-400"
-                            : "bg-yellow-500/20 text-yellow-400"
-                    }`}
-                  >
-                    {toStatusLabel(t, payment.status)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 font-medium text-[#0A0A0A]">
-                  {payment.amount} {payment.asset}
-                </td>
-                <td className="hidden px-4 py-3 text-[#6B6B6B] sm:table-cell">
-                  {payment.description || "—"}
-                </td>
-                <td className="hidden px-4 py-3 text-[#6B6B6B] md:table-cell">
-                  {new Date(payment.created_at).toLocaleDateString(locale, {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </td>
-                <td className="px-4 py-3">
+            {payments.length === 0 ? (
+              <div className="rounded-2xl border border-[#E8E8E8] bg-[#F9F9F9] py-20 text-center">
+                <div className="mx-auto mb-4 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-[#E8E8E8]">
+                   <svg className="w-8 h-8 text-[#A0A0A0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                   </svg>
+                </div>
+                <h3 className="text-lg font-bold text-[#0A0A0A]">No payments found</h3>
+                <p className="text-sm text-[#6B6B6B] mt-1">Try adjusting your filters to find what you&apos;re looking for.</p>
+                {draftHasActiveFilters && (
                   <button
-                    onClick={() => handlePaymentClick(payment.id)}
-                    className="inline-flex items-center gap-1 font-mono text-xs text-[var(--pluto-600)] transition-all duration-200 hover:text-[var(--pluto-800)] hover:gap-2 hover:translate-x-0.5 active:scale-95"
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="mt-6 text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-500)] hover:underline"
                   >
-                    View
-                    <svg
-                      className="w-3 h-3 transition-transform duration-200 group-hover:translate-x-0.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                    Clear all filters
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-[#E8E8E8] bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[#E8E8E8] bg-[#F9F9F9]">
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">Status</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">Amount</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">Recipient</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] hidden md:table-cell">Date</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F0F0F0]">
+                      {payments.map((payment) => (
+                        <tr
+                          key={payment.id}
+                          onMouseEnter={() => setHoveredPayment(payment.id)}
+                          onMouseLeave={() => setHoveredPayment(null)}
+                          onClick={() => handlePaymentClick(payment.id)}
+                          className={`group cursor-pointer transition-all hover:bg-[#F9F9F9] ${flashedIds.has(payment.id) ? "bg-emerald-50" : ""}`}
+                        >
+                          <td className="px-6 py-5"><StatusBadge status={payment.status} /></td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-base font-bold text-[#0A0A0A]">{payment.amount}</span>
+                              <span className="text-[10px] font-bold text-[#6B6B6B] uppercase">{payment.asset}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex flex-col gap-0.5">
+                              <code className="text-xs text-[#0A0A0A] font-mono">{payment.id.slice(0, 12)}...</code>
+                              <p className="text-[10px] text-[#6B6B6B] truncate max-w-[150px]">{payment.description || "No description"}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 hidden md:table-cell">
+                            <p className="text-xs text-[#6B6B6B] font-medium">
+                              {new Date(payment.created_at).toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" })}
+                            </p>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <button className="text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-500)] group-hover:translate-x-0.5 transition-all">
+                                Details →
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
-      {/* Empty State for Filtered Results */}
-      {payments.length === 0 && hasActiveFilters && (
-        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-8 text-center">
-          <div className="mx-auto mb-4 w-16 h-16 relative">
-            <div className="absolute inset-0 bg-slate-500/10 rounded-full blur-xl" />
-            <div className="relative w-full h-full flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-[#6B6B6B]"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
+            {/* Pagination Placeholder */}
+            {totalCount > LIMIT && (
+              <div className="flex items-center justify-center py-6">
+                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#A0A0A0]">End of list (Showing {LIMIT} most recent)</p>
+              </div>
+            )}
           </div>
-          <h3 className="text-base font-semibold text-[#0A0A0A] mb-2">
-            No payments found
-          </h3>
-          <p className="text-sm text-[#6B6B6B] mb-4">
-            Try adjusting your filters to see more results
-          </p>
-          <button
-            onClick={clearAllFilters}
-            className="inline-flex items-center gap-2 rounded-lg bg-mint/10 border border-mint/30 px-4 py-2 text-sm font-medium text-mint transition-all hover:bg-mint/20"
-          >
-            Clear All Filters
-          </button>
         </div>
-      )}
+      </div>
 
       {/* Payment Detail Modal */}
       {selectedPayment && (

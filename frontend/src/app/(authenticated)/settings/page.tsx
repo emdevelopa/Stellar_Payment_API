@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useDropzone } from "react-dropzone";
 import Link from "next/link";
 import Image from "next/image";
@@ -16,6 +23,12 @@ import { useDisplayPreferences } from "@/lib/display-preferences";
 import WebhookHealthIndicator from "@/components/WebhookHealthIndicator";
 import DangerZone from "@/components/DangerZone";
 import { EmailReceiptPreview } from "@/components/EmailReceiptPreview";
+import {
+  getNextSettingsTab,
+  getSettingsPanelDomId,
+  getSettingsTabDomId,
+  type SettingsTab,
+} from "./accessibility";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const HEX_COLOR_REGEX = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
@@ -25,8 +38,6 @@ const DEFAULT_BRANDING = {
   background_color: "#050608",
   logo_url: null as string | null,
 };
-
-type SettingsTab = "api" | "branding" | "display" | "webhooks" | "danger";
 
 interface WebhookDomainVerification {
   status: "verified" | "unverified";
@@ -253,6 +264,8 @@ export default function SettingsPage() {
   const [webhookVerification, setWebhookVerification] =
     useState<WebhookDomainVerification | null>(null);
   const [verifyingWebhookDomain, setVerifyingWebhookDomain] = useState(false);
+  const desktopTabRefs = useRef<Partial<Record<SettingsTab, HTMLButtonElement | null>>>({});
+  const mobileTabRefs = useRef<Partial<Record<SettingsTab, HTMLButtonElement | null>>>({});
 
   useHydrateMerchantStore();
 
@@ -540,6 +553,34 @@ export default function SettingsPage() {
     [webhookVerification],
   );
 
+  const focusTab = useCallback((tab: SettingsTab, variant: "desktop" | "mobile") => {
+    const refMap = variant === "desktop" ? desktopTabRefs.current : mobileTabRefs.current;
+    refMap[tab]?.focus();
+  }, []);
+
+  const handleTabKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>, variant: "desktop" | "mobile") => {
+      const supportedKeys = [
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "End",
+      ];
+
+      if (!supportedKeys.includes(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+      const nextTab = getNextSettingsTab(activeTab, event.key);
+      setActiveTab(nextTab);
+      focusTab(nextTab, variant);
+    },
+    [activeTab, focusTab],
+  );
+
   if (!hydrated) return null;
 
   if (!apiKey) {
@@ -585,22 +626,28 @@ export default function SettingsPage() {
       </div>
 
       {/* Two-column layout */}
-      <div className="flex gap-8 items-start">
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
         {/* Left nav */}
         <nav
           className="hidden lg:flex w-52 shrink-0 flex-col gap-1"
           role="tablist"
           aria-label="Settings navigation"
+          aria-orientation="vertical"
         >
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
-              id={`${item.id}-tab`}
+              id={getSettingsTabDomId(item.id, "desktop")}
               type="button"
               role="tab"
               aria-selected={activeTab === item.id}
-              aria-controls={`${item.id}-panel`}
+              aria-controls={getSettingsPanelDomId(item.id)}
+              tabIndex={activeTab === item.id ? 0 : -1}
+              ref={(node) => {
+                desktopTabRefs.current[item.id] = node;
+              }}
               onClick={() => setActiveTab(item.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, "desktop")}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-left transition-all duration-200 ${
                 activeTab === item.id
                   ? item.danger
@@ -622,16 +669,22 @@ export default function SettingsPage() {
           className="lg:hidden flex gap-1 overflow-x-auto rounded-xl border border-[#E8E8E8] bg-[#F5F5F5] p-1 w-full"
           role="tablist"
           aria-label="Settings navigation"
+          aria-orientation="horizontal"
         >
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
-              id={`${item.id}-tab-mobile`}
+              id={getSettingsTabDomId(item.id, "mobile")}
               type="button"
               role="tab"
               aria-selected={activeTab === item.id}
-              aria-controls={`${item.id}-panel`}
+              aria-controls={getSettingsPanelDomId(item.id)}
+              tabIndex={activeTab === item.id ? 0 : -1}
+              ref={(node) => {
+                mobileTabRefs.current[item.id] = node;
+              }}
               onClick={() => setActiveTab(item.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, "mobile")}
               className={`shrink-0 rounded-lg px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${
                 activeTab === item.id
                   ? item.danger
@@ -652,9 +705,10 @@ export default function SettingsPage() {
           {/* API Keys Tab */}
           {activeTab === "api" && (
             <div
-              id="api-panel"
+              id={getSettingsPanelDomId("api")}
               role="tabpanel"
-              aria-labelledby="api-tab"
+              aria-label="API Keys"
+              aria-labelledby="api-tab api-tab-mobile"
               tabIndex={0}
               className="rounded-2xl border border-[#E8E8E8] bg-white p-8 flex flex-col gap-8"
             >
@@ -678,6 +732,9 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => setRevealed((v) => !v)}
+                    aria-pressed={revealed}
+                    aria-controls="live-api-key"
+                    aria-describedby="live-api-key-visibility"
                     className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] hover:text-[#0A0A0A] transition-colors"
                   >
                     <EyeIcon open={revealed} /> {revealed ? "Hide" : "Reveal"}
@@ -695,6 +752,13 @@ export default function SettingsPage() {
                 <p className="text-xs text-[#6B6B6B]">
                   Pass as <code className="text-[#0A0A0A]">x-api-key</code>{" "}
                   header on every request.
+                </p>
+                <p
+                  id="live-api-key-visibility"
+                  className="sr-only"
+                  aria-live="polite"
+                >
+                  {revealed ? "Live API key is currently visible." : "Live API key is currently hidden."}
                 </p>
               </div>
 
@@ -734,12 +798,12 @@ export default function SettingsPage() {
                     <p className="text-xs text-yellow-700">
                       The old key will stop working immediately.
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row">
                       <button
                         type="button"
                         onClick={confirmRotate}
                         disabled={rotating}
-                        className="flex-1 rounded-xl bg-[var(--pluto-500)] py-2.5 text-xs font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
+                        className="flex-1 min-w-0 rounded-xl bg-[var(--pluto-500)] py-2.5 text-xs font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
                       >
                         Confirm
                       </button>
@@ -747,7 +811,7 @@ export default function SettingsPage() {
                         type="button"
                         onClick={() => setConfirming(false)}
                         disabled={rotating}
-                        className="flex-1 rounded-xl border border-[#E8E8E8] bg-white py-2.5 text-xs font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
+                        className="flex-1 min-w-0 rounded-xl border border-[#E8E8E8] bg-white py-2.5 text-xs font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
                       >
                         Cancel
                       </button>
@@ -761,9 +825,10 @@ export default function SettingsPage() {
           {/* Branding Tab */}
           {activeTab === "branding" && (
             <div
-              id="branding-panel"
+              id={getSettingsPanelDomId("branding")}
               role="tabpanel"
-              aria-labelledby="branding-tab"
+              aria-label="Branding"
+              aria-labelledby="branding-tab branding-tab-mobile"
               tabIndex={0}
               className="rounded-2xl border border-[#E8E8E8] bg-white p-8 flex flex-col gap-8"
             >
@@ -849,7 +914,7 @@ export default function SettingsPage() {
                     ["background_color", "Background"],
                   ] as const
                 ).map(([field, label]) => (
-                  <div key={field} className="flex items-center gap-4">
+                  <div key={field} className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <input
                       type="color"
                       value={branding[field]}
@@ -859,7 +924,7 @@ export default function SettingsPage() {
                       aria-label={`${label} color picker`}
                       className="h-10 w-12 shrink-0 rounded-lg border border-[#E8E8E8] bg-white p-1 cursor-pointer"
                     />
-                    <div className="flex flex-col gap-1 flex-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <label
                         htmlFor={`color-text-${field}`}
                         className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]"
@@ -873,7 +938,7 @@ export default function SettingsPage() {
                         onChange={(e) =>
                           updateBrandingField(field, e.target.value)
                         }
-                        className="rounded-lg border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2 font-mono text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none"
+                        className="w-full rounded-lg border border-[#E8E8E8] bg-[#F9F9F9] px-3 py-2 font-mono text-sm text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none"
                       />
                     </div>
                   </div>
@@ -932,12 +997,12 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={saveBranding}
                   disabled={loadingBranding || savingBranding}
-                  className="flex-1 rounded-xl bg-[var(--pluto-500)] py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
+                  className="flex-1 min-w-0 rounded-xl bg-[var(--pluto-500)] py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
                 >
                   {savingBranding ? "Saving…" : "Save Branding"}
                 </button>
@@ -945,7 +1010,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={() => setIsPreviewOpen(true)}
                   disabled={!apiKey}
-                  className="rounded-xl border border-[#E8E8E8] bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:text-[#0A0A0A] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
+                  className="flex-1 min-w-0 rounded-xl border border-[#E8E8E8] bg-white px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:text-[#0A0A0A] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
                 >
                   Preview Receipt
                 </button>
@@ -956,11 +1021,12 @@ export default function SettingsPage() {
           {/* Display Tab */}
           {activeTab === "display" && (
             <div
-              id="display-panel"
+              id={getSettingsPanelDomId("display")}
               role="tabpanel"
-              aria-labelledby="display-tab"
+              aria-label="Display"
+              aria-labelledby="display-tab display-tab-mobile"
               tabIndex={0}
-              className="rounded-2xl border border-[#E8E8E8] bg-white p-8 flex flex-col gap-8"
+              className="rounded-2xl border border-[#E8E8E8] bg-white p-8 flex flex-col gap-8 max-w-full"
             >
               <div>
                 <h2 className="text-lg font-bold text-[#0A0A0A] mb-1">
@@ -994,13 +1060,14 @@ export default function SettingsPage() {
           {/* Webhooks Tab */}
           {activeTab === "webhooks" && (
             <div
-              id="webhooks-panel"
+              id={getSettingsPanelDomId("webhooks")}
               role="tabpanel"
-              aria-labelledby="webhooks-tab"
+              aria-label="Webhooks"
+              aria-labelledby="webhooks-tab webhooks-tab-mobile"
               tabIndex={0}
-              className="rounded-2xl border border-[#E8E8E8] bg-white p-8 flex flex-col gap-8"
+              className="rounded-2xl border border-[#E8E8E8] bg-white p-8 flex flex-col gap-8 max-w-full"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-[#0A0A0A] mb-1">
                     Webhook Endpoint
@@ -1010,9 +1077,11 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 {webhookUrl && (
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <WebhookHealthIndicator webhookUrl={webhookUrl} />
                     <span
+                      role="status"
+                      aria-live="polite"
                       className={`rounded-full border px-3 py-1 text-[9px] font-bold uppercase tracking-widest ${isVerified ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-yellow-200 bg-yellow-50 text-yellow-700"}`}
                     >
                       {isVerified ? "Verified" : "Unverified"}
@@ -1040,19 +1109,23 @@ export default function SettingsPage() {
                   value={webhookUrl}
                   onChange={handleWebhookUrlChange}
                   placeholder="https://example.com/hooks/pluto"
+                  aria-invalid={webhookUrlError ? "true" : "false"}
+                  aria-describedby={webhookUrlError ? "webhook-url-error" : undefined}
                   className={`rounded-xl border bg-[#F9F9F9] px-4 py-3 font-mono text-sm text-[#0A0A0A] focus:outline-none focus:bg-white transition-all ${webhookUrlError ? "border-red-300 focus:border-red-500" : "border-[#E8E8E8] focus:border-[#0A0A0A]"}`}
                 />
                 {webhookUrlError && (
-                  <p className="text-xs text-red-500">{webhookUrlError}</p>
+                  <p id="webhook-url-error" className="text-xs text-red-500" role="alert">
+                    {webhookUrlError}
+                  </p>
                 )}
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
                     onClick={saveWebhookUrl}
                     disabled={
                       savingWebhook || loadingWebhook || !!webhookUrlError
                     }
-                    className="flex-1 rounded-xl bg-[var(--pluto-500)] py-2.5 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
+                    className="flex-1 min-w-0 rounded-xl bg-[var(--pluto-500)] py-2.5 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
                   >
                     {savingWebhook ? "Saving…" : "Save URL"}
                   </button>
@@ -1060,7 +1133,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={testWebhook}
                     disabled={testingWebhook || !webhookUrl}
-                    className="flex-1 rounded-xl border border-[#E8E8E8] bg-white py-2.5 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:text-[#0A0A0A] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
+                    className="flex-1 min-w-0 rounded-xl border border-[#E8E8E8] bg-white py-2.5 text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:text-[#0A0A0A] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
                   >
                     {testingWebhook ? "Testing…" : "Send Test"}
                   </button>
@@ -1074,12 +1147,12 @@ export default function SettingsPage() {
                   </p>
                   <p className="text-xs text-[#6B6B6B]">
                     Host this token at{" "}
-                    <code className="text-[#0A0A0A]">
+                    <code className="text-[#0A0A0A] break-all">
                       {webhookVerification.verification_file_url}
                     </code>
                   </p>
-                  <div className="flex items-center gap-2 rounded-lg border border-[#E8E8E8] bg-white p-1 pl-4">
-                    <code className="flex-1 truncate font-mono text-xs text-[#0A0A0A]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center rounded-lg border border-[#E8E8E8] bg-white p-1 pl-4">
+                    <code className="flex-1 min-w-0 truncate font-mono text-xs text-[#0A0A0A]">
                       {webhookVerification.verification_token ?? "—"}
                     </code>
                     {webhookVerification.verification_token && (
@@ -1113,7 +1186,10 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-1 pl-4">
-                  <code className="flex-1 truncate font-mono text-xs text-[#0A0A0A]">
+                  <code
+                    id="webhook-secret-value"
+                    className="flex-1 truncate font-mono text-xs text-[#0A0A0A]"
+                  >
                     {webhookNewSecret
                       ? webhookRevealedSecret
                         ? webhookNewSecret
@@ -1125,6 +1201,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => setWebhookRevealedSecret((v) => !v)}
                       aria-label={webhookRevealedSecret ? "Hide webhook secret" : "Show webhook secret"}
+                      aria-pressed={webhookRevealedSecret}
+                      aria-controls="webhook-secret-value webhook-secret-visibility"
                       className="p-1 text-[#6B6B6B] hover:text-[#0A0A0A]"
                     >
                       <EyeIcon open={webhookRevealedSecret} />
@@ -1135,8 +1213,15 @@ export default function SettingsPage() {
                   )}
                 </div>
                 {webhookNewSecret && (
-                  <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-center text-[10px] font-bold uppercase tracking-widest text-yellow-800">
-                    Copy now — shown once
+                  <div
+                    id="webhook-secret-visibility"
+                    role="status"
+                    aria-live="polite"
+                    className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-center text-[10px] font-bold uppercase tracking-widest text-yellow-800"
+                  >
+                    {webhookRevealedSecret
+                      ? "Webhook secret is visible. Copy now — shown once."
+                      : "Webhook secret is hidden. Toggle reveal to inspect it."}
                   </div>
                 )}
                 {!confirmRegenSecret ? (
@@ -1158,12 +1243,12 @@ export default function SettingsPage() {
                     <p className="text-xs text-yellow-700">
                       The current secret will stop working immediately.
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row">
                       <button
                         type="button"
                         onClick={regenerateWebhookSecret}
                         disabled={regeneratingSecret}
-                        className="flex-1 rounded-xl bg-[var(--pluto-500)] py-2.5 text-xs font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
+                        className="flex-1 min-w-0 rounded-xl bg-[var(--pluto-500)] py-2.5 text-xs font-bold uppercase tracking-widest text-white hover:bg-[var(--pluto-600)] hover:shadow-md hover:scale-[1.01] disabled:opacity-50 transition-all duration-200"
                       >
                         Confirm
                       </button>
@@ -1171,7 +1256,7 @@ export default function SettingsPage() {
                         type="button"
                         onClick={() => setConfirmRegenSecret(false)}
                         disabled={regeneratingSecret}
-                        className="flex-1 rounded-xl border border-[#E8E8E8] bg-white py-2.5 text-xs font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
+                        className="flex-1 min-w-0 rounded-xl border border-[#E8E8E8] bg-white py-2.5 text-xs font-bold uppercase tracking-widest text-[#6B6B6B] hover:bg-[#F5F5F5] hover:shadow-sm hover:border-[#D0D0D0] disabled:opacity-50 transition-all duration-200"
                       >
                         Cancel
                       </button>
@@ -1185,11 +1270,12 @@ export default function SettingsPage() {
           {/* Danger Tab */}
           {activeTab === "danger" && (
             <div
-              id="danger-panel"
+              id={getSettingsPanelDomId("danger")}
               role="tabpanel"
-              aria-labelledby="danger-tab"
+              aria-label="Danger Zone"
+              aria-labelledby="danger-tab danger-tab-mobile"
               tabIndex={0}
-              className="rounded-2xl border border-red-200 bg-white p-8 flex flex-col gap-6"
+              className="rounded-2xl border border-red-200 bg-white p-8 flex flex-col gap-6 max-w-full"
             >
               <div>
                 <h2 className="text-lg font-bold text-red-600 mb-1">

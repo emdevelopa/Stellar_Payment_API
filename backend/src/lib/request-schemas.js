@@ -56,6 +56,7 @@ const paymentBaseSchema = z.object({
     .trim()
     .min(1, "recipient is required"),
   description: optionalTrimmedString(),
+  message: optionalTrimmedString().refine((val) => !val || val.length <= 28, "Message must be at most 28 characters"),
   memo: optionalTrimmedString(),
   memo_type: optionalTrimmedString().transform((value) =>
     value ? value.toLowerCase() : undefined,

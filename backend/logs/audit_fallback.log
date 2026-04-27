@@ -1,0 +1,8 @@
+2026-04-25T21:21:03.833Z | {"timestamp":"2026-04-25T21:21:03.833Z","merchant_id":"merchant-uuid-004","action":"login","status":"success","ip_address":"1.2.3.4","user_agent":"test-agent"} | error: DB connection lost
+2026-04-26T12:07:05.351Z | {"merchant_id":"merchant-uuid-004","action":"login","status":"success","ip_address":"1.2.3.4","user_agent":"test-agent","event_type":"login_attempt"} | error: DB connection lost
+2026-04-26T12:08:45.458Z | {"merchant_id":"merchant-uuid-004","action":"login","status":"success","ip_address":"1.2.3.4","user_agent":"test-agent","event_type":"login_attempt"} | error: DB connection lost
+2026-04-26T12:09:52.277Z | {"merchant_id":"merchant-uuid-004","action":"login","event_type":"login_attempt"} | error: DB connection lost
+2026-04-26T12:10:16.328Z | {"merchant_id":"merchant-uuid-004","action":"login","status":"success","ip_address":"1.2.3.4","user_agent":"test-agent","event_type":"login_attempt"} | error: DB connection lost
+2026-04-26T12:10:52.741Z | {"merchant_id":"merchant-uuid-004","action":"login","event_type":"login_attempt"} | error: DB connection lost
+2026-04-26T12:11:43.372Z | {"merchant_id":"merchant-uuid-004","action":"login","event_type":"login_attempt"} | error: DB connection lost
+2026-04-26T13:07:19.913Z | {"merchant_id":"merchant-uuid-004","action":"login","event_type":"login_attempt"} | error: DB connection lost

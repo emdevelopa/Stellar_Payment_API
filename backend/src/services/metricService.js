@@ -157,12 +157,12 @@ export const metricService = {
       FROM payments
       WHERE merchant_id = $1
         AND status = 'completed'
-        AND created_at >= NOW() - INTERVAL '${days} days'
+        AND created_at >= NOW() - ($2::int * INTERVAL '1 day')
       GROUP BY 1, 2
       ORDER BY 1 ASC, 2 ASC
     `;
 
-    const { rows } = await pool.query(query, [merchantId]);
+    const { rows } = await pool.query(query, [merchantId, days]);
 
     // Collect all distinct assets across the result set
     const assetSet = new Set(rows.map((r) => r.asset));

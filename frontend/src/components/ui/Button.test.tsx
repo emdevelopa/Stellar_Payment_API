@@ -2,6 +2,10 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { Button } from "./Button";
+import { describe, it, expect, vi } from "vitest";
+
+// Use vi.fn() instead of jest.fn()
+const jest = { fn: vi.fn };
 
 describe("Button Component - Mobile Responsiveness", () => {
   describe("Rendering", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -21,6 +22,7 @@ import { localeToLanguageTag } from "@/i18n/config";
 import Confetti from "react-confetti";
 import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
 import { Modal } from "@/components/ui/Modal";
+import PaymentSuccessAnimation from "@/components/PaymentSuccessAnimation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet";
@@ -451,137 +453,150 @@ export default function PaymentPage() {
                 </DetailRow>
               )}
 
-              {!isSettled && !isFailed && (
-                <DetailRow label={t("scanToPay")}>
-                  <div className="flex items-center gap-4 rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
-                    <div className="rounded-lg border border-[#E8E8E8] bg-white p-2 shrink-0 transition-transform hover:scale-105 active:scale-95 duration-200">
-                      <QRCodeSVG
-                        value={paymentIntentUri}
-                        size={256}
-                        level="H"
-                        bgColor="#ffffff"
-                        fgColor="#0A0A0A"
-                        style={{ width: "72px", height: "72px" }}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <p className="text-xs text-[#6B6B6B]">{t("scanDescription")}</p>
-                      <button type="button" onClick={() => setShowQrModal(true)}
-                        className="self-start rounded-lg border border-[#E8E8E8] bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A] hover:bg-[#F5F5F5] transition-colors">
-                        {t("openQrModal")}
-                      </button>
-                    </div>
-                  </div>
-                </DetailRow>
-              )}
+              <AnimatePresence mode="wait">
+                {!isSettled && !isFailed ? (
+                  <motion.div
+                    key="pending"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex flex-col gap-5"
+                  >
+                    <DetailRow label={t("scanToPay")}>
+                      <div className="flex items-center gap-4 rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
+                        <div className="rounded-lg border border-[#E8E8E8] bg-white p-2 shrink-0 transition-transform hover:scale-105 active:scale-95 duration-200">
+                          <QRCodeSVG
+                            value={paymentIntentUri}
+                            size={256}
+                            level="H"
+                            bgColor="#ffffff"
+                            fgColor="#0A0A0A"
+                            style={{ width: "72px", height: "72px" }}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs text-[#6B6B6B]">{t("scanDescription")}</p>
+                          <button type="button" onClick={() => setShowQrModal(true)}
+                            className="self-start rounded-lg border border-[#E8E8E8] bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#0A0A0A] hover:bg-[#F5F5F5] transition-colors">
+                            {t("openQrModal")}
+                          </button>
+                        </div>
+                      </div>
+                    </DetailRow>
 
-              {actionError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{actionError}</div>
-              )}
+                    {actionError && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{actionError}</div>
+                    )}
 
-              {/* CTA */}
-              {!isSettled && !isFailed && (
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] mb-2">
-                      {t("completePayment")}
-                    </p>
-                    <p className="text-sm text-[#6B6B6B]">
-                      {payment.description ?? t("paymentRequest")}
-                    </p>
-                  </div>
-                  {activeProvider ? (
-                    <>
-                      <p className="text-center text-[10px] text-[#6B6B6B] font-medium">{t("connectedVia", { provider: activeProvider.name ?? "" })}</p>
+                    {/* CTA */}
+                    <div className="flex flex-col gap-3">
+                      <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] mb-2">
+                          {t("completePayment")}
+                        </p>
+                        <p className="text-sm text-[#6B6B6B]">
+                          {payment.description ?? t("paymentRequest")}
+                        </p>
+                      </div>
+                      {activeProvider ? (
+                        <>
+                          <p className="text-center text-[10px] text-[#6B6B6B] font-medium">{t("connectedVia", { provider: activeProvider.name ?? "" })}</p>
 
-                      {sortedSourceAssets.length > 0 && (
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">Payment Asset</label>
-                          <div className="relative">
-                            <select value={sourceAsset} onChange={(e) => setSourceAsset(e.target.value)}
-                              className="w-full appearance-none rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-4 py-3 text-sm font-medium text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-colors">
-                              {sortedSourceAssets.map(code => (
-                                <option key={code} value={code}>{code} — {parseFloat(walletBalances.find(b => b.code === code)?.balance || "0").toFixed(2)}</option>
-                              ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#6B6B6B]">
-                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          {sortedSourceAssets.length > 0 && (
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">Payment Asset</label>
+                              <div className="relative">
+                                <select value={sourceAsset} onChange={(e) => setSourceAsset(e.target.value)}
+                                  className="w-full appearance-none rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] px-4 py-3 text-sm font-medium text-[#0A0A0A] focus:border-[#0A0A0A] focus:outline-none transition-colors">
+                                  {sortedSourceAssets.map(code => (
+                                    <option key={code} value={code}>{code} — {parseFloat(walletBalances.find(b => b.code === code)?.balance || "0").toFixed(2)}</option>
+                                  ))}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#6B6B6B]">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
+                          )}
+
+                          {pathQuoteLoading && <p className="text-center text-xs text-[#6B6B6B]">Checking payment routes…</p>}
+                          {pathQuoteError && <p className="text-center text-xs text-red-500">{pathQuoteError}</p>}
+                          {pathQuote && !pathQuoteLoading && sourceAsset !== payment.asset.toUpperCase() && (
+                            <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4 flex flex-col gap-3">
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] mb-1">{t("approximateCostLabel")}</p>
+                                <p className="text-xl font-bold text-[#0A0A0A]">{Number(pathQuote.source_amount).toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 7 })} {pathQuote.source_asset}</p>
+                                <p className="text-xs text-[#6B6B6B] mt-1">{t("approximateCostHelp", { amount: pathQuote.destination_amount, asset: pathQuote.destination_asset })}</p>
+                              </div>
+                              <label className="flex items-center gap-3 cursor-pointer select-none">
+                                <input type="checkbox" checked={usePathPayment} onChange={(e) => setUsePathPayment(e.target.checked)} className="h-4 w-4 rounded border-[#E8E8E8] text-[#0A0A0A] focus:ring-[#0A0A0A]" />
+                                <span className="text-sm text-[#0A0A0A]">Pay with <span className="font-bold">{pathQuote.send_max} {pathQuote.source_asset}</span></span>
+                              </label>
+                            </div>
+                          )}
+
+                          <button type="button" onClick={() => setIsPayModalOpen(true)} disabled={isProcessing}
+                            className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#0A0A0A] py-4 text-sm font-bold uppercase tracking-widest text-white shadow-lg shadow-black/10 hover:bg-black active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                            {isProcessing ? (
+                              <><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>{t("processing")}</>
+                            ) : usePathPayment && pathQuote ? `Pay ${pathQuote.send_max} ${pathQuote.source_asset}`
+                              : activeProvider?.name ? t("payWith", { provider: activeProvider.name }) : t("payWithFallback")}
+                          </button>
+
+                          <button type="button" onClick={() => setIsCancelModalOpen(true)} className="text-center text-[10px] text-[#6B6B6B] hover:text-[#0A0A0A] transition-colors font-medium">
+                            Cancel Payment
+                          </button>
+                        </>
+                      ) : (
+                        <WalletSelector networkPassphrase={process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015"} onConnected={() => { }} />
                       )}
-
-                      {pathQuoteLoading && <p className="text-center text-xs text-[#6B6B6B]">Checking payment routes…</p>}
-                      {pathQuoteError && <p className="text-center text-xs text-red-500">{pathQuoteError}</p>}
-                      {pathQuote && !pathQuoteLoading && sourceAsset !== payment.asset.toUpperCase() && (
-                        <div className="rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4 flex flex-col gap-3">
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] mb-1">{t("approximateCostLabel")}</p>
-                            <p className="text-xl font-bold text-[#0A0A0A]">{Number(pathQuote.source_amount).toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 7 })} {pathQuote.source_asset}</p>
-                            <p className="text-xs text-[#6B6B6B] mt-1">{t("approximateCostHelp", { amount: pathQuote.destination_amount, asset: pathQuote.destination_asset })}</p>
-                          </div>
-                          <label className="flex items-center gap-3 cursor-pointer select-none">
-                            <input type="checkbox" checked={usePathPayment} onChange={(e) => setUsePathPayment(e.target.checked)} className="h-4 w-4 rounded border-[#E8E8E8] text-[#0A0A0A] focus:ring-[#0A0A0A]" />
-                            <span className="text-sm text-[#0A0A0A]">Pay with <span className="font-bold">{pathQuote.send_max} {pathQuote.source_asset}</span></span>
-                          </label>
-                        </div>
-                      )}
-
-                      <button type="button" onClick={() => setIsPayModalOpen(true)} disabled={isProcessing}
-                        className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#0A0A0A] py-4 text-sm font-bold uppercase tracking-widest text-white shadow-lg shadow-black/10 hover:bg-black active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                        {isProcessing ? (
-                          <><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>{t("processing")}</>
-                        ) : usePathPayment && pathQuote ? `Pay ${pathQuote.send_max} ${pathQuote.source_asset}`
-                          : activeProvider?.name ? t("payWith", { provider: activeProvider.name }) : t("payWithFallback")}
-                      </button>
-
-                      <button type="button" onClick={() => setIsCancelModalOpen(true)} className="text-center text-[10px] text-[#6B6B6B] hover:text-[#0A0A0A] transition-colors font-medium">
-                        Cancel Payment
-                      </button>
-                    </>
-                  ) : (
-                    <WalletSelector networkPassphrase={process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015"} onConnected={() => { }} />
-                  )}
-                </div>
-              )}
-
-              {isSettled && (
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center flex flex-col items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
-                      <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                     </div>
-                    <p className="text-sm font-bold text-emerald-800">{t("receivedTitle")}</p>
-                    <p className="text-xs text-emerald-600">{t("receivedDescription")}</p>
-                  </div>
-                  <button type="button" onClick={handleDownloadReceipt} disabled={isDownloadingReceipt}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8E8] bg-white text-sm font-bold text-[#0A0A0A] hover:bg-[#F5F5F5] disabled:opacity-50 transition-all">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    {isDownloadingReceipt ? t("downloadReceiptLoading") : t("downloadReceipt")}
-                  </button>
-                </div>
-              )}
-
-              {isFailed && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center flex flex-col gap-2">
-                  <p className="text-sm font-bold text-red-700">{t("failedTitle")}</p>
-                  {payment.metadata?.failure_reason === "underpayment" ? (
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xs text-red-600 font-medium">Underpayment detected</p>
-                      <p className="text-xs text-red-500">
-                        Expected <span className="font-bold">{payment.metadata.expected_amount} {payment.asset.toUpperCase()}</span>,
-                        received <span className="font-bold">{payment.metadata.received_amount} {payment.asset.toUpperCase()}</span>.
-                      </p>
-                      <p className="text-xs text-red-500 mt-1">
-                        Shortfall: <span className="font-bold">{payment.metadata.shortfall} {payment.asset.toUpperCase()}</span>
-                      </p>
-                      <p className="text-[10px] text-red-400 mt-2">Please contact the merchant to arrange a top-up or refund.</p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-red-500">{t("failedDescription")}</p>
-                  )}
-                </div>
-              )}
+                  </motion.div>
+                ) : isSettled ? (
+                  <motion.div
+                    key="success"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    className="flex flex-col gap-3"
+                  >
+                    <PaymentSuccessAnimation 
+                      title={t("receivedTitle")} 
+                      description={t("receivedDescription")} 
+                    />
+                    <button type="button" onClick={handleDownloadReceipt} disabled={isDownloadingReceipt}
+                      className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8E8] bg-white text-sm font-bold text-[#0A0A0A] hover:bg-[#F5F5F5] disabled:opacity-50 transition-all">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      {isDownloadingReceipt ? t("downloadReceiptLoading") : t("downloadReceipt")}
+                    </button>
+                  </motion.div>
+                ) : isFailed ? (
+                  <motion.div
+                    key="failed"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="rounded-xl border border-red-200 bg-red-50 p-5 text-center flex flex-col gap-2"
+                  >
+                    <p className="text-sm font-bold text-red-700">{t("failedTitle")}</p>
+                    {payment.metadata?.failure_reason === "underpayment" ? (
+                      <div className="flex flex-col gap-1">
+                        <p className="text-xs text-red-600 font-medium">Underpayment detected</p>
+                        <p className="text-xs text-red-500">
+                          Expected <span className="font-bold">{payment.metadata.expected_amount} {payment.asset.toUpperCase()}</span>,
+                          received <span className="font-bold">{payment.metadata.received_amount} {payment.asset.toUpperCase()}</span>.
+                        </p>
+                        <p className="text-xs text-red-500 mt-1">
+                          Shortfall: <span className="font-bold">{payment.metadata.shortfall} {payment.asset.toUpperCase()}</span>
+                        </p>
+                        <p className="text-[10px] text-red-400 mt-2">Please contact the merchant to arrange a top-up or refund.</p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-red-500">{t("failedDescription")}</p>
+                    )}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
           </div>
 

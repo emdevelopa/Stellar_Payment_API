@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import * as StellarSdk from "stellar-sdk";
 import { submitTransaction } from "@/lib/freighter";
 import { buildPaymentTransaction, buildPathPaymentTransaction } from "@/lib/stellar";
 import type { WalletProvider } from "@/lib/wallet-types";
@@ -10,6 +11,7 @@ interface PaymentParams {
   assetIssuer: string | null;
   memo?: string | null;
   memoType?: string | null;
+  onSigned?: (txHash: string) => void;
 }
 
 interface PathPaymentParams {
@@ -23,6 +25,7 @@ interface PathPaymentParams {
   path: Array<{ asset_code: string; asset_issuer: string | null }>;
   memo?: string | null;
   memoType?: string | null;
+  onSigned?: (txHash: string) => void;
 }
 
 interface UsePaymentReturn {
@@ -85,6 +88,16 @@ export function usePayment(provider: WalletProvider | null): UsePaymentReturn {
           transactionXDR,
           networkPassphrase,
         );
+
+        // Optimistic update: Compute hash and notify before submission
+        if (params.onSigned) {
+          try {
+            const tx = StellarSdk.TransactionBuilder.fromXDR(signedXDR, networkPassphrase);
+            params.onSigned(tx.hash().toString("hex"));
+          } catch {
+            // Fallback: we'll get the hash from result anyway
+          }
+        }
 
         // Submit the transaction
         setStatus("Submitting transaction...");
@@ -150,6 +163,16 @@ export function usePayment(provider: WalletProvider | null): UsePaymentReturn {
           transactionXDR,
           networkPassphrase,
         );
+
+        // Optimistic update: Compute hash and notify before submission
+        if (params.onSigned) {
+          try {
+            const tx = StellarSdk.TransactionBuilder.fromXDR(signedXDR, networkPassphrase);
+            params.onSigned(tx.hash().toString("hex"));
+          } catch {
+            // Fallback
+          }
+        }
 
         setStatus("Submitting transaction...");
         const result = await submitTransaction(

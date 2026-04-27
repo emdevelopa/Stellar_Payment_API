@@ -27,6 +27,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PaymentSuccessAnimation } from "@/components/PaymentSuccessAnimation";
 import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
 import { Modal } from "@/components/ui/Modal";
+import PaymentSuccessAnimation from "@/components/PaymentSuccessAnimation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet";
@@ -176,6 +177,7 @@ export default function PaymentPage() {
   const [sourceAsset, setSourceAsset] = useState<string>("XLM");
   const [sortedSourceAssets, setSortedSourceAssets] = useState<string[]>([]);
   const [walletPublicKey, setWalletPublicKey] = useState<string | null>(null);
+  const [isOptimisticSettled, setIsOptimisticSettled] = useState(false);
   const previousWalletPublicKey = useRef<string | null>(null);
 
   const { activeProvider } = useWallet();
@@ -333,22 +335,58 @@ export default function PaymentPage() {
     if (!payment) return;
     setIsPayModalOpen(false); setActionError(null);
     try {
+      const onSigned = (txHash: string) => {
+        // TRIGGER OPTIMISTIC SUCCESS
+        setIsOptimisticSettled(true);
+        setPayment(p => p ? { ...p, tx_id: txHash } : null);
+      };
+
       let result: { hash: string };
       if (usePathPayment && pathQuote) {
-        result = await processPathPayment({ recipient: payment.recipient, destAmount: pathQuote.destination_amount, destAssetCode: pathQuote.destination_asset, destAssetIssuer: pathQuote.destination_asset_issuer, sendMax: pathQuote.send_max, sendAssetCode: pathQuote.source_asset, sendAssetIssuer: pathQuote.source_asset_issuer, path: pathQuote.path, memo: payment.memo, memoType: payment.memo_type });
+        result = await processPathPayment({
+          recipient: payment.recipient,
+          destAmount: pathQuote.destination_amount,
+          destAssetCode: pathQuote.destination_asset,
+          destAssetIssuer: pathQuote.destination_asset_issuer,
+          sendMax: pathQuote.send_max,
+          sendAssetCode: pathQuote.source_asset,
+          sendAssetIssuer: pathQuote.source_asset_issuer,
+          path: pathQuote.path,
+          memo: payment.memo,
+          memoType: payment.memo_type,
+          onSigned,
+        });
       } else {
-        result = await processPayment({ recipient: payment.recipient, amount: String(payment.amount), assetCode: payment.asset, assetIssuer: payment.asset_issuer, memo: payment.memo, memoType: payment.memo_type });
+        result = await processPayment({
+          recipient: payment.recipient,
+          amount: String(payment.amount),
+          assetCode: payment.asset,
+          assetIssuer: payment.asset_issuer,
+          memo: payment.memo,
+          memoType: payment.memo_type,
+          onSigned,
+        });
       }
       // Optimistic update: trigger animation and local state as soon as transaction hash is available
       setIsOptimisticSuccess(true);
       setPayment({ ...payment, status: "completed", tx_id: result.hash });
+      setIsOptimisticSettled(false); // No longer optimistic, it's real now
       toast.success(t("paymentSent"));
+      setTimeout(async () => {
+        try {
+          await fetch(`${API_URL}/api/verify-payment/${paymentId}`, {
+            method: "POST",
+          });
+        } catch {}
+      }, 2000);
       
       // Verification in background
       void fetch(`${API_URL}/api/verify-payment/${paymentId}`, { method: "POST" }).catch(() => {});
     } catch {
+      setIsOptimisticSettled(false);
       const msg = paymentError ?? t("paymentFailed");
-      setActionError(msg); toast.error(msg);
+      setActionError(msg);
+      toast.error(msg);
     }
   };
 
@@ -382,7 +420,7 @@ export default function PaymentPage() {
     );
   }
 
-  const isSettled = payment.status === "confirmed" || payment.status === "completed";
+  const isSettled = payment.status === "confirmed" || payment.status === "completed" || isOptimisticSettled;
   const isFailed = payment.status === "failed";
   const paymentIntentUri = buildSep7Uri(payment);
   const branding = resolveBranding(payment.branding_config || {});
@@ -390,6 +428,15 @@ export default function PaymentPage() {
 
   return (
     <>
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white/95 backdrop-blur-sm">
+          <Spinner size="xl" />
+          <div className="flex flex-col items-center gap-1 text-center">
+            <p className="text-sm font-bold text-[#0A0A0A]">{txStatus ?? t("processingFallback")}</p>
+            <p className="text-xs text-[#6B6B6B]">{t("doNotClose")}</p>
+          </div>
+        </div>
+      )}
       <AnimatePresence>
         {isOptimisticSuccess && (
           <motion.div 
@@ -634,6 +681,33 @@ export default function PaymentPage() {
 
               {isSettled && (
                 <div className="flex flex-col gap-3">
+                  <PaymentSuccessAnimation
+                    amount={payment.amount}
+                    asset={payment.asset}
+                    optimistic={isOptimisticSettled}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDownloadReceipt}
+                    disabled={isDownloadingReceipt || isOptimisticSettled}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8E8] bg-white text-sm font-bold text-[#0A0A0A] hover:bg-[#F5F5F5] disabled:opacity-50 transition-all"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                    {isDownloadingReceipt
+                      ? t("downloadReceiptLoading")
+                      : t("downloadReceipt")}
                   <motion.div 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}

@@ -149,10 +149,10 @@ test.describe("Checkout – Rendering", () => {
     await page.goto(PAY_URL);
 
     await expect(
-      page.getByText("This payment has been received.")
+      page.getByText("Payment Received")
     ).toBeVisible();
     await expect(
-      page.getByText("The transaction was confirmed on the Stellar network.")
+      page.getByText("Your transaction was successfully confirmed and settled on the Stellar network.")
     ).toBeVisible();
   });
 
@@ -161,7 +161,7 @@ test.describe("Checkout – Rendering", () => {
     await page.goto(PAY_URL);
 
     await expect(
-      page.getByText("This payment has been received.")
+      page.getByText("Payment Received")
     ).toBeVisible();
   });
 

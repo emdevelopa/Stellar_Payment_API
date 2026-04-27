@@ -18,7 +18,7 @@ vi.mock("@/lib/merchant-store", () => ({
     useHydrateMerchantStore: vi.fn(),
 }));
 
-// Mock ResizeObserver for Rechart
+// Mock ResizeObserver for Recharts
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),

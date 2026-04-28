@@ -354,15 +354,20 @@ export const focusRingVariants: Variants = {
   },
 };
 
+type LatencyVariantName = "good" | "warning" | "bad";
+type ConnectionQualityVariantName = "excellent" | "good" | "fair" | "poor";
+
 // Animation utility functions
-export const getLatencyVariant = (latency: number | null): keyof typeof latencyVariants => {
+export const getLatencyVariant = (latency: number | null): LatencyVariantName => {
   if (latency === null) return "good";
   if (latency < 100) return "good";
   if (latency < 300) return "warning";
   return "bad";
 };
 
-export const getConnectionQualityVariant = (latency: number | null): keyof typeof connectionQualityVariants => {
+export const getConnectionQualityVariant = (
+  latency: number | null
+): ConnectionQualityVariantName => {
   if (latency === null) return "poor";
   if (latency < 50) return "excellent";
   if (latency < 150) return "good";
@@ -370,9 +375,13 @@ export const getConnectionQualityVariant = (latency: number | null): keyof typeo
   return "poor";
 };
 
-export const getStatusDotVariant = (status: string): keyof typeof statusDotVariants => {
-  const validStatuses = ["online", "offline", "slow", "checking"];
-  return validStatuses.includes(status) ? status as keyof typeof statusDotVariants : "checking";
+type StatusDotVariantName = "online" | "offline" | "slow" | "checking";
+
+export const getStatusDotVariant = (status: string): StatusDotVariantName => {
+  const validStatuses: StatusDotVariantName[] = ["online", "offline", "slow", "checking"];
+  return validStatuses.includes(status as StatusDotVariantName)
+    ? (status as StatusDotVariantName)
+    : "checking";
 };
 
 // Animation hooks for reduced motion support

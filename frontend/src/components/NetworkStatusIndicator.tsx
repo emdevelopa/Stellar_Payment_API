@@ -318,8 +318,7 @@ export const NetworkStatusIndicator: React.FC<
     // Announce completion after a delay
     setTimeout(() => {
       if (enableScreenReaderSupport && announcementsEnabled) {
-        const currentStatus = status === "checking" ? "completed" : status;
-        announce(`Network status check ${currentStatus}`, "polite");
+        announce(`Network status check ${status}`, "polite");
       }
     }, 2000);
   }, [status, checkStatus, saveFocus, enableScreenReaderSupport, announcementsEnabled, announce]);
@@ -343,8 +342,8 @@ export const NetworkStatusIndicator: React.FC<
       tabIndex={enableKeyboardNavigation ? 0 : undefined}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
-      onFocusStart={() => setIsFocused(true)}
-      onFocusEnd={() => setIsFocused(false)}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
     >
       {/* Background hover effect */}
       {enableMicroInteractions && (

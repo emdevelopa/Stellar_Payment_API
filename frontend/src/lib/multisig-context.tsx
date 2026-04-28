@@ -3,7 +3,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from "react";
 
 export type MultisigApprovalStatus = "pending" | "approved" | "rejected" | "expired" | "processing";
-export type MultisigStep = "review" | "sign" | "submit" | "confirm" | "error";
+export type MultisigStep =
+  | "review"
+  | "sign"
+  | "submit"
+  | "processing"
+  | "confirm"
+  | "error";
 
 export interface MultisigSigner {
   id: string;

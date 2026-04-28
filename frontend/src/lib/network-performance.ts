@@ -328,7 +328,7 @@ export function useAnimationResources() {
  * Combined animation performance hook
  */
 export function useAnimationSystem() {
-  const performance = useAnimationPerformance();
+  const animationPerformance = useAnimationPerformance();
   const accessibility = useAnimationAccessibility();
   const memory = useAnimationMemory();
   const optimization = useAnimationOptimization();
@@ -358,7 +358,7 @@ export function useAnimationSystem() {
     const adaptiveDuration = accessibility.getAdaptiveDuration(duration);
     const throttledCallback = optimization.throttleAnimation(callback, throttleMs);
     
-    performance.startAnimation();
+    animationPerformance.startAnimation();
     resources.incrementActiveAnimations();
 
     const startTime = performance.now();
@@ -376,7 +376,7 @@ export function useAnimationSystem() {
         memory.addAnimationFrame(animationId);
       } else {
         throttledCallback();
-        performance.endAnimation();
+        animationPerformance.endAnimation();
         resources.decrementActiveAnimations();
       }
     };
@@ -388,25 +388,25 @@ export function useAnimationSystem() {
       if (animationId) {
         cancelAnimationFrame(animationId);
         memory.removeAnimationFrame(animationId);
-        performance.endAnimation();
+        animationPerformance.endAnimation();
         resources.decrementActiveAnimations();
       }
     };
-  }, [performance, accessibility, memory, optimization, framePerformance, resources]);
+  }, [animationPerformance, accessibility, memory, optimization, framePerformance, resources]);
 
   const getSystemMetrics = useCallback(() => {
     return {
-      performance: performance.getPerformanceMetrics(),
+      performance: animationPerformance.getPerformanceMetrics(),
       frame: framePerformance.getFrameMetrics(),
       resources: resources.getResourceMetrics(),
       accessibility: {
         prefersReducedMotion: accessibility.prefersReducedMotion(),
       },
     };
-  }, [performance, framePerformance, resources, accessibility]);
+  }, [animationPerformance, framePerformance, resources, accessibility]);
 
   return {
-    performance,
+    performance: animationPerformance,
     accessibility,
     memory,
     optimization,

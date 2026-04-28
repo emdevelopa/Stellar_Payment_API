@@ -1,11 +1,12 @@
 import React from "react";
 
-interface SpinnerProps {
-  size?: "sm" | "md" | "lg" | "xl";
+interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
   className?: string;
 }
 
 const sizeMap = {
+  xs: "w-3 h-3",
   sm: "w-4 h-4",
   md: "w-8 h-8",
   lg: "w-12 h-12",
@@ -15,12 +16,14 @@ const sizeMap = {
 export const Spinner: React.FC<SpinnerProps> = ({
   size = "md",
   className = "",
+  ...props
 }) => {
   return (
     <div
       className={`relative ${sizeMap[size]} ${className}`}
       role="status"
       aria-label="Loading"
+      {...props}
     >
       <svg
         viewBox="0 0 100 100"

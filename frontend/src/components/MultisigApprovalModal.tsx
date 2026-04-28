@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMultisigState, useMultisigActions } from "@/lib/multisig-context";
 import { toast } from "sonner";
-import { CopyButton } from "@/components/CopyButton";
+import CopyButton from "@/components/CopyButton";
 
 interface MultisigApprovalModalProps {
   readonly isOpen: boolean;

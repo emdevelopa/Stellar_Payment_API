@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -23,7 +22,7 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import { QRCodeSVG } from "qrcode.react";
 import { localeToLanguageTag } from "@/i18n/config";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { PaymentSuccessAnimation } from "@/components/PaymentSuccessAnimation";
 import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
 import { Modal } from "@/components/ui/Modal";

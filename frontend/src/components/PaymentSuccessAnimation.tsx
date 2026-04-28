@@ -1,7 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion, type Variants } from "framer-motion";
-import { useEffect } from "react";
 import confetti from "canvas-confetti";
 
 interface PaymentSuccessAnimationProps {
@@ -9,420 +9,283 @@ interface PaymentSuccessAnimationProps {
   className?: string;
 }
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence, type Variants } from "framer-motion";
-import confetti from "canvas-confetti";
-import { useTranslations } from "next-intl";
+const PLUTO_CONFETTI_COLORS = ["#4A6FA5", "#6B8FBF", "#B8D4E8", "#0D1B2E"];
 
-/**
- * Props for PaymentSuccessAnimation component
- */
-interface PaymentSuccessAnimationProps {
-  show: boolean;
-  onComplete?: () => void;
-  amount?: string;
-  asset?: string;
-  txId?: string;
-}
+const cardVariants: Variants = {
+  hidden: {
+    opacity: 0,
+    scale: 0.94,
+    y: 18,
+  },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: {
+      duration: 0.55,
+      ease: [0.16, 1, 0.3, 1],
+      staggerChildren: 0.08,
+      delayChildren: 0.08,
+    },
+  },
+};
 
-/**
- * Animation variants for the success container
- */
-const containerVariants: Variants = {
-  hidden: { opacity: 0, scale: 0.8 },
+const contentVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.4,
+      ease: [0.16, 1, 0.3, 1],
+    },
+  },
+};
+
+const ringVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.72 },
   visible: {
     opacity: 1,
     scale: 1,
     transition: {
-      type: "spring",
-      stiffness: 300,
-      damping: 20,
-      staggerChildren: 0.1,
+      duration: 0.7,
+      ease: [0.22, 1, 0.36, 1],
     },
   },
 };
 
-const circleVariants: Variants = {
-  hidden: { pathLength: 0, opacity: 0 },
-  visible: {
-    pathLength: 1,
-    opacity: 1,
+const sparkVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.6 },
+  visible: (index: number) => ({
+    opacity: [0, 1, 0.75],
+    scale: [0.6, 1, 0.9],
+    y: [0, -6, 0],
     transition: {
-      duration: 0.6,
-      ease: "easeInOut",
-    },
-  },
-};
-
-const checkVariants: Variants = {
-  hidden: { pathLength: 0, opacity: 0 },
-  visible: {
-    pathLength: 1,
-    opacity: 1,
-    transition: {
-      duration: 0.4,
+      delay: 0.2 + index * 0.08,
+      duration: 0.8,
       ease: "easeOut",
-      delay: 0.3,
     },
-  },
+  }),
 };
 
-export function PaymentSuccessAnimation({ onComplete, className = "" }: PaymentSuccessAnimationProps) {
+const SPARK_POSITIONS = [
+  "left-3 top-7",
+  "right-5 top-4",
+  "left-7 bottom-4",
+  "right-3 bottom-8",
+];
+
+function usePrefersReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
   useEffect(() => {
-    // Fire brand-themed confetti
-    const duration = 2000;
-    const animationEnd = Date.now() + duration;
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
 
-    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncPreference = () => setPrefersReducedMotion(mediaQuery.matches);
 
-    const interval: NodeJS.Timeout = setInterval(() => {
+    syncPreference();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncPreference);
+      return () => mediaQuery.removeEventListener("change", syncPreference);
+    }
+
+    mediaQuery.addListener(syncPreference);
+    return () => mediaQuery.removeListener(syncPreference);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+/**
+ * Checkout celebration card for confirmed payments.
+ * Keeps the motion work self-contained so the page can control the overlay shell.
+ */
+export function PaymentSuccessAnimation({
+  onComplete,
+  className = "",
+}: PaymentSuccessAnimationProps) {
+  const shouldReduceMotion = usePrefersReducedMotion();
+
+  useEffect(() => {
+    const animationDuration = shouldReduceMotion ? 900 : 2000;
+    const completionTimer = onComplete
+      ? window.setTimeout(onComplete, animationDuration)
+      : undefined;
+
+    confetti({
+      particleCount: shouldReduceMotion ? 26 : 46,
+      spread: shouldReduceMotion ? 70 : 100,
+      startVelocity: shouldReduceMotion ? 24 : 32,
+      ticks: shouldReduceMotion ? 60 : 90,
+      scalar: 0.9,
+      origin: { x: 0.5, y: 0.45 },
+      colors: PLUTO_CONFETTI_COLORS,
+      disableForReducedMotion: shouldReduceMotion,
+    });
+
+    if (shouldReduceMotion) {
+      return () => {
+        if (completionTimer) {
+          window.clearTimeout(completionTimer);
+        }
+      };
+    }
+
+    const animationEnd = Date.now() + animationDuration;
+    const interval = window.setInterval(() => {
       const timeLeft = animationEnd - Date.now();
 
       if (timeLeft <= 0) {
-        clearInterval(interval);
-        onComplete?.();
+        window.clearInterval(interval);
         return;
       }
 
-      const particleCount = 20 * (timeLeft / duration);
-      
-      // Use Pluto theme colors: steel blue, ice blue, and deep navy
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
-        colors: ["#4A6FA5", "#B8D4E8", "#0D1B2E"],
-      });
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
-        colors: ["#4A6FA5", "#B8D4E8", "#0D1B2E"],
-      });
-    }, 250);
+      const particleCount = Math.max(8, Math.round(22 * (timeLeft / animationDuration)));
 
-    return () => clearInterval(interval);
-  }, [onComplete]);
+      confetti({
+        particleCount,
+        spread: 72,
+        startVelocity: 28,
+        ticks: 70,
+        scalar: 0.72,
+        origin: { x: 0.18, y: 0.52 },
+        colors: PLUTO_CONFETTI_COLORS,
+      });
+      confetti({
+        particleCount,
+        spread: 72,
+        startVelocity: 28,
+        ticks: 70,
+        scalar: 0.72,
+        origin: { x: 0.82, y: 0.52 },
+        colors: PLUTO_CONFETTI_COLORS,
+      });
+    }, 260);
+
+    return () => {
+      window.clearInterval(interval);
+      if (completionTimer) {
+        window.clearTimeout(completionTimer);
+      }
+    };
+  }, [onComplete, shouldReduceMotion]);
 
   return (
     <motion.div
-      className={`flex flex-col items-center justify-center gap-4 ${className}`}
-      variants={containerVariants}
+      className={[
+        "relative mx-4 w-full max-w-sm overflow-hidden rounded-[2rem]",
+        "border border-[var(--pluto-200)]/80 bg-[linear-gradient(160deg,rgba(255,255,255,0.96),rgba(240,246,251,0.96))]",
+        "px-8 py-9 text-center shadow-[0_24px_80px_rgba(13,27,46,0.18)]",
+        className,
+      ].join(" ")}
+      variants={cardVariants}
       initial="hidden"
       animate="visible"
+      aria-live="polite"
     >
-      <div className="relative h-24 w-24">
-        {/* Animated Background Pulse */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-8 top-0 h-24 rounded-full bg-[radial-gradient(circle,rgba(184,212,232,0.8)_0%,rgba(184,212,232,0)_72%)] blur-2xl"
+      />
+
+      <motion.div
+        className="relative mx-auto mb-6 flex h-28 w-28 items-center justify-center"
+        variants={ringVariants}
+      >
         <motion.div
-          className="absolute inset-0 rounded-full bg-[var(--pluto-100)]"
-          initial={{ scale: 0 }}
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full border border-[var(--pluto-200)] bg-white/70"
+          animate={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  scale: [1, 1.06, 1],
+                  boxShadow: [
+                    "0 0 0 rgba(74,111,165,0.10)",
+                    "0 0 30px rgba(74,111,165,0.24)",
+                    "0 0 0 rgba(74,111,165,0.10)",
+                  ],
+                }
+          }
+          transition={{
+            duration: 2.2,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
         />
-        
+
+        <motion.div
+          aria-hidden="true"
+          className="absolute inset-3 rounded-full border border-[var(--pluto-300)]/70 bg-[var(--pluto-50)]"
+          animate={
+            shouldReduceMotion
+              ? undefined
+              : {
+                  scale: [1, 0.97, 1],
+                  opacity: [0.9, 1, 0.9],
+                }
+          }
+          transition={{
+            duration: 1.8,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+
+        {SPARK_POSITIONS.map((position, index) => (
+          <motion.span
+            key={position}
+            aria-hidden="true"
+            className={`absolute h-2.5 w-2.5 rounded-full bg-[var(--pluto-400)]/85 ${position}`}
+            custom={index}
+            variants={sparkVariants}
+          />
+        ))}
+
         <svg
           viewBox="0 0 100 100"
-          className="relative h-full w-full drop-shadow-[0_0_8px_rgba(74,111,165,0.3)]"
+          className="relative z-10 h-full w-full drop-shadow-[0_12px_24px_rgba(74,111,165,0.18)]"
+          aria-hidden="true"
         >
-          {/* Circle Outline */}
           <motion.circle
             cx="50"
             cy="50"
-            r="45"
+            r="34"
             fill="none"
             stroke="var(--pluto-500)"
             strokeWidth="6"
             strokeLinecap="round"
-            variants={circleVariants}
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.6, ease: "easeInOut" }}
           />
-          
-          {/* Checkmark */}
           <motion.path
-            d="M30 50L45 65L70 35"
+            d="M32 51L45 64L69 38"
             fill="none"
-            stroke="var(--pluto-500)"
+            stroke="var(--pluto-800)"
             strokeWidth="8"
             strokeLinecap="round"
             strokeLinejoin="round"
-            variants={checkVariants}
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ delay: 0.25, duration: 0.42, ease: "easeOut" }}
           />
         </svg>
-      </div>
-      
-      <motion.div
-        className="text-center"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-      >
-        <h3 className="text-lg font-bold text-[var(--pluto-800)]">Payment Secured</h3>
-        <p className="text-sm text-[var(--pluto-600)]">Transaction verified on Stellar</p>
+      </motion.div>
+
+      <motion.div className="space-y-2" variants={contentVariants}>
+        <h2 className="text-lg font-bold tracking-tight text-[var(--pluto-800)]">
+          Payment Secured
+        </h2>
+        <p className="mx-auto max-w-[15rem] text-sm leading-6 text-[var(--pluto-600)]">
+          Transaction verified on Stellar
+        </p>
       </motion.div>
     </motion.div>
   );
 }
-      duration: 0.5,
-      ease: [0.16, 1, 0.3, 1],
-      staggerChildren: 0.1,
-    },
-  },
-  exit: {
-    opacity: 0,
-    scale: 0.9,
-    transition: { duration: 0.3 },
-  },
-};
-
-/**
- * Animation variants for success elements
- */
-const successVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] },
-  },
-};
-
-/**
- * Animation variants for confetti bursts
- */
-const confettiVariants: Variants = {
-  hidden: { scale: 0 },
-  visible: {
-    scale: 1,
-    transition: {
-      duration: 0.6,
-      ease: "easeOut",
-    },
-  },
-};
-
-/**
- * PaymentSuccessAnimation Component
- *
- * Displays a celebratory animation for successful payments with comprehensive
- * screen reader support and accessibility features.
- */
-export const PaymentSuccessAnimation: React.FC<PaymentSuccessAnimationProps> = ({
-  show,
-  onComplete,
-  amount = "0",
-  asset = "XLM",
-  txId,
-}) => {
-  const t = useTranslations();
-  const [hasAnnounced, setHasAnnounced] = useState(false);
-  const [confettiTriggered, setConfettiTriggered] = useState(false);
-
-  /**
-   * Trigger confetti animation
-   */
-  useEffect(() => {
-    if (show && !confettiTriggered) {
-      setConfettiTriggered(true);
-
-      const duration = 3000;
-      const end = Date.now() + duration;
-
-      const frame = () => {
-        confetti({
-          particleCount: 7,
-          angle: 60,
-          spread: 70,
-          origin: { x: 0 },
-          colors: ["#00F5D4", "#6C5CE7", "#00D4AA"],
-        });
-        confetti({
-          particleCount: 7,
-          angle: 120,
-          spread: 70,
-          origin: { x: 1 },
-          colors: ["#00F5D4", "#6C5CE7", "#00D4AA"],
-        });
-
-        if (Date.now() < end) {
-          requestAnimationFrame(frame);
-        }
-      };
-
-      frame();
-    }
-  }, [show, confettiTriggered]);
-
-  /**
-   * Handle completion and announcements
-   */
-  useEffect(() => {
-    if (show && !hasAnnounced) {
-      setHasAnnounced(true);
-
-      // Announce to screen readers
-      const announcement = t("payment.successAnnounce") ||
-        `Payment successful! ${amount} ${asset} has been received.`;
-
-      // Use a timeout to ensure the announcement is processed
-      setTimeout(() => {
-        setHasAnnounced(false); // Reset for next animation
-      }, 1000);
-
-      // Call onComplete after animation
-      setTimeout(() => {
-        onComplete?.();
-      }, 4000);
-    }
-  }, [show, hasAnnounced, onComplete, amount, asset, t]);
-
-  if (!show) return null;
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="payment-success-title"
-        aria-describedby="payment-success-description"
-      >
-        {/* Screen reader announcement */}
-        <div
-          className="sr-only"
-          role="status"
-          aria-live="assertive"
-          aria-atomic="true"
-        >
-          {t("payment.successAnnounce") ||
-            `Payment successful! ${amount} ${asset} has been received.`}
-        </div>
-
-        <motion.div
-          className="relative w-full max-w-md overflow-hidden rounded-3xl border border-accent/30 bg-gradient-to-br from-black via-gray-900 to-black p-8 text-center shadow-2xl"
-          variants={successVariants}
-        >
-          {/* Close button */}
-          <motion.button
-            onClick={onComplete}
-            className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors z-10"
-            variants={successVariants}
-            aria-label={t("common.close") || "Close success animation"}
-          >
-            ✕
-          </motion.button>
-
-          {/* Animated success icon */}
-          <motion.div
-            className="relative mb-6 flex h-20 w-20 items-center justify-center mx-auto"
-            variants={confettiVariants}
-          >
-            {/* Pulsing background */}
-            <motion.div
-              className="absolute inset-0 rounded-full bg-accent/20"
-              animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.5, 1, 0.5],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            />
-
-            {/* Check mark with bounce */}
-            <motion.div
-              className="relative z-10 text-4xl"
-              animate={{
-                scale: [0, 1.2, 1],
-                rotate: [0, 10, -10, 0],
-              }}
-              transition={{
-                duration: 0.8,
-                ease: "easeOut",
-              }}
-            >
-              ✅
-            </motion.div>
-          </motion.div>
-
-          {/* Success title */}
-          <motion.h1
-            id="payment-success-title"
-            className="mb-3 text-3xl font-bold tracking-tight text-white"
-            variants={successVariants}
-          >
-            {t("payment.successTitle") || "Payment Successful!"}
-          </motion.h1>
-
-          {/* Amount display */}
-          <motion.div
-            className="mb-4 rounded-xl bg-accent/10 p-4"
-            variants={successVariants}
-          >
-            <p className="text-sm text-slate-400 mb-1">
-              {t("payment.amountReceived") || "Amount Received"}
-            </p>
-            <p className="text-2xl font-bold text-accent">
-              {amount} {asset}
-            </p>
-          </motion.div>
-
-          {/* Description */}
-          <motion.p
-            id="payment-success-description"
-            className="mb-6 text-slate-400"
-            variants={successVariants}
-          >
-            {t("payment.successMessage") ||
-              "Your payment has been processed successfully. The transaction is now confirmed on the Stellar network."}
-          </motion.p>
-
-          {/* Transaction ID if provided */}
-          {txId && (
-            <motion.div
-              className="mb-6 p-3 rounded-lg bg-slate-800/50"
-              variants={successVariants}
-            >
-              <p className="text-xs text-slate-500 mb-1">
-                {t("payment.transactionId") || "Transaction ID"}
-              </p>
-              <p className="text-xs font-mono text-slate-300 break-all">
-                {txId}
-              </p>
-            </motion.div>
-          )}
-
-          {/* Action buttons */}
-          <motion.div
-            className="flex w-full flex-col gap-3"
-            variants={successVariants}
-          >
-            <button
-              onClick={onComplete}
-              className="flex items-center justify-center rounded-xl bg-accent px-6 py-3 font-semibold text-black transition-all hover:bg-accent/90 focus:ring-2 focus:ring-accent/50"
-              aria-label={t("common.continue") || "Continue"}
-            >
-              {t("common.continue") || "Continue"}
-            </button>
-          </motion.div>
-
-          {/* Accessibility hint */}
-          <motion.p
-            className="sr-only"
-            variants={successVariants}
-          >
-            {t("payment.successHint") ||
-              "Press the continue button or close button to dismiss this success message."}
-          </motion.p>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
-  );
-};
 
 export default PaymentSuccessAnimation;

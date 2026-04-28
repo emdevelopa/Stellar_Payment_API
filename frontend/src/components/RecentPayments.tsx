@@ -802,7 +802,7 @@ export const RecentPayments = memo(function RecentPayments({
       />
     </div>
   );
-}
+});
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
@@ -830,5 +830,4 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
     </span>
   );
 }
-e x p o r t   d e f a u l t   R e c e n t P a y m e n t s ;  
- 
+export default RecentPayments;

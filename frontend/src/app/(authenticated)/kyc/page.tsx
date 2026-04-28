@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import KycSubmissionForm from "@/components/KycSubmissionForm";
+import KycSubmissionForm from "@/components/KYCSubmissionForm";
 
 export const metadata: Metadata = {
   title: "KYC Verification | PLUTO",

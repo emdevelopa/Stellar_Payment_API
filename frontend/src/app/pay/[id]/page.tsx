@@ -596,6 +596,7 @@ export default function PaymentPage() {
                         </div>
                       </motion.div>
                     </div>
+                      )}
 
                       {pathQuoteLoading && <p className="text-center text-xs text-[#6B6B6B]">Checking payment routes…</p>}
                       {pathQuoteError && <p className="text-center text-xs text-red-500">{pathQuoteError}</p>}

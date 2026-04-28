@@ -185,6 +185,7 @@ export default function ThemeToggle() {
           </motion.div>
         )}
       </AnimatePresence>
+      </button>
 
       {/* Hidden description for screen readers */}
       <div id="theme-description" className="sr-only">

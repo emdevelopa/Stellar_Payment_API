@@ -17,6 +17,8 @@ interface KYCFormData {
   documentUpload: File | null;
 }
 
+type KYCFormErrors = Partial<Record<keyof KYCFormData, string>>;
+
 /**
  * Props for KYCSubmissionForm component
  */
@@ -97,7 +99,7 @@ export const KYCSubmissionForm: React.FC<KYCSubmissionFormProps> = ({
     idNumber: "",
     documentUpload: null,
   });
-  const [errors, setErrors] = useState<Partial<KYCFormData>>({});
+  const [errors, setErrors] = useState<KYCFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [announcementText, setAnnouncementText] = useState("");
@@ -106,7 +108,7 @@ export const KYCSubmissionForm: React.FC<KYCSubmissionFormProps> = ({
    * Validate form data
    */
   const validateForm = useCallback((): boolean => {
-    const newErrors: Partial<KYCFormData> = {};
+    const newErrors: KYCFormErrors = {};
 
     if (!formData.fullName.trim()) {
       newErrors.fullName = "Full name is required";

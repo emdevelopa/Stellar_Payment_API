@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import * as StellarSdk from "stellar-sdk";
+let StellarSdk: typeof import("stellar-sdk");
+
+async function getSdk() {
+  if (!StellarSdk) {
+    StellarSdk = await import("stellar-sdk");
+  }
+  return StellarSdk;
+}
 import { useWallet } from "@/lib/wallet-context";
 import { resolveAsset } from "@/lib/stellar";
 
@@ -169,11 +176,11 @@ export default function AssetConverter({ onBack }: AssetConverterProps) {
     try {
       const server = new StellarSdk.Horizon.Server(HORIZON_URL);
 
-      const sourceAsset = resolveAsset(
+      const sourceAsset = await resolveAsset(
         fromCode.trim().toUpperCase(),
         fromCode.toUpperCase() === "XLM" ? null : fromIssuer.trim(),
       );
-      const destAsset = resolveAsset(
+      const destAsset = await resolveAsset(
         toCode.trim().toUpperCase(),
         toCode.toUpperCase() === "XLM" ? null : toIssuer.trim(),
       );

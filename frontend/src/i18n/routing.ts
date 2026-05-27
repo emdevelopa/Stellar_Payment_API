@@ -1,16 +1,27 @@
-export const locales = ["en", "es", "pt", "fr"] as const;
+import { defineRouting } from "next-intl/routing";
+
+export const routing = defineRouting({
+  locales: ["en", "es", "pt", "fr"],
+  defaultLocale: "en"
+});
+
+export const locales = routing.locales;
 
 export type AppLocale = (typeof locales)[number];
 
-export const defaultLocale: AppLocale = "en";
+export const defaultLocale: AppLocale = routing.defaultLocale;
 
 export const localeCookieName = "NEXT_LOCALE";
 
-export function isValidLocale(value: string | null | undefined): value is AppLocale {
+export function isValidLocale(
+  value: string | null | undefined
+): value is AppLocale {
   return locales.includes((value ?? "") as AppLocale);
 }
 
-export function resolveAppLocale(value: string | null | undefined): AppLocale {
+export function resolveAppLocale(
+  value: string | null | undefined
+): AppLocale {
   return isValidLocale(value) ? value : defaultLocale;
 }
 

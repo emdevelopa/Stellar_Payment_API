@@ -13,7 +13,7 @@ import {
 } from "@/lib/merchant-store";
 import { useTranslations } from "next-intl";
 import FirstApiKeyModal from "@/components/FirstApiKeyModal";
-import WithdrawModal from "@/components/WithdrawModal";
+import WithdrawalModal from "@/components/WithdrawalModal";
 
 export default function DashboardPage() {
   const t = useTranslations("Dashboard");
@@ -196,7 +196,7 @@ export default function DashboardPage() {
         isOpen={isFirstKeyModalOpen}
         onClose={() => setIsFirstKeyModalOpen(false)}
       />
-      <WithdrawModal
+      <WithdrawalModal
         isOpen={isWithdrawOpen}
         onClose={() => setIsWithdrawOpen(false)}
       />

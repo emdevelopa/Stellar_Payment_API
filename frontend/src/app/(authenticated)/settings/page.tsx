@@ -81,16 +81,44 @@ function EyeIcon({ open }: { open: boolean }) {
   );
 }
 
-const NAV_ITEMS: { id: SettingsTab; label: string; icon: React.ReactNode; danger?: boolean }[] = [
-  { id: "api", label: "API Keys", icon: <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg> },
-  { id: "branding", label: "Branding", icon: <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg> },
-  { id: "display", label: "Display", icon: <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> },
-  { id: "webhooks", label: "Webhooks", icon: <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
-  { id: "danger", label: "Danger Zone", icon: <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>, danger: true },
+const NAV_ITEMS: {
+  id: SettingsTab;
+  icon: React.ReactNode;
+  danger?: boolean;
+}[] = [
+  {
+    id: "api",
+    icon: <span>🔑</span>,
+  },
+  {
+    id: "branding",
+    icon: <span>🎨</span>,
+  },
+  {
+    id: "display",
+    icon: <span>🖥️</span>,
+  },
+  {
+    id: "webhooks",
+    icon: <span>🔗</span>,
+  },
+  {
+    id: "danger",
+    icon: <span>⚠️</span>,
+    danger: true,
+  },
 ];
 
 export default function SettingsPage() {
   const t = useTranslations("Settings");
+
+  const navItems = [
+    { ...NAV_ITEMS[0], label: t("apiKeys") },
+    { ...NAV_ITEMS[1], label: t("branding") },
+    { ...NAV_ITEMS[2], label: t("display") },
+    { ...NAV_ITEMS[3], label: t("webhooks") },
+    { ...NAV_ITEMS[4], label: t("dangerZone") },
+  ];
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const setApiKey = useSetMerchantApiKey();
@@ -279,12 +307,12 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-8 animate-in fade-in duration-500">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">Settings</p>
-          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Merchant Settings</h1>
+          <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">{t("merchantSettings")}</h1>
         </div>
         <div className="max-w-md rounded-2xl border border-yellow-200 bg-yellow-50 p-8 flex flex-col gap-4">
-          <p className="font-bold text-yellow-800">No API key found</p>
+          <p className="font-bold text-yellow-800">{t("noApiKey")}</p>
           <p className="text-sm text-yellow-700">Register a merchant account first to manage your credentials here.</p>
-          <Link href="/register" className="self-start rounded-xl bg-[#0A0A0A] px-5 py-2.5 text-sm font-bold text-white hover:bg-black transition-all">Register as Merchant</Link>
+          <Link href="/register" className="self-start rounded-xl bg-[#0A0A0A] px-5 py-2.5 text-sm font-bold text-white hover:bg-black transition-all">{t("registerMerchant")}</Link>
         </div>
       </div>
     );
@@ -299,15 +327,15 @@ export default function SettingsPage() {
       {/* Page header */}
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B] mb-2">Account</p>
-        <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">Settings</h1>
-        <p className="mt-2 text-sm font-medium text-[#6B6B6B]">Manage your credentials, branding, and integrations.</p>
+        <h1 className="text-4xl font-bold text-[#0A0A0A] tracking-tight">{t("title")}</h1>
+        <p className="mt-2 text-sm font-medium text-[#6B6B6B]">{t("description")}</p>
       </div>
 
       {/* Two-column layout */}
       <div className="flex gap-8 items-start">
         {/* Left nav */}
         <nav className="hidden lg:flex w-52 shrink-0 flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -326,7 +354,7 @@ export default function SettingsPage() {
 
         {/* Mobile tab bar */}
         <div className="lg:hidden flex gap-1 overflow-x-auto rounded-xl border border-[#E8E8E8] bg-[#F5F5F5] p-1 w-full">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.id}
               type="button"

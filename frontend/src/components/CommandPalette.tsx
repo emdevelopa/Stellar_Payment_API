@@ -2,8 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import AssetConverter from "@/components/AssetConverter";
+import dynamic from "next/dynamic";
 
+const AssetConverter = dynamic(
+  () => import("./AssetConverter"),
+  { ssr: false }
+);
 /* ------------------------------------------------------------------ */
 /*  Command definitions                                                */
 /* ------------------------------------------------------------------ */

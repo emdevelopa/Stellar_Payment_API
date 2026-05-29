@@ -146,6 +146,51 @@ export const rateLimitRequestsTotal = new client.Counter({
   labelNames: ["endpoint", "type"],
 });
 
+/**
+ * Query Cache Metrics (Issue #760)
+ */
+
+export const queryCacheHitTotal = new client.Counter({
+  name: "db_query_cache_hit_total",
+  help: "Total number of query cache hits",
+});
+
+export const queryCacheMissTotal = new client.Counter({
+  name: "db_query_cache_miss_total",
+  help: "Total number of query cache misses",
+});
+
+export const queryCacheSize = new client.Gauge({
+  name: "db_query_cache_size",
+  help: "Current number of entries in the query cache",
+});
+
+/**
+ * Database Pooler Rate Limiting Metrics (Issue #758)
+ */
+
+export const dbPoolerRateLimitExceeded = new client.Counter({
+  name: "db_pooler_rate_limit_exceeded_total",
+  help: "Total number of database pooler rate limit violations",
+  labelNames: ["type"], // query, connection, merchant
+});
+
+export const dbPoolerQueryTotal = new client.Counter({
+  name: "db_pooler_query_total",
+  help: "Total number of queries executed through the pooler",
+  labelNames: ["label", "status"], // success, error, rate_limited
+});
+
+/**
+ * Database Pooler Signature Verification Metrics (Issue #759)
+ */
+
+export const dbPoolerSignatureVerified = new client.Counter({
+  name: "db_pooler_signature_verified_total",
+  help: "Total number of query signature verifications",
+  labelNames: ["result"], // valid, invalid, skipped
+});
+
 // Register custom metrics
 register.registerMetric(paymentCreatedCounter);
 register.registerMetric(paymentConfirmedCounter);
@@ -166,5 +211,11 @@ register.registerMetric(ledgerMonitorPaymentsChecked);
 register.registerMetric(ledgerMonitorCircuitBreakerTrips);
 register.registerMetric(rateLimitExceededTotal);
 register.registerMetric(rateLimitRequestsTotal);
+register.registerMetric(queryCacheHitTotal);
+register.registerMetric(queryCacheMissTotal);
+register.registerMetric(queryCacheSize);
+register.registerMetric(dbPoolerRateLimitExceeded);
+register.registerMetric(dbPoolerQueryTotal);
+register.registerMetric(dbPoolerSignatureVerified);
 
 export { register };

@@ -595,6 +595,7 @@
     "good": "Good",
     "fair": "Fair",
     "poor": "Poor"
+  },
   "darkModeTheme": {
     "loading": "Loading theme settings",
     "errorCleared": "Error cleared. Attempting to toggle theme.",
@@ -685,5 +686,21 @@
     "emptyAllocation": "No allocation data available yet.",
     "emptyAssets": "No portfolio assets available yet.",
     "emptyHistory": "No performance history available yet."
+  },
+  "payment": {
+    "successTitle": "Payment Successful!",
+    "successMessage": "Your payment has been processed successfully. The transaction is now confirmed on the Stellar network.",
+    "amountReceived": "Amount Received",
+    "transactionId": "Transaction ID",
+    "successAnnounce": "Payment successful! {amount} {asset} has been received.",
+    "networkConfirmed": "Payment confirmed on the Stellar network.",
+    "dismissing": "Processing…",
+    "optimisticNote": "Transaction submitted — awaiting network confirmation.",
+    "successHint": "Press Escape or the close button to dismiss this message."
+  },
+  "common": {
+    "close": "Close success animation",
+    "continue": "Continue",
+    "error": "Something went wrong. Please try again."
   }
 }

@@ -26,7 +26,6 @@
     "@walletconnect/sign-client": "^2.23.9",
     "@walletconnect/types": "^2.23.8",
     "canvas-confetti": "^1.9.4",
-    "confetti": "^3.0.4",
     "event-source-polyfill": "^1.0.31",
     "framer-motion": "^12.42.2",
     "marked": "^17.0.5",

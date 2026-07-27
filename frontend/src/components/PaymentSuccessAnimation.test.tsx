@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import confetti from "canvas-confetti";
-import { PaymentSuccessAnimation } from "./PaymentSuccessAnimation";
+import { PaymentSuccessAnimationClient as PaymentSuccessAnimation } from "./PaymentSuccessAnimationClient";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -14,11 +14,7 @@ vi.mock("canvas-confetti", () => ({
   default: vi.fn(),
 }));
 
-// ── framer-motion mock ────────────────────────────────────────────────────────
-// Hoisted so useReducedMotion can be controlled per-test (#980)
-const { mockUseReducedMotion } = vi.hoisted(() => ({
-  mockUseReducedMotion: vi.fn(() => false as boolean | null),
-}));
+// ── motion/react mock ────────────────────────────────────────────────────────
 
 const MOTION_PROPS = [
   "initial", "animate", "exit", "transition", "variants", "viewport",
@@ -35,7 +31,7 @@ function mkMotion(tag: string) {
   });
 }
 
-vi.mock("framer-motion", () => ({
+vi.mock("motion/react", () => ({
   motion: {
     div: mkMotion("div"),
     button: mkMotion("button"),
@@ -44,8 +40,23 @@ vi.mock("framer-motion", () => ({
     path: mkMotion("path"),
   },
   AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  useReducedMotion: mockUseReducedMotion,
 }));
+
+// The component reads the OS "prefers reduced motion" setting via
+// window.matchMedia (not a framer-motion/motion hook), so tests drive it
+// through matchMedia directly (#980).
+function setPrefersReducedMotion(matches: boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: matches && query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -53,7 +64,7 @@ describe("PaymentSuccessAnimation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
-    mockUseReducedMotion.mockReturnValue(false);
+    setPrefersReducedMotion(false);
   });
 
   // ── Render / visibility ────────────────────────────────────────────────────
@@ -201,7 +212,7 @@ describe("PaymentSuccessAnimation", () => {
   });
 
   it("skips confetti when prefersReducedMotion is true (#980)", () => {
-    mockUseReducedMotion.mockReturnValue(true);
+    setPrefersReducedMotion(true);
     vi.useFakeTimers();
     render(<PaymentSuccessAnimation show />);
     act(() => { vi.advanceTimersByTime(200); });

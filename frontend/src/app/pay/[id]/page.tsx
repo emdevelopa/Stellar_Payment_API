@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
@@ -25,15 +25,10 @@ import { QRCodeSVG } from "qrcode.react";
 import { localeToLanguageTag } from "@/i18n/config";
 import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
 import { Modal } from "@/components/ui/Modal";
-
-// Lazy-load PaymentSuccessAnimation so its dependencies (framer-motion success
-// variants, canvas-confetti) are excluded from the initial checkout bundle and
-// only fetched the first time a payment actually succeeds. (#1179)
-const PaymentSuccessAnimation = lazy(() =>
-  import("@/components/PaymentSuccessAnimation").then((m) => ({
-    default: m.PaymentSuccessAnimation,
-  }))
-);
+// PaymentSuccessAnimation is a Server Component boundary that code-splits its
+// own client bundle (framer-motion, canvas-confetti) via next/dynamic and
+// renders PaymentSuccessSkeleton while it loads. (#1179)
+import { PaymentSuccessAnimation } from "@/components/PaymentSuccessAnimation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet";
@@ -402,16 +397,14 @@ export default function PaymentPage() {
   return (
     <>
       {hasSucceededOnce && (
-        <Suspense fallback={null}>
-          <PaymentSuccessAnimation
-            show={isOptimisticSuccess}
-            onComplete={() => setIsOptimisticSuccess(false)}
-            amount={payment?.amount != null ? String(payment.amount) : undefined}
-            asset={payment?.asset}
-            txId={payment?.tx_id ?? undefined}
-            isOptimistic={payment?.status !== "confirmed" && payment?.status !== "completed"}
-          />
-        </Suspense>
+        <PaymentSuccessAnimation
+          show={isOptimisticSuccess}
+          onComplete={() => setIsOptimisticSuccess(false)}
+          amount={payment?.amount != null ? String(payment.amount) : undefined}
+          asset={payment?.asset}
+          txId={payment?.tx_id ?? undefined}
+          isOptimistic={payment?.status !== "confirmed" && payment?.status !== "completed"}
+        />
       )}
 
       <AnimatePresence>

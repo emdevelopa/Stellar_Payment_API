@@ -664,5 +664,21 @@
     "emptyAllocation": "Ainda nao ha dados de alocacao.",
     "emptyAssets": "Ainda nao ha ativos no portafolio.",
     "emptyHistory": "Ainda nao ha historico de desempenho."
+  },
+  "payment": {
+    "successTitle": "Pagamento realizado com sucesso!",
+    "successMessage": "Seu pagamento foi processado com sucesso. A transação já está confirmada na rede Stellar.",
+    "amountReceived": "Valor recebido",
+    "transactionId": "ID da transação",
+    "successAnnounce": "Pagamento realizado com sucesso! {amount} {asset} foram recebidos.",
+    "networkConfirmed": "Pagamento confirmado na rede Stellar.",
+    "dismissing": "Processando…",
+    "optimisticNote": "Transação enviada — aguardando confirmação da rede.",
+    "successHint": "Pressione Esc ou o botão fechar para dispensar esta mensagem."
+  },
+  "common": {
+    "close": "Fechar animação de sucesso",
+    "continue": "Continuar",
+    "error": "Algo deu errado. Tente novamente."
   }
 }

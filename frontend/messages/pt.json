@@ -28,9 +28,10 @@
     "label": "Idioma",
     "ariaLabel": "Selecionar idioma",
     "options": {
-      "en": "English",
-      "es": "Espanol",
-      "pt": "Portugues"
+      "en": "Inglês",
+      "es": "Espanhol",
+      "pt": "Português",
+      "fr": "Francês"
     }
   },
   "nav": {

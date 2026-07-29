@@ -29,8 +29,9 @@
     "ariaLabel": "Select language",
     "options": {
       "en": "English",
-      "es": "Espanol",
-      "pt": "Portugues"
+      "es": "Spanish",
+      "pt": "Portuguese",
+      "fr": "French"
     }
   },
   "nav": {

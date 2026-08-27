@@ -74,6 +74,13 @@ const fadeUp: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
+const fieldInputClassName =
+  "w-full min-h-[48px] rounded-2xl border border-pluto-200 bg-pluto-50/60 px-4 py-3 text-sm text-pluto-900 shadow-sm transition-all duration-200 placeholder:text-pluto-400 focus:border-pluto-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-pluto-100 disabled:cursor-not-allowed disabled:opacity-60";
+
+const fieldLabelClassName = "text-sm font-semibold tracking-[0.01em] text-pluto-700";
+
+const fieldErrorClassName = "text-xs font-medium leading-relaxed text-red-600";
+
 function Field({
   id,
   label,
@@ -86,8 +93,8 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-pluto-900">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className={fieldLabelClassName}>
         {label}
       </label>
       {children}
@@ -96,7 +103,7 @@ function Field({
           <motion.p
             id={`${id}-error`}
             role="alert"
-            className="text-xs text-red-600"
+            className={fieldErrorClassName}
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -149,6 +156,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
     if (state.currentStep === "personal") {
       if (!state.personal.firstName.trim()) errs.firstName = t("required");
       if (!state.personal.lastName.trim()) errs.lastName = t("required");
+      if (!state.personal.email.trim()) errs.email = t("required");
     }
 
     setStepErrors(errs);
@@ -279,10 +287,10 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
             </svg>
           </motion.div>
 
-          <h2 className="text-2xl font-bold text-pluto-900" aria-live="assertive">
+          <h2 className="text-2xl font-bold tracking-tight text-pluto-900" aria-live="assertive">
             {t("successTitle")}
           </h2>
-          <p className="text-pluto-600">{t("successDescription")}</p>
+          <p className="max-w-md text-sm leading-6 text-pluto-600 sm:text-base">{t("successDescription")}</p>
 
           <button
             type="button"
@@ -311,9 +319,9 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
           aria-valuemin={1}
           aria-valuemax={TOTAL_STEPS}
           aria-label={`${t("step")} ${stepIndex + 1} ${t("of")} ${TOTAL_STEPS}: ${t(STEP_LABEL_KEYS[state.currentStep])}`}
-          className="space-y-2"
+          className="space-y-3"
         >
-          <div className="flex justify-between text-xs text-pluto-600">
+          <div className="flex justify-between text-xs font-medium text-pluto-600 sm:text-sm">
             <span>
               {stepIndex + 1} {t("of")} {TOTAL_STEPS}
             </span>
@@ -636,7 +644,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
           </AnimatePresence>
         )}
 
-        <div className="flex gap-4 pt-2">
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row">
           <button
             type="button"
             onClick={goBack}

@@ -465,15 +465,14 @@ describe("KycSubmissionForm", () => {
     (global.fetch as any).mockImplementation(() => new Promise(() => {}));
     render(React.createElement(KycSubmissionForm));
     await navigateToStep(3);
-    fireEvent.click(screen.getByText("submit"));
+
+    const submitButton = screen.getByRole("button", { name: "submit" });
+    fireEvent.click(submitButton);
+
     await waitFor(() => {
-      const liveRegion = document.getElementById(
-        screen.getByText("submit").closest("button")!.getAttribute("aria-describedby") ?? ""
-      );
-      // The submit-status sr-only div should contain the processingSubmission key
-      const allLive = document.querySelectorAll('[aria-live="polite"]');
-      const texts = Array.from(allLive).map((el) => el.textContent ?? "");
-      expect(texts.some((t) => t.includes("processingSubmission"))).toBe(true);
+      const describedById = submitButton.getAttribute("aria-describedby");
+      const liveRegion = describedById ? document.getElementById(describedById) : null;
+      expect(liveRegion?.textContent).toContain("processingSubmission");
     });
   });
 });

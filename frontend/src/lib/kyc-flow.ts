@@ -33,8 +33,9 @@ export interface FileUploadStatus {
 export interface PersonalInfo {
   firstName: string;
   lastName: string;
-  dateOfBirth: string;
+  email: string;
   nationality: string;
+  dateOfBirth: string;
 }
 
 export interface AddressInfo {
@@ -87,7 +88,7 @@ const defaultFileUpload: FileUploadStatus = {
 
 export const initialKycFlowState: KycFlowState = {
   currentStep: "personal",
-  personal: { firstName: "", lastName: "", dateOfBirth: "", nationality: "" },
+  personal: { firstName: "", lastName: "", email: "", nationality: "", dateOfBirth: "" },
   address: { street: "", city: "", state: "", postalCode: "", country: "" },
   documents: { idType: "", idNumber: "", idFrontFile: null, idBackFile: null, selfieFile: null },
   isSubmitting: false,

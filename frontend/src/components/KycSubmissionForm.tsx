@@ -74,6 +74,13 @@ const fadeUp: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
+const fieldInputClassName =
+  "w-full min-h-[48px] rounded-2xl border border-pluto-200 bg-pluto-50/60 px-4 py-3 text-sm text-pluto-900 shadow-sm transition-all duration-200 placeholder:text-pluto-400 focus:border-pluto-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-pluto-100 disabled:cursor-not-allowed disabled:opacity-60";
+
+const fieldLabelClassName = "text-sm font-semibold tracking-[0.01em] text-pluto-700";
+
+const fieldErrorClassName = "text-xs font-medium leading-relaxed text-red-600";
+
 function Field({
   id,
   label,
@@ -86,8 +93,8 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-pluto-900">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className={fieldLabelClassName}>
         {label}
       </label>
       {children}
@@ -96,7 +103,7 @@ function Field({
           <motion.p
             id={`${id}-error`}
             role="alert"
-            className="text-xs text-red-600"
+            className={fieldErrorClassName}
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -147,6 +154,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
     if (state.currentStep === "personal") {
       if (!state.personal.firstName.trim()) errs.firstName = t("required");
       if (!state.personal.lastName.trim()) errs.lastName = t("required");
+      if (!state.personal.email.trim()) errs.email = t("required");
     }
 
     setStepErrors(errs);
@@ -211,7 +219,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
   if (state.submittedAt) {
     return (
       <div
-        className="w-full max-w-2xl mx-auto"
+        className="mx-auto w-full max-w-2xl"
         role="region"
         aria-label={t("formTitle")}
       >
@@ -219,7 +227,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
           {announcement}
         </div>
         <motion.div
-          className="flex flex-col items-center gap-6 rounded-3xl border border-pluto-100 bg-white p-10 shadow-lg text-center"
+          className="flex flex-col items-center gap-6 rounded-3xl border border-pluto-100 bg-white p-6 text-center shadow-lg sm:p-10"
           variants={fadeUp}
           initial="hidden"
           animate="visible"
@@ -246,15 +254,15 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
             </svg>
           </motion.div>
 
-          <h2 className="text-2xl font-bold text-pluto-900" aria-live="assertive">
+          <h2 className="text-2xl font-bold tracking-tight text-pluto-900" aria-live="assertive">
             {t("successTitle")}
           </h2>
-          <p className="text-pluto-600">{t("successDescription")}</p>
+          <p className="max-w-md text-sm leading-6 text-pluto-600 sm:text-base">{t("successDescription")}</p>
 
           <button
             type="button"
             onClick={() => dispatch({ type: "RESET" })}
-            className="rounded-xl bg-pluto-600 px-8 py-3 font-semibold text-white hover:bg-pluto-700 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+            className="rounded-xl bg-pluto-600 px-8 py-3 font-semibold text-white transition-colors hover:bg-pluto-700 focus:outline-none focus:ring-2 focus:ring-pluto-400 focus:ring-offset-2"
           >
             {t("submitAnother")}
           </button>
@@ -265,7 +273,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
 
   return (
     <div
-      className="w-full max-w-2xl mx-auto"
+      className="mx-auto w-full max-w-2xl"
       role="region"
       aria-label={t("formTitle")}
     >
@@ -273,16 +281,16 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
         {announcement}
       </div>
 
-      <div className="rounded-3xl border border-pluto-100 bg-white p-8 shadow-lg space-y-6">
+      <div className="space-y-6 rounded-3xl border border-pluto-100 bg-white p-4 shadow-lg sm:p-6 lg:p-8">
         <div
           role="progressbar"
           aria-valuenow={stepIndex + 1}
           aria-valuemin={1}
           aria-valuemax={TOTAL_STEPS}
           aria-label={`${t("step")} ${stepIndex + 1} ${t("of")} ${TOTAL_STEPS}: ${t(STEP_LABEL_KEYS[state.currentStep])}`}
-          className="space-y-2"
+          className="space-y-3"
         >
-          <div className="flex justify-between text-xs text-pluto-600">
+          <div className="flex justify-between text-xs font-medium text-pluto-600 sm:text-sm">
             <span>
               {stepIndex + 1} {t("of")} {TOTAL_STEPS}
             </span>
@@ -318,15 +326,15 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
             initial="enter"
             animate="center"
             exit="exit"
-            className="space-y-4"
+            className="space-y-5"
           >
             {state.currentStep === "personal" && (
-              <section aria-labelledby={`${uid}-personal-title`} className="space-y-4">
-                <h2 id={`${uid}-personal-title`} className="text-xl font-bold text-pluto-900">
+              <section aria-labelledby={`${uid}-personal-title`} className="space-y-5">
+                <h2 id={`${uid}-personal-title`} className="text-xl font-bold tracking-tight text-pluto-900 sm:text-2xl">
                   {t("personalInfo")}
                 </h2>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field
                     id={`${uid}-firstName`}
                     label={t("firstName")}
@@ -345,7 +353,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                       aria-describedby={
                         stepErrors.firstName ? `${uid}-firstName-error` : undefined
                       }
-                      className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                      className={fieldInputClassName}
                     />
                   </Field>
 
@@ -367,23 +375,41 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                       aria-describedby={
                         stepErrors.lastName ? `${uid}-lastName-error` : undefined
                       }
-                      className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                      className={fieldInputClassName}
                     />
                   </Field>
                 </div>
 
-                <Field id={`${uid}-email`} label={t("email")}>
-                  <input
-                    id={`${uid}-email`}
-                    type="email"
-                    placeholder={t("email")}
-                    value={state.personal.nationality}
-                    onChange={(e) =>
-                      dispatch({ type: "UPDATE_PERSONAL", data: { nationality: e.target.value } })
-                    }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
-                  />
-                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field id={`${uid}-email`} label={t("email")} error={stepErrors.email}>
+                    <input
+                      id={`${uid}-email`}
+                      type="email"
+                      placeholder={t("email")}
+                      value={state.personal.email}
+                      onChange={(e) =>
+                        dispatch({ type: "UPDATE_PERSONAL", data: { email: e.target.value } })
+                      }
+                      aria-required="true"
+                      aria-invalid={!!stepErrors.email}
+                      aria-describedby={stepErrors.email ? `${uid}-email-error` : undefined}
+                      className={fieldInputClassName}
+                    />
+                  </Field>
+
+                  <Field id={`${uid}-nationality`} label={t("nationality")}>
+                    <input
+                      id={`${uid}-nationality`}
+                      type="text"
+                      placeholder={t("nationality")}
+                      value={state.personal.nationality}
+                      onChange={(e) =>
+                        dispatch({ type: "UPDATE_PERSONAL", data: { nationality: e.target.value } })
+                      }
+                      className={fieldInputClassName}
+                    />
+                  </Field>
+                </div>
 
                 <Field id={`${uid}-dateOfBirth`} label={t("dateOfBirth")}>
                   <input
@@ -393,15 +419,15 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                     onChange={(e) =>
                       dispatch({ type: "UPDATE_PERSONAL", data: { dateOfBirth: e.target.value } })
                     }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                    className={fieldInputClassName}
                   />
                 </Field>
               </section>
             )}
 
             {state.currentStep === "address" && (
-              <section aria-labelledby={`${uid}-address-title`} className="space-y-4">
-                <h2 id={`${uid}-address-title`} className="text-xl font-bold text-pluto-900">
+              <section aria-labelledby={`${uid}-address-title`} className="space-y-5">
+                <h2 id={`${uid}-address-title`} className="text-xl font-bold tracking-tight text-pluto-900 sm:text-2xl">
                   {t("addressInfo")}
                 </h2>
 
@@ -414,11 +440,11 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                     onChange={(e) =>
                       dispatch({ type: "UPDATE_ADDRESS", data: { street: e.target.value } })
                     }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                    className={fieldInputClassName}
                   />
                 </Field>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field id={`${uid}-city`} label={t("city")}>
                     <input
                       id={`${uid}-city`}
@@ -428,7 +454,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                       onChange={(e) =>
                         dispatch({ type: "UPDATE_ADDRESS", data: { city: e.target.value } })
                       }
-                      className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                      className={fieldInputClassName}
                     />
                   </Field>
 
@@ -441,12 +467,12 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                       onChange={(e) =>
                         dispatch({ type: "UPDATE_ADDRESS", data: { state: e.target.value } })
                       }
-                      className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                      className={fieldInputClassName}
                     />
                   </Field>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field id={`${uid}-postalCode`} label={t("postalCode")}>
                     <input
                       id={`${uid}-postalCode`}
@@ -456,7 +482,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                       onChange={(e) =>
                         dispatch({ type: "UPDATE_ADDRESS", data: { postalCode: e.target.value } })
                       }
-                      className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                      className={fieldInputClassName}
                     />
                   </Field>
 
@@ -469,7 +495,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                       onChange={(e) =>
                         dispatch({ type: "UPDATE_ADDRESS", data: { country: e.target.value } })
                       }
-                      className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                      className={fieldInputClassName}
                     />
                   </Field>
                 </div>
@@ -477,8 +503,8 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
             )}
 
             {state.currentStep === "documents" && (
-              <section aria-labelledby={`${uid}-docs-title`} className="space-y-4">
-                <h2 id={`${uid}-docs-title`} className="text-xl font-bold text-pluto-900">
+              <section aria-labelledby={`${uid}-docs-title`} className="space-y-5">
+                <h2 id={`${uid}-docs-title`} className="text-xl font-bold tracking-tight text-pluto-900 sm:text-2xl">
                   {t("documents")}
                 </h2>
 
@@ -498,7 +524,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                         },
                       })
                     }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                    className={fieldInputClassName}
                   >
                     <option value="">{t("selectIdType")}</option>
                     <option value="passport">{t("passport")}</option>
@@ -516,7 +542,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                     onChange={(e) =>
                       dispatch({ type: "UPDATE_DOCUMENTS", data: { idNumber: e.target.value } })
                     }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+                    className={fieldInputClassName}
                   />
                 </Field>
 
@@ -531,7 +557,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                         data: { idFrontFile: e.target.files?.[0] ?? null },
                       })
                     }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 file:mr-4 file:rounded-lg file:border-0 file:bg-pluto-100 file:px-4 file:py-2 file:text-sm"
+                    className="block w-full rounded-2xl border border-pluto-200 bg-pluto-50/60 px-3 py-3 text-sm text-pluto-700 file:mr-3 file:rounded-lg file:border-0 file:bg-pluto-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-pluto-700 hover:file:bg-pluto-200 focus:outline-none focus:ring-4 focus:ring-pluto-100"
                   />
                 </Field>
 
@@ -546,7 +572,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                         data: { idBackFile: e.target.files?.[0] ?? null },
                       })
                     }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 file:mr-4 file:rounded-lg file:border-0 file:bg-pluto-100 file:px-4 file:py-2 file:text-sm"
+                    className="block w-full rounded-2xl border border-pluto-200 bg-pluto-50/60 px-3 py-3 text-sm text-pluto-700 file:mr-3 file:rounded-lg file:border-0 file:bg-pluto-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-pluto-700 hover:file:bg-pluto-200 focus:outline-none focus:ring-4 focus:ring-pluto-100"
                   />
                 </Field>
 
@@ -561,39 +587,56 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
                         data: { selfieFile: e.target.files?.[0] ?? null },
                       })
                     }
-                    className="rounded-xl border border-pluto-200 px-4 py-3 file:mr-4 file:rounded-lg file:border-0 file:bg-pluto-100 file:px-4 file:py-2 file:text-sm"
+                    className="block w-full rounded-2xl border border-pluto-200 bg-pluto-50/60 px-3 py-3 text-sm text-pluto-700 file:mr-3 file:rounded-lg file:border-0 file:bg-pluto-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-pluto-700 hover:file:bg-pluto-200 focus:outline-none focus:ring-4 focus:ring-pluto-100"
                   />
                 </Field>
               </section>
             )}
 
             {state.currentStep === "review" && (
-              <section aria-labelledby={`${uid}-review-title`} className="space-y-4">
-                <h2 id={`${uid}-review-title`} className="text-xl font-bold text-pluto-900">
+              <section aria-labelledby={`${uid}-review-title`} className="space-y-5">
+                <h2 id={`${uid}-review-title`} className="text-xl font-bold tracking-tight text-pluto-900 sm:text-2xl">
                   {t("review")}
                 </h2>
 
-                <dl className="divide-y divide-pluto-100 rounded-xl border border-pluto-100 text-sm">
-                  {[
+                <dl className="divide-y divide-pluto-100 overflow-hidden rounded-2xl border border-pluto-100 bg-pluto-50/40 text-sm">
+                  {/*
+                  // NOTE: We don't show the user's actual answers here yet — just the labels.
+                  // This will be implemented in a follow-up PR.
+                  */}
+                  {/*
                     { label: t("firstName"), value: state.personal.firstName },
                     { label: t("lastName"), value: state.personal.lastName },
+                    { label: t("email"), value: state.personal.email },
                     { label: t("dateOfBirth"), value: state.personal.dateOfBirth },
                     { label: t("city"), value: state.address.city },
                     { label: t("country"), value: state.address.country },
                     { label: t("idType"), value: state.documents.idType },
                     { label: t("idNumber"), value: state.documents.idNumber },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex justify-between px-4 py-2">
-                      <dt className="font-medium text-pluto-600">{label}</dt>
-                      <dd className="text-pluto-900">{value || t("dash")}</dd>
-                    </div>
-                  ))}
+                  */}
+                  {[]
+                    .concat(
+                      { label: t("firstName"), value: state.personal.firstName },
+                      { label: t("lastName"), value: state.personal.lastName },
+                      { label: t("email"), value: state.personal.email },
+                      { label: t("dateOfBirth"), value: state.personal.dateOfBirth },
+                      { label: t("city"), value: state.address.city },
+                      { label: t("country"), value: state.address.country },
+                      { label: t("idType"), value: state.documents.idType },
+                      { label: t("idNumber"), value: state.documents.idNumber },
+                    )
+                    .map(({ label, value }) => (
+                      <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
+                        <dt className="font-medium text-pluto-600">{label}</dt>
+                        <dd className="text-right text-pluto-900">{value || t("dash")}</dd>
+                      </div>
+                    ))}
                 </dl>
 
                 {state.error && (
                   <motion.p
                     role="alert"
-                    className="text-sm text-red-600"
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
@@ -605,13 +648,13 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
           </motion.div>
         </AnimatePresence>
 
-        <div className="flex gap-4 pt-2">
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row">
           <button
             type="button"
             onClick={goBack}
             disabled={stepIndex === 0}
             aria-label={stepIndex > 0 ? `${t("back")} ${t(STEP_LABEL_KEYS[STEPS[stepIndex - 1]!])}` : t("back")}
-            className="flex-1 rounded-xl border border-pluto-200 bg-white px-6 py-3 font-semibold text-pluto-900 hover:bg-pluto-50 focus:outline-none focus:ring-2 focus:ring-pluto-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 rounded-xl border border-pluto-200 bg-white px-6 py-3 font-semibold text-pluto-900 transition-colors hover:bg-pluto-50 focus:outline-none focus:ring-2 focus:ring-pluto-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t("back")}
           </button>
@@ -621,7 +664,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
               type="button"
               onClick={goNext}
               aria-label={`${t("next")}: ${t(STEP_LABEL_KEYS[STEPS[stepIndex + 1]!])}`}
-              className="flex-1 rounded-xl bg-pluto-600 px-6 py-3 font-semibold text-white hover:bg-pluto-700 focus:outline-none focus:ring-2 focus:ring-pluto-400"
+              className="flex-1 rounded-xl bg-pluto-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-pluto-700 focus:outline-none focus:ring-2 focus:ring-pluto-400 focus:ring-offset-2"
             >
               {t("next")}
             </button>
@@ -631,7 +674,7 @@ function KycSubmissionForm({ initialValues }: { initialValues?: KycInitialValues
               onClick={() => void handleSubmit()}
               disabled={state.isSubmitting}
               aria-describedby={`${uid}-submit-status`}
-              className="flex-1 rounded-xl bg-pluto-600 px-6 py-3 font-semibold text-white hover:bg-pluto-700 focus:outline-none focus:ring-2 focus:ring-pluto-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-xl bg-pluto-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-pluto-700 focus:outline-none focus:ring-2 focus:ring-pluto-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {state.isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">

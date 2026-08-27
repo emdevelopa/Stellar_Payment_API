@@ -93,7 +93,7 @@ export function RealTimeBalanceSync({
 
   return (
     <motion.section
-      className={`w-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 ease-out dark:border-slate-700 dark:bg-slate-900 ${isLoading ? "ring-2 ring-sky-200 dark:ring-sky-800" : ""} ${className}`}
+      className={`w-full rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 ease-out dark:border-slate-700 dark:bg-slate-900 ${isLoading ? "ring-2 ring-sky-200 dark:ring-sky-800" : ""} ${className}`}
       aria-label={t("sectionAriaLabel")}
       aria-busy={isLoading}
       {...animProps}
@@ -108,9 +108,9 @@ export function RealTimeBalanceSync({
         {liveRegionText}
       </div>
 
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
             {t("title")}
           </h2>
           <AnimatePresence mode="wait">
@@ -159,7 +159,7 @@ export function RealTimeBalanceSync({
           }
           aria-label={t("refreshButton")}
           aria-describedby={liveId}
-          className="group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-sky-50 to-white px-3 py-1.5 text-xs font-semibold text-sky-600 shadow-sm transition-all duration-200 hover:border-sky-300 hover:from-sky-100 hover:to-sky-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700 dark:from-slate-800 dark:to-slate-900 dark:text-sky-400 dark:hover:border-sky-600 dark:hover:from-slate-700 dark:hover:to-slate-800"
+          className="group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-sky-50 to-white px-3.5 py-2 text-sm font-semibold text-sky-600 shadow-sm transition-all duration-200 hover:border-sky-300 hover:from-sky-100 hover:to-sky-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700 dark:from-slate-800 dark:to-slate-900 dark:text-sky-400 dark:hover:border-sky-600 dark:hover:from-slate-700 dark:hover:to-slate-800"
         >
           <motion.span
             className="relative z-10 flex items-center gap-1.5"
@@ -220,19 +220,19 @@ export function RealTimeBalanceSync({
             animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
             exit={shouldReduceMotion ? undefined : { opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="mb-2 text-xs text-red-600"
+            className="mb-3 text-sm font-medium text-red-600 dark:text-red-400"
           >
             {error}
           </motion.p>
         ) : null}
       </AnimatePresence>
 
-      {balances.length === 0 && !isLoading ? (
+      {!error && balances.length === 0 && !isLoading ? (
         <motion.div
           key="empty"
           initial={shouldReduceMotion ? undefined : { opacity: 0, y: 10 }}
           animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-          className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100/50 px-4 py-6 transition-all duration-300 hover:border-slate-200 hover:shadow-sm dark:border-slate-800 dark:from-slate-800 dark:to-slate-900/50"
+          className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100/50 px-4 py-8 transition-all duration-300 hover:border-slate-200 hover:shadow-sm dark:border-slate-800 dark:from-slate-800 dark:to-slate-900/50"
           aria-live="polite"
         >
           <motion.div
@@ -257,7 +257,7 @@ export function RealTimeBalanceSync({
           />
           <div className="relative">
             <svg
-              className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-slate-600"
+              className="mx-auto mb-3 h-10 w-10 text-slate-300 dark:text-slate-600"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -270,7 +270,7 @@ export function RealTimeBalanceSync({
                 d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
               />
             </svg>
-            <p className="text-center text-xs font-medium text-slate-500 dark:text-slate-400">
+            <p className="text-center text-sm font-medium text-slate-500 dark:text-slate-400">
               {t("emptyState")}
             </p>
           </div>
@@ -280,7 +280,7 @@ export function RealTimeBalanceSync({
           key="skeleton"
           initial={shouldReduceMotion ? undefined : { opacity: 0 }}
           animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-          className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50"
+          className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50"
         >
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center justify-between">
@@ -331,7 +331,7 @@ export function RealTimeBalanceSync({
         <motion.ul
           role="list"
           aria-label={t("balancesListAriaLabel")}
-          className="overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 divide-y divide-slate-100 dark:border-slate-800 dark:bg-slate-800/50 dark:divide-slate-800"
+          className="overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 divide-y divide-slate-100 dark:border-slate-800 dark:bg-slate-800/50 dark:divide-slate-700"
           variants={shouldReduceMotion ? undefined : listVariants}
           initial="hidden"
           animate="visible"
@@ -355,22 +355,22 @@ export function RealTimeBalanceSync({
                   animate="visible"
                   exit="exit"
                   transition={{ duration: 0.25, ease: "easeOut" }}
-                  className="group relative flex items-center justify-between gap-4 py-3 px-3 transition-colors hover:bg-white/50 dark:hover:bg-slate-700/30"
+                  className="group relative flex items-center justify-between gap-4 py-3.5 px-4 transition-colors hover:bg-white/50 dark:hover:bg-slate-700/30"
                   aria-label={t("balanceItemAriaLabel", {
                     asset: b.code,
                     balance: formattedBalance,
                   })}
                 >
                   <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-blue-100 text-xs font-bold text-sky-700 dark:from-sky-900/30 dark:to-blue-900/30 dark:text-sky-400">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-blue-100 text-xs font-bold text-sky-700 dark:from-sky-900/30 dark:to-blue-900/30 dark:text-sky-400">
                       {b.code.slice(0, 2)}
                     </div>
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                       {b.code}
                     </span>
                   </div>
                   <motion.span
-                    className="text-sm tabular-nums font-semibold text-slate-900 dark:text-slate-100"
+                    className="text-base tabular-nums font-bold text-slate-900 dark:text-white"
                     key={`${b.code}-${b.balance}`}
                     initial={
                       shouldReduceMotion
@@ -401,7 +401,7 @@ export function RealTimeBalanceSync({
 
       {lastUpdated && (
         <motion.div
-          className="mt-3 flex items-center gap-2"
+          className="mt-4 flex items-center gap-2"
           initial={shouldReduceMotion ? undefined : { opacity: 0, y: 5 }}
           animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.3 }}
@@ -429,10 +429,10 @@ export function RealTimeBalanceSync({
             />
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            <span className="font-medium text-slate-500 dark:text-slate-400">
+            <span className="font-semibold text-slate-500 dark:text-slate-400">
               {t("updatedLabel")}
             </span>{" "}
-            <time dateTime={lastUpdated.toISOString()}>
+            <time dateTime={lastUpdated.toISOString()} className="tabular-nums">
               {lastUpdated.toLocaleTimeString(locale, {
                 hour: "numeric",
                 minute: "2-digit",

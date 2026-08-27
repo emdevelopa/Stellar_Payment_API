@@ -197,10 +197,15 @@ export default function MultisigApprovalModal({
 
   // Step components with improved accessibility
   const ReviewStep = () => (
-    <div className="space-y-6" role="region" aria-label={t("review.sectionAriaLabel")}>
+    <div className="space-y-5" role="region" aria-label={t("review.sectionAriaLabel")}>
       <div className="text-center">
-        <h3 className="text-xl font-bold text-white" id="review-title">{t("review.heading")}</h3>
-        <p className="mt-2 text-sm text-slate-400" id="review-description">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-mint/10 mb-3">
+          <svg className="w-6 h-6 text-mint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-white" id="review-title">{t("review.heading")}</h3>
+        <p className="mt-1.5 text-sm text-slate-400" id="review-description">
           {t("review.description")}
         </p>
       </div>
@@ -208,24 +213,24 @@ export default function MultisigApprovalModal({
       {transaction && (
         <div className="space-y-4">
           {/* Transaction Details */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-            <div className="flex justify-between items-center">
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-white/5">
               <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{t("review.amount")}</span>
-              <span className="font-mono text-sm text-white">
+              <span className="font-mono text-sm font-semibold text-white">
                 {transaction.amount} {transaction.assetCode}
               </span>
             </div>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center py-2 border-b border-white/5">
               <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{t("review.to")}</span>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm text-slate-200 truncate max-w-[200px]">
+                <span className="font-mono text-sm text-slate-200 truncate max-w-[180px]">
                   {transaction.destination}
                 </span>
                 <CopyButton text={transaction.destination} />
               </div>
             </div>
             {transaction.memo && (
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center py-2">
                 <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{t("review.memo")}</span>
                 <span className="font-mono text-sm text-slate-200">{transaction.memo}</span>
               </div>
@@ -233,12 +238,12 @@ export default function MultisigApprovalModal({
           </div>
 
           {/* Signature Progress */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <div className="flex justify-between items-center">
               <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
                 {t("review.signaturesLabel", { signed: signedCount, required: requiredSignatures })}
               </span>
-              <span className="text-xs text-slate-400">{Math.round(progress)}%</span>
+              <span className="text-xs font-semibold text-mint">{Math.round(progress)}%</span>
             </div>
               <motion.div 
                 className="w-full bg-white/10 rounded-full h-2"
@@ -259,7 +264,7 @@ export default function MultisigApprovalModal({
           </div>
 
           {/* Signers List */}
-          <div className="space-y-2" role="region" aria-label={t("review.signersListAriaLabel")}>
+          <div className="space-y-2.5" role="region" aria-label={t("review.signersListAriaLabel")}>
             <span className="text-xs font-medium uppercase tracking-wider text-slate-500" id="signers-label">{t("review.signersLabel")}</span>
             <motion.ul
               className="space-y-2"
@@ -272,10 +277,10 @@ export default function MultisigApprovalModal({
                 <motion.li
                   key={signer.id}
                   variants={!prefersReducedMotion ? signerItemVariants : undefined}
-                  className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+                  className={`flex items-center justify-between rounded-lg border p-3 transition-all duration-200 ${
                     signer.hasSigned
-                      ? "border-mint/30 bg-mint/5"
-                      : "border-white/10 bg-white/5"
+                      ? "border-mint/30 bg-mint/5 shadow-sm shadow-mint/5"
+                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                   }`}
                   role="listitem"
                   aria-label={t("review.signerAriaLabel", {
@@ -353,29 +358,29 @@ export default function MultisigApprovalModal({
   );
 
   const ProcessingStep = () => (
-    <div className="flex flex-col items-center justify-center py-12 text-center" role="status">
-      <div className="relative mb-6" aria-hidden="true">
-        <div className="w-16 h-16 border-4 border-mint border-t-transparent rounded-full animate-spin" />
-        <div className="absolute inset-0 w-16 h-16 border-4 border-mint/20 rounded-full animate-ping" />
+    <div className="flex flex-col items-center justify-center py-10 text-center" role="status">
+      <div className="relative mb-5" aria-hidden="true">
+        <div className="w-14 h-14 border-[3px] border-mint border-t-transparent rounded-full animate-spin" />
+        <div className="absolute inset-0 w-14 h-14 border-[3px] border-mint/20 rounded-full animate-ping" />
       </div>
-      <h3 className="text-xl font-bold text-white">{t("processing.heading")}</h3>
-      <p className="mt-2 text-sm text-slate-400">
+      <h3 className="text-lg font-bold text-white">{t("processing.heading")}</h3>
+      <p className="mt-1.5 text-sm text-slate-400 max-w-xs">
         {t("processing.description")}
       </p>
     </div>
   );
 
   const ConfirmStep = () => (
-    <div className="text-center space-y-6">
+    <div className="text-center space-y-5">
       {isPendingConfirmation ? (
         <>
-          <div className="relative mx-auto w-16 h-16" aria-hidden="true">
-            <div className="w-16 h-16 border-4 border-mint border-t-transparent rounded-full animate-spin" />
-            <div className="absolute inset-0 w-16 h-16 border-4 border-mint/20 rounded-full animate-ping" />
+          <div className="relative mx-auto w-14 h-14" aria-hidden="true">
+            <div className="w-14 h-14 border-[3px] border-mint border-t-transparent rounded-full animate-spin" />
+            <div className="absolute inset-0 w-14 h-14 border-[3px] border-mint/20 rounded-full animate-ping" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white">{t("confirm.pendingHeading")}</h3>
-            <p className="mt-2 text-sm text-slate-400">
+            <h3 className="text-lg font-bold text-white">{t("confirm.pendingHeading")}</h3>
+            <p className="mt-1.5 text-sm text-slate-400">
               {t("confirm.pendingDescription")}
             </p>
           </div>
@@ -401,14 +406,14 @@ export default function MultisigApprovalModal({
         </>
       ) : (
         <>
-          <div className="w-16 h-16 bg-mint/20 rounded-full flex items-center justify-center mx-auto">
-            <svg className="w-8 h-8 text-mint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          <div className="w-14 h-14 bg-mint/15 rounded-full flex items-center justify-center mx-auto ring-4 ring-mint/10">
+            <svg className="w-7 h-7 text-mint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white">{t("confirm.approvedHeading")}</h3>
-            <p className="mt-2 text-sm text-slate-400">
+            <h3 className="text-lg font-bold text-white">{t("confirm.approvedHeading")}</h3>
+            <p className="mt-1.5 text-sm text-slate-400">
               {t("confirm.approvedDescription")}
             </p>
           </div>
@@ -437,15 +442,15 @@ export default function MultisigApprovalModal({
   );
 
   const ErrorStep = () => (
-    <div className="text-center space-y-6" role="alert">
-      <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
-        <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="text-center space-y-5" role="alert">
+      <div className="w-14 h-14 bg-red-500/15 rounded-full flex items-center justify-center mx-auto ring-4 ring-red-500/10">
+        <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
       </div>
       <div>
-        <h3 className="text-xl font-bold text-white">{t("error.heading")}</h3>
-        <p className="mt-2 text-sm text-slate-400">
+        <h3 className="text-lg font-bold text-white">{t("error.heading")}</h3>
+        <p className="mt-1.5 text-sm text-slate-400 max-w-xs mx-auto">
           {error || t("error.defaultMessage")}
         </p>
       </div>
@@ -507,7 +512,7 @@ export default function MultisigApprovalModal({
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="relative w-full max-w-2xl overflow-hidden rounded-t-2xl sm:rounded-2xl border border-white/10 bg-[#050608] shadow-2xl backdrop-blur-xl outline-none"
+            className="relative w-full max-w-lg overflow-hidden rounded-t-2xl sm:rounded-2xl border border-white/10 bg-[#050608] shadow-2xl backdrop-blur-xl outline-none"
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
@@ -516,12 +521,12 @@ export default function MultisigApprovalModal({
             aria-describedby="multisig-modal-description"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 p-6">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <div>
-                <h2 id="multisig-modal-title" className="text-xl font-bold text-white">
+                <h2 id="multisig-modal-title" className="text-lg font-bold text-white tracking-tight">
                   {t("title")}
                 </h2>
-                <p id="multisig-modal-description" className="text-sm text-slate-400">
+                <p id="multisig-modal-description" className="text-xs text-slate-400 mt-0.5">
                   {isExpired
                     ? t("expired.statusLabel")
                     : t("stepOf", {
@@ -561,7 +566,7 @@ export default function MultisigApprovalModal({
 
             {/* Content */}
             <motion.div
-              className="p-6 max-h-[70vh] overflow-y-auto"
+              className="px-6 py-5 max-h-[70vh] overflow-y-auto"
               aria-live="polite"
               key={currentStep}
               variants={stepVariants}
@@ -570,15 +575,15 @@ export default function MultisigApprovalModal({
               exit="exit"
             >
               {isExpired ? (
-                <div className="text-center space-y-6">
-                  <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto">
-                    <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-center space-y-5">
+                  <div className="w-14 h-14 bg-amber-500/15 rounded-full flex items-center justify-center mx-auto ring-4 ring-amber-500/10">
+                    <svg className="w-7 h-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white">{t("expired.heading")}</h3>
-                    <p className="mt-2 text-sm text-slate-400">
+                    <h3 className="text-lg font-bold text-white">{t("expired.heading")}</h3>
+                    <p className="mt-1.5 text-sm text-slate-400">
                       {t("expired.description")}
                     </p>
                   </div>

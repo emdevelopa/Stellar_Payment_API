@@ -680,5 +680,73 @@
     "close": "Cerrar animación de éxito",
     "continue": "Continuar",
     "error": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "multisigModal": {
+    "title": "Aprobación multifirma",
+    "closeModal": "Cerrar modal",
+    "stepOf": "Paso {step} de {total}",
+    "review": {
+      "heading": "Revisar transacción",
+      "description": "Revise los detalles de la transacción y confirme su aprobación.",
+      "sectionAriaLabel": "Sección de revisión de transacciones",
+      "amount": "Cantidad",
+      "to": "Para",
+      "issuer": "Emisor",
+      "memo": "Memo",
+      "signaturesLabel": "Firmas ({signed}/{required})",
+      "progressAriaLabel": "Progreso de firma",
+      "signersLabel": "Firmantes",
+      "signersListAriaLabel": "Lista de firmantes",
+      "signerFallbackName": "Firmante {id}",
+      "signedStatus": "Firmado",
+      "notSignedStatus": "No firmado",
+      "signerWeight": "Peso: {weight} • {publicKey}...",
+      "signerAriaLabel": "{name}, Peso: {weight}, Estado: {status}",
+      "signButton": "Firmar",
+      "signingButton": "Firmando...",
+      "signButtonAriaLabel": "{action} para {name}",
+      "expiresIn": "Expira en {time}",
+      "submitButton": "Enviar transacción",
+      "submittingButton": "Enviando..."
+    },
+    "processing": {
+      "heading": "Procesando transacción",
+      "description": "Procesando su transacción. Por favor espere."
+    },
+    "confirm": {
+      "pendingHeading": "Transacción enviada",
+      "pendingDescription": "Esperando confirmación de red...",
+      "hashPendingLabel": "Hash de la transacción",
+      "confirmingButton": "Confirmando...",
+      "approvedHeading": "Transacción aprobada",
+      "approvedDescription": "Su transacción multifirma ha sido enviada con éxito",
+      "hashLabel": "Hash de la transacción",
+      "closeButton": "Cerrar"
+    },
+    "error": {
+      "heading": "Transacción fallida",
+      "defaultMessage": "Ocurrió un error al procesar su transacción",
+      "tryAgainButton": "Intentar de nuevo",
+      "closeButton": "Cerrar",
+      "bannerTitle": "Error",
+      "clearErrorAriaLabel": "Borrar error",
+      "statusLabel": "Fallido"
+    },
+    "expired": {
+      "heading": "Transacción expirada",
+      "statusLabel": "Transacción expirada",
+      "badge": "Expirado",
+      "description": "Esta transacción ha expirado y ya no se puede firmar ni enviar.",
+      "closeButton": "Cerrar"
+    },
+    "announcements": {
+      "processing": "Procesando su transacción. Por favor espere.",
+      "confirmed": "Transacción aprobada con éxito.",
+      "failed": "La transacción falló. Consulte los detalles del error a continuación."
+    },
+    "toasts": {
+      "signed": "Transacción firmada con éxito",
+      "submitted": "Transacción enviada con éxito"
+    }
   }
 }

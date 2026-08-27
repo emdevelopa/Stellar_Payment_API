@@ -702,5 +702,73 @@
     "close": "Close success animation",
     "continue": "Continue",
     "error": "Something went wrong. Please try again."
+  },
+  "multisigModal": {
+    "title": "Multi-Signature Approval",
+    "closeModal": "Close modal",
+    "stepOf": "Step {step} of {total}",
+    "review": {
+      "heading": "Review Transaction",
+      "description": "Please review the transaction details and confirm your approval.",
+      "sectionAriaLabel": "Review transaction section",
+      "amount": "Amount",
+      "to": "To",
+      "issuer": "Issuer",
+      "memo": "Memo",
+      "signaturesLabel": "Signatures ({signed}/{required})",
+      "progressAriaLabel": "Signature progress",
+      "signersLabel": "Signers",
+      "signersListAriaLabel": "Signers list",
+      "signerFallbackName": "Signer {id}",
+      "signedStatus": "Signed",
+      "notSignedStatus": "Not signed",
+      "signerWeight": "Weight: {weight} • {publicKey}...",
+      "signerAriaLabel": "{name}, Weight: {weight}, Status: {status}",
+      "signButton": "Sign",
+      "signingButton": "Signing...",
+      "signButtonAriaLabel": "{action} for {name}",
+      "expiresIn": "Expires in {time}",
+      "submitButton": "Submit Transaction",
+      "submittingButton": "Submitting..."
+    },
+    "processing": {
+      "heading": "Processing Transaction",
+      "description": "Processing your transaction. Please wait."
+    },
+    "confirm": {
+      "pendingHeading": "Transaction Submitted",
+      "pendingDescription": "Awaiting network confirmation...",
+      "hashPendingLabel": "Transaction Hash",
+      "confirmingButton": "Confirming...",
+      "approvedHeading": "Transaction Approved",
+      "approvedDescription": "Your multi-signature transaction has been successfully submitted",
+      "hashLabel": "Transaction Hash",
+      "closeButton": "Close"
+    },
+    "error": {
+      "heading": "Transaction Failed",
+      "defaultMessage": "An error occurred while processing your transaction",
+      "tryAgainButton": "Try Again",
+      "closeButton": "Close",
+      "bannerTitle": "Error",
+      "clearErrorAriaLabel": "Clear error",
+      "statusLabel": "Failed"
+    },
+    "expired": {
+      "heading": "Transaction Expired",
+      "statusLabel": "Transaction Expired",
+      "badge": "Expired",
+      "description": "This transaction has expired and can no longer be signed or submitted.",
+      "closeButton": "Close"
+    },
+    "announcements": {
+      "processing": "Processing your transaction. Please wait.",
+      "confirmed": "Transaction approved successfully.",
+      "failed": "Transaction failed. See error details below."
+    },
+    "toasts": {
+      "signed": "Transaction signed successfully",
+      "submitted": "Transaction submitted successfully"
+    }
   }
 }

@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { vi } from "vitest";
 import { MultisigProvider, useMultisig, useMultisigState, useMultisigActions } from "./multisig-context";
 
 describe("Multisig Context", () => {
@@ -57,6 +58,7 @@ describe("Multisig Context", () => {
         <button onClick={() => setTransaction(mockTransaction)}>Set Transaction</button>
         <button onClick={() => setCurrentStep("sign")}>Set Step</button>
         <button onClick={() => signTransaction("signer1")}>Sign Transaction</button>
+        <button onClick={() => signTransaction("signer2")}>Sign Second Signer</button>
         <button onClick={submitTransaction}>Submit Transaction</button>
         <button onClick={resetModal}>Reset</button>
         <button onClick={clearError}>Clear Error</button>
@@ -74,7 +76,7 @@ describe("Multisig Context", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("Initial State", () => {
@@ -213,7 +215,7 @@ describe("Multisig Context", () => {
         expect(screen.getByTestId("signed-count")).toHaveTextContent("1");
       }, { timeout: 2000 });
 
-      fireEvent.click(screen.getByText("Sign Transaction"));
+      fireEvent.click(screen.getByText("Sign Second Signer"));
 
       await waitFor(() => {
         expect(screen.getByTestId("signed-count")).toHaveTextContent("2");
@@ -304,17 +306,17 @@ describe("Multisig Context", () => {
     it("resets modal state correctly", async () => {
       renderWithProvider();
 
-      // Set transaction and trigger error
-      fireEvent.click(screen.getByText("Set Transaction"));
-
-      await waitFor(() => {
-        expect(screen.getByTestId("transaction-id")).toHaveTextContent("test-tx-1");
-      });
-
+      // Trigger error and set transaction
       fireEvent.click(screen.getByText("Sign Transaction"));
 
       await waitFor(() => {
         expect(screen.getByTestId("error")).not.toHaveTextContent("no-error");
+      });
+
+      fireEvent.click(screen.getByText("Set Transaction"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("transaction-id")).toHaveTextContent("test-tx-1");
       });
 
       // Reset

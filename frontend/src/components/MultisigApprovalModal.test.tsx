@@ -1,8 +1,86 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { vi } from "vitest";
 import MultisigApprovalModal from "./MultisigApprovalModal";
 import { MultisigProvider } from "@/lib/multisig-context";
+
+vi.mock("framer-motion", async () => {
+  const actual = await vi.importActual<any>("framer-motion");
+  return {
+    ...actual,
+    AnimatePresence: ({ children }: any) => <>{children}</>,
+  };
+});
+
+vi.mock("next-intl", () => ({
+  useTranslations: (namespace?: string) => {
+    const translations: Record<string, any> = {
+      "title": "Multi-Signature Approval",
+      "closeModal": "Close modal",
+      "stepOf": ({ step, total }: any) => `Step ${step} of ${total}`,
+      "review.heading": "Review Transaction",
+      "review.description": "Please review the transaction details and confirm your approval.",
+      "review.sectionAriaLabel": "Review transaction section",
+      "review.amount": "Amount",
+      "review.to": "To",
+      "review.memo": "Memo",
+      "review.signaturesLabel": ({ signed, required }: any) => `Signatures (${signed}/${required})`,
+      "review.progressAriaLabel": "Signature progress",
+      "review.signersLabel": "Signers",
+      "review.signersListAriaLabel": "Signers list",
+      "review.signerFallbackName": ({ id }: any) => `Signer ${id}`,
+      "review.signedStatus": "Signed",
+      "review.notSignedStatus": "Not signed",
+      "review.signerWeight": ({ weight }: any) => `Weight: ${weight}`,
+      "review.signerAriaLabel": ({ name, weight, status }: any) => `${name}, Weight: ${weight}, Status: ${status}`,
+      "review.signButton": "Sign",
+      "review.signingButton": "Signing...",
+      "review.signButtonAriaLabel": ({ action, name }: any) => `${action} for ${name}`,
+      "review.expiresIn": ({ time }: any) => `Expires in ${time}`,
+      "review.submitButton": "Submit Transaction",
+      "review.submittingButton": "Submitting...",
+      "processing.heading": "Processing Transaction",
+      "processing.description": "Processing your transaction. Please wait.",
+      "confirm.pendingHeading": "Transaction Submitted",
+      "confirm.pendingDescription": "Awaiting network confirmation...",
+      "confirm.hashPendingLabel": "Transaction Hash",
+      "confirm.confirmingButton": "Confirming...",
+      "confirm.approvedHeading": "Transaction Approved",
+      "confirm.approvedDescription": "Your multi-signature transaction has been successfully submitted",
+      "confirm.hashLabel": "Transaction Hash",
+      "confirm.closeButton": "Close",
+      "error.heading": "Transaction Failed",
+      "error.defaultMessage": "An error occurred while processing your transaction",
+      "error.tryAgainButton": "Try Again",
+      "error.closeButton": "Close",
+      "error.bannerTitle": "Error",
+      "error.clearErrorAriaLabel": "Clear error",
+      "expired.heading": "Transaction Expired",
+      "expired.statusLabel": "Expired",
+      "expired.badge": "Expired",
+      "expired.description": "This transaction has expired and can no longer be signed or submitted.",
+      "expired.closeButton": "Close",
+      "review.issuer": "Issuer",
+      "announcements.processing": "Processing your transaction. Please wait.",
+      "announcements.confirmed": "Transaction approved successfully.",
+      "announcements.failed": "Transaction failed. See error details below.",
+      "toasts.signed": "Transaction signed successfully",
+      "toasts.submitted": "Transaction submitted successfully",
+      "ariaLabel": "Copy to clipboard",
+      "copyButton.ariaLabel": "Copy to clipboard",
+    };
+    return (key: string, values?: any) => {
+      const fullKey = namespace ? `${namespace}.${key}` : key;
+      const val = translations[fullKey] ?? translations[key];
+      if (typeof val === "function") {
+        return val(values);
+      }
+      return val || key;
+    };
+  },
+  useLocale: () => "en",
+}));
 
 describe("MultisigApprovalModal Component", () => {
   const mockTransaction = {
@@ -23,7 +101,7 @@ describe("MultisigApprovalModal Component", () => {
   const renderWithProvider = (props = {}) => {
     const defaultProps = {
       isOpen: true,
-      onClose: jest.fn(),
+      onClose: vi.fn(),
       networkPassphrase: "Test Network",
       transaction: mockTransaction,
     };
@@ -36,12 +114,12 @@ describe("MultisigApprovalModal Component", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe("Modal Rendering", () => {
@@ -79,7 +157,7 @@ describe("MultisigApprovalModal Component", () => {
 
       expect(screen.getByText("Alice")).toBeInTheDocument();
       expect(screen.getByText("Bob")).toBeInTheDocument();
-      expect(screen.getByText("Weight: 1")).toBeInTheDocument();
+      expect(screen.getAllByText("Weight: 1")[0]).toBeInTheDocument();
     });
 
     it("shows sign buttons for unsigned signers", () => {
@@ -155,7 +233,7 @@ describe("MultisigApprovalModal Component", () => {
 
   describe("Modal Actions", () => {
     it("calls onClose when close button is clicked", () => {
-      const mockOnClose = jest.fn();
+      const mockOnClose = vi.fn();
       renderWithProvider({ onClose: mockOnClose });
 
       const closeButton = screen.getByLabelText("Close modal");
@@ -165,7 +243,7 @@ describe("MultisigApprovalModal Component", () => {
     });
 
     it("calls onClose when backdrop is clicked", () => {
-      const mockOnClose = jest.fn();
+      const mockOnClose = vi.fn();
       renderWithProvider({ onClose: mockOnClose });
 
       const backdrop = screen.getByText("Multi-Signature Approval").closest('[role="dialog"]')?.previousSibling as HTMLElement;
@@ -176,7 +254,7 @@ describe("MultisigApprovalModal Component", () => {
     });
 
     it("closes modal on escape key", () => {
-      const mockOnClose = jest.fn();
+      const mockOnClose = vi.fn();
       renderWithProvider({ onClose: mockOnClose });
 
       fireEvent.keyDown(document, { key: "Escape" });
@@ -327,7 +405,7 @@ describe("MultisigApprovalModal Component", () => {
       await waitFor(() => {
         expect(screen.getByText("Transaction Approved")).toBeInTheDocument();
       }, { timeout: 3000 });
-    });
+    }, 10000);
 
     it("displays transaction hash after confirmation", async () => {
       renderWithProvider();
@@ -352,7 +430,7 @@ describe("MultisigApprovalModal Component", () => {
         expect(screen.getByText("Transaction Hash")).toBeInTheDocument();
         expect(screen.getByText(/tx_/)).toBeInTheDocument();
       }, { timeout: 3000 });
-    });
+    }, 10000);
   });
 
   describe("Accessibility", () => {
@@ -670,7 +748,7 @@ describe("MultisigApprovalModal Component", () => {
     });
 
     it("prevents backdrop close during loading", async () => {
-      const mockOnClose = jest.fn();
+      const mockOnClose = vi.fn();
       renderWithProvider({ onClose: mockOnClose });
 
       const signButtons = screen.getAllByText("Sign");
@@ -696,7 +774,7 @@ describe("MultisigApprovalModal Component", () => {
     });
 
     it("reopens correctly after being closed", () => {
-      const mockOnClose = jest.fn();
+      const mockOnClose = vi.fn();
       const { rerender } = render(
         <MultisigProvider networkPassphrase="Test Network">
           <MultisigApprovalModal

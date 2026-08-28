@@ -60,7 +60,6 @@ const DEFAULT_COLORS = [
 /**
  * PortfolioChartWidget - A responsive portfolio visualization component
  * Displays asset allocation with pie chart and includes state management
- * Optimized: removed framer-motion dependency for smaller bundle size
  */
 export function PortfolioChartWidget({
   assets = [],
@@ -137,15 +136,6 @@ export function PortfolioChartWidget({
     [currency, locale]
   );
 
-  return (
-    <div
-      className={`w-full h-full flex flex-col gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${className}`}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {t('portfolioChart.valueTitle') || 'Portfolio Value'}
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
@@ -192,28 +182,6 @@ export function PortfolioChartWidget({
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setChartType('pie')}
-            className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
-              chartType === 'pie'
-                ? 'bg-blue-600 text-white scale-105'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
-            aria-pressed={chartType === 'pie'}
-          >
-            {t('portfolioChart.allocation') || 'Allocation'}
-          </button>
-          <button
-            onClick={() => setChartType('history')}
-            className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
-              chartType === 'history'
-                ? 'bg-blue-600 text-white scale-105'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
-            aria-pressed={chartType === 'history'}
-          >
-            {t('portfolioChart.trend') || 'Trend'}
-          </button>
           <motion.button
             whileHover={isChartLoading ? undefined : { scale: 1.05 }}
             whileTap={isChartLoading ? undefined : { scale: 0.95 }}
@@ -243,125 +211,8 @@ export function PortfolioChartWidget({
             {t('trend')}
           </motion.button>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Chart Container */}
-      <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-md min-h-[300px]">
-        <div className={chartType === 'pie' ? 'w-full h-full' : 'w-full h-full p-4'}>
-          {chartType === 'pie' ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={120}
-                  paddingAngle={2}
-                  isAnimationActive={showAnimation}
-                  animationDuration={800}
-                  onClick={(entry) => handleAssetClick(entry.payload.payload)}
-                >
-                  {assetsWithColors.map((asset) => (
-                    <Cell
-                      key={`cell-${asset.id}`}
-                      fill={asset.color}
-                      className={`cursor-pointer transition-opacity duration-300 ${
-                        selectedAsset === null || selectedAsset === asset.id
-                          ? 'opacity-100'
-                          : 'opacity-40'
-                      }`}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number) => formatCurrency(value as number)}
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: '1px solid #374151',
-                    borderRadius: '0.375rem',
-                    color: '#F3F4F6',
-                  }}
-                />
-                <Legend
-                  formatter={(value, entry) => {
-                    const asset = (entry as unknown as { payload: { payload: PortfolioAsset } }).payload.payload;
-                    return `${asset.symbol} (${asset.percentage.toFixed(1)}%)`;
-                  }}
-                  wrapperStyle={{
-                    paddingTop: '20px',
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={[]}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#3B82F6"
-                  isAnimationActive={showAnimation}
-                  animationDuration={800}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {/* Asset List */}
-      <div className="space-y-2 max-h-[200px] overflow-y-auto">
-        {assetsWithColors.map((asset) => (
-          <div
-            key={asset.id}
-            onClick={() => handleAssetClick(asset)}
-            className={`flex items-center gap-3 p-3 rounded-md cursor-pointer transition-all duration-200 ${
-              selectedAsset === asset.id
-                ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
-                : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
-            }`}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleAssetClick(asset);
-              }
-            }}
-          >
-            <div
-              className="w-3 h-3 rounded-full flex-shrink-0 transition-transform duration-200 group-hover:scale-110"
-              style={{ backgroundColor: asset.color }}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-center gap-2">
-                <span className="font-medium text-gray-900 dark:text-white text-sm">
-                  {asset.symbol}
-                </span>
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  {asset.percentage.toFixed(1)}%
-                </span>
-              </div>
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {asset.amount.toFixed(4)} {asset.symbol}
-                </span>
-                <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                  {formatCurrency(asset.value)}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
       <motion.div
         variants={itemVariants}
         className="relative flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded-md bg-gray-50 dark:bg-gray-800"
@@ -509,13 +360,22 @@ export function PortfolioChartWidget({
             <motion.div
               key={asset.id}
               onClick={() => !isChartLoading && handleAssetClick(asset)}
-              className={`flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all ${
+              className={`flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
                 selectedAsset === asset.id
                   ? 'border border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30'
                   : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700'
               } ${isChartLoading ? 'pointer-events-none opacity-60' : ''}`}
               whileHover={isChartLoading ? undefined : { x: 4 }}
               whileTap={isChartLoading ? undefined : { scale: 0.98 }}
+              role="button"
+              tabIndex={isChartLoading ? -1 : 0}
+              aria-pressed={selectedAsset === asset.id}
+              onKeyDown={(e) => {
+                if (!isChartLoading && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  handleAssetClick(asset);
+                }
+              }}
             >
               <motion.div
                 className="h-3 w-3 flex-shrink-0 rounded-full"

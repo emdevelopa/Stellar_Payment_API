@@ -36,6 +36,16 @@ function stableStringify(value, depth = 0, seen = new WeakSet()) {
   if (value === null || value === undefined) return "null";
   if (typeof value !== "object") return JSON.stringify(value);
 
+  // Date has no own enumerable properties, so the generic Object.entries()
+  // path below silently serializes any Date to "{}", discarding the actual
+  // timestamp. old_value/new_value in a profile-change audit event can be a
+  // Date (e.g. a timestamp field changing), so this must be special-cased
+  // before the object/array branches — otherwise the audit trail records a
+  // meaningless "{}" instead of the value that actually changed.
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
+
   if (seen.has(value)) {
     return '"[Circular]"';
   }

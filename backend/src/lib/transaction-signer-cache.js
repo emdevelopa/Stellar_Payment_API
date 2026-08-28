@@ -92,8 +92,13 @@ class VerificationMemoryCache {
       this.cache.delete(txHash);
     }
     if (this.cache.size >= this.maxEntries) {
+      // NPE-07: Map.keys().next().value is undefined when the Map is empty
+      // (maxEntries=0 or a race where the map was cleared between the size
+      // check and the eviction).  Guard so we never call cache.delete(undefined).
       const oldest = this.cache.keys().next().value;
-      this.cache.delete(oldest);
+      if (oldest !== undefined) {
+        this.cache.delete(oldest);
+      }
     }
     this.cache.set(txHash, { result, insertedAt: Date.now(), valid });
   }
@@ -181,12 +186,33 @@ export class TransactionSignerCache {
       try {
         const raw = await this.redisClient.get(`${REDIS_KEY_PREFIX}${txHash}`);
         if (raw) {
-          const parsed = JSON.parse(raw);
-          // Rehydrate into memory cache
-          this.memory.set(txHash, parsed.result, parsed.valid);
-          this.hits += 1;
-          txSignatureCacheHits?.inc();
-          return { result: parsed.result, hit: true };
+          // NPE-08: JSON.parse can return null (when raw === "null"), a
+          // primitive, or any non-object value.  Any of these would cause
+          // `parsed.result` or `parsed.valid` to throw a TypeError.
+          // Validate the parsed value is a non-null object before trusting it.
+          let parsed;
+          try {
+            parsed = JSON.parse(raw);
+          } catch (jsonErr) {
+            logger.warn(
+              { err: jsonErr, txHash },
+              "TransactionSignerCache: Redis value is not valid JSON — ignoring",
+            );
+            parsed = null;
+          }
+
+          if (parsed !== null && typeof parsed === "object" && "result" in parsed) {
+            // Rehydrate into memory cache
+            this.memory.set(txHash, parsed.result, !!parsed.valid);
+            this.hits += 1;
+            txSignatureCacheHits?.inc();
+            return { result: parsed.result, hit: true };
+          } else {
+            logger.warn(
+              { txHash, parsedType: typeof parsed },
+              "TransactionSignerCache: Redis value has unexpected shape — ignoring",
+            );
+          }
         }
       } catch (err) {
         this.fallbacks += 1;
@@ -271,6 +297,26 @@ export class TransactionSignerCache {
       redisConnected: !!this.redisClient,
     };
   }
+
+  /**
+   * Destroy this cache instance: clear all in-memory entries and release the
+   * singleton reference so the Map and all cached objects become eligible for
+   * garbage collection.
+   *
+   * Memory leak fix (ML-04): the module-level singleton was never released on
+   * process exit, keeping all cached verification results alive until the OS
+   * reclaimed the process heap.  Call this during graceful shutdown via
+   * `stopTransactionSignerTimers()`.
+   */
+  async destroy() {
+    await this.clear();
+    // Null the singleton if this is the current instance so the next call to
+    // getTransactionSignerCache() creates a fresh one (useful in tests).
+    if (_cacheInstance === this) {
+      _cacheInstance = null;
+    }
+    logger.debug("TransactionSignerCache: instance destroyed and singleton reference released");
+  }
 }
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
@@ -294,5 +340,77 @@ export function resetTransactionSignerCacheForTest() {
   if (_cacheInstance) {
     _cacheInstance.clear();
     _cacheInstance = null;
+  }
+}
+
+// ── Prune Timer ───────────────────────────────────────────────────────────────
+
+/**
+ * How often (ms) the background prune interval sweeps expired entries from the
+ * in-memory verification cache.  Defaults to 60 seconds — short enough to
+ * reclaim stale memory promptly, long enough to have negligible CPU impact.
+ */
+const DEFAULT_PRUNE_INTERVAL_MS = 60 * 1000;
+
+/** Handle returned by setInterval so it can be cleared on shutdown. */
+let _pruneTimer = null;
+
+/**
+ * Start a periodic background interval that evicts expired entries from the
+ * singleton VerificationMemoryCache.
+ *
+ * Memory leak fix (ML-01/02): without this interval, expired entries are only
+ * reclaimed on the next request that touches the same txHash.  Under low
+ * traffic the Map grows to its LRU capacity and stays there, holding
+ * verification result objects in memory long past their TTL.
+ *
+ * The timer is created with `unref()` so it does not keep the Node.js event
+ * loop alive after the HTTP server closes.
+ *
+ * @param {number} [intervalMs] - Sweep frequency in milliseconds.
+ * @returns {NodeJS.Timeout} The interval handle (also stored internally).
+ */
+export function startCachePruneTimer(intervalMs = DEFAULT_PRUNE_INTERVAL_MS) {
+  if (_pruneTimer) {
+    // Idempotent — calling start twice resets to the new interval.
+    clearInterval(_pruneTimer);
+  }
+
+  _pruneTimer = setInterval(() => {
+    const instance = getTransactionSignerCache();
+    const pruned = instance.prune();
+    if (pruned > 0) {
+      logger.debug(
+        { pruned, size: instance.memory.size },
+        "TransactionSignerCache: background prune removed expired entries",
+      );
+    }
+  }, intervalMs);
+
+  // unref() so the timer does not prevent the process from exiting cleanly
+  // when the server has already been closed (ML-03).
+  if (typeof _pruneTimer.unref === "function") {
+    _pruneTimer.unref();
+  }
+
+  logger.debug(
+    { intervalMs },
+    "TransactionSignerCache: background prune timer started",
+  );
+
+  return _pruneTimer;
+}
+
+/**
+ * Stop the background prune interval and release the timer handle.
+ *
+ * Must be called during graceful shutdown to ensure the interval does not
+ * keep a reference to stale cache objects after the singleton is destroyed.
+ */
+export function stopCachePruneTimer() {
+  if (_pruneTimer) {
+    clearInterval(_pruneTimer);
+    _pruneTimer = null;
+    logger.debug("TransactionSignerCache: background prune timer stopped");
   }
 }

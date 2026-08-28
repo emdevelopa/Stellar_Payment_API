@@ -45,7 +45,7 @@ const MAX_METADATA_KEYS = 30;
 const MAX_METADATA_VALUE_LENGTH = 500;
 
 /** Keys from payment metadata that are allowed through sanitization unchanged. */
-const METADATA_ALLOWLIST = new Set([
+export const METADATA_ALLOWLIST = new Set([
   "order_id",
   "customer_id",
   "reference",
@@ -59,6 +59,13 @@ const METADATA_ALLOWLIST = new Set([
   "overpayment",
   "note",
 ]);
+
+/**
+ * Age threshold (hours) above which a payment is considered stale and flagged
+ * as an anomaly. Exported so horizon-poller.js can share the same value
+ * rather than maintaining a separate hardcoded copy that can diverge (DI-05).
+ */
+export const STALE_PAYMENT_HOURS = 20;
 
 // ── Payment Record Validation ─────────────────────────────────────────────────
 
@@ -89,12 +96,26 @@ export function validatePaymentRecord(payment) {
     };
   }
 
-  // amount — must be a finite positive number
-  const amount = Number(payment.amount);
+  // amount — must be a finite positive number.
+  // DI-04: payment.amount is stored in the DB as a string (e.g. "10.0000000").
+  // Number() coerces empty strings and "0.00" to 0, which is falsy but would
+  // pass a naive `> 0` check if the value were already a number. Explicitly
+  // reject non-parseable strings and zero-value amounts to prevent a payment
+  // with amount "0" from being processed and marking a DB row as confirmed.
+  const rawAmount = payment.amount;
+  if (
+    rawAmount === null ||
+    rawAmount === undefined ||
+    rawAmount === "" ||
+    (typeof rawAmount === "string" && rawAmount.trim() === "")
+  ) {
+    return { valid: false, reason: "payment.amount is missing or empty" };
+  }
+  const amount = Number(rawAmount);
   if (!Number.isFinite(amount) || amount <= 0) {
     return {
       valid: false,
-      reason: `payment.amount is not a positive finite number: ${payment.amount}`,
+      reason: `payment.amount is not a positive finite number: ${rawAmount}`,
     };
   }
 
@@ -231,7 +252,7 @@ export function auditPaymentAnomaly(payment) {
   // Payment is very old (should have been handled already)
   if (payment.created_at) {
     const ageHours = (Date.now() - Date.parse(payment.created_at)) / 3_600_000;
-    if (ageHours > 20) {
+    if (ageHours > STALE_PAYMENT_HOURS) {
       flags.push({ type: "stale_payment", ageHours: Math.floor(ageHours) });
     }
   }

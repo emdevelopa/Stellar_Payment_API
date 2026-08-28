@@ -3,7 +3,6 @@
 import React, { useId } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
-import FilterSyncIndicator from "./FilterSyncIndicator";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

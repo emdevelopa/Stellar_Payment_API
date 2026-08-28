@@ -751,7 +751,7 @@
   },
   "transactionFilters": {
     "title": "Filtros",
-    "landmarkLabel": "Filtros de transacoes",
+    "landmarkLabel": "Filtros de transações",
     "closeFilters": "Fechar filtros",
     "ariaLabel": "Limpar busca",
     "applyingToResults": "Aplicando aos resultados…",
@@ -760,7 +760,7 @@
     "clearing": "Limpando…",
     "search": {
       "label": "Busca",
-      "placeholder": "Buscar por ID ou descricao",
+      "placeholder": "Buscar por ID ou descrição",
       "syncLabel": "Buscando…"
     },
     "status": {
@@ -780,7 +780,7 @@
     "dateRange": {
       "label": "Intervalo de datas",
       "from": "De",
-      "to": "Ate",
+      "to": "Até",
       "fromSyncLabel": "Atualizando data inicial…",
       "toSyncLabel": "Atualizando data final…"
     }

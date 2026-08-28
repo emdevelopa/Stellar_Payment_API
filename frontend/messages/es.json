@@ -753,14 +753,14 @@
     "title": "Filtros",
     "landmarkLabel": "Filtros de transacciones",
     "closeFilters": "Cerrar filtros",
-    "ariaLabel": "Borrar busqueda",
+    "ariaLabel": "Borrar búsqueda",
     "applyingToResults": "Aplicando a los resultados…",
     "clearAll": "Borrar todos los filtros",
     "clearAllAriaLabel": "Borrar {count, plural, one {1 filtro activo} other {# filtros activos}}",
     "clearing": "Borrando…",
     "search": {
-      "label": "Busqueda",
-      "placeholder": "Buscar por ID o descripcion",
+      "label": "Búsqueda",
+      "placeholder": "Buscar por ID o descripción",
       "syncLabel": "Buscando…"
     },
     "status": {

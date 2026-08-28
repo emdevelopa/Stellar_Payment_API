@@ -142,8 +142,60 @@ describe("createApiKeyAuth", () => {
       timestampHeader: "1713916800",
       signatureHeader: "sha256=abcd",
       body: { amount: 1 },
+      clientIp: "1.2.3.4",
     });
     expect(next).toHaveBeenCalledWith();
+  });
+
+  it("does not trust a pre-populated merchant without x402 authentication", async () => {
+    merchantLookup.mockResolvedValue(null);
+    const req = createRequest({ "x-api-key": "invalid-key" }, { merchant: baseMerchant });
+
+    await middleware(req, res, next);
+
+    expect(merchantLookup).toHaveBeenCalledWith("invalid-key");
+    expect(usageRecorder).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("honors a merchant populated by the trusted x402 bridge", async () => {
+    const req = createRequest({}, { merchant: baseMerchant, x402: { tx_hash: "tx-1" } });
+
+    await middleware(req, res, next);
+
+    expect(merchantLookup).not.toHaveBeenCalled();
+    expect(usageRecorder).toHaveBeenCalledWith({ merchantId: baseMerchant.id, req });
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it("rejects a replay reported by the distributed signature reservation", async () => {
+    merchantLookup.mockResolvedValue(baseMerchant);
+    const reserveGatewaySignature = vi.fn().mockResolvedValue({
+      reserved: false,
+      replay: true,
+    });
+    middleware = createApiKeyAuth({
+      merchantLookup,
+      usageRecorder,
+      verifyGatewaySignature,
+      reserveGatewaySignature,
+    });
+    const req = createRequest({
+      "x-api-key": "signed-api-key",
+      "x-api-signature": "sha256=" + "a".repeat(64),
+      "x-api-timestamp": "1713916800",
+    });
+
+    await middleware(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Invalid API gateway signature",
+      code: "API_GATEWAY_REPLAY_DETECTED",
+    });
+    expect(merchantLookup).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("rejects request when gateway signature verification fails", async () => {

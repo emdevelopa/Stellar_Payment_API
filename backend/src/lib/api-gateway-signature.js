@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { logger } from "./logger.js";
 import { apiGatewaySignatureCacheSize, apiGatewayReplayBlockedTotal } from "./metrics.js";
+import { connectRedisClient } from "./redis.js";
 
 const DEFAULT_SIGNATURE_WINDOW_SECONDS = 300;
 // Minimum HMAC secret length to prevent signing with trivially weak keys
@@ -262,6 +263,62 @@ function buildCanonicalPayload({ method, path, timestamp, body }) {
 // state-changing requests, where re-execution has a real side effect.
 const REPLAY_PROTECTED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+function isReplayProtectedMethod(method) {
+  return REPLAY_PROTECTED_METHODS.has(String(method || "GET").toUpperCase());
+}
+
+function distributedReplayKey(secret, signatureHeader) {
+  return `api-gateway:replay:${crypto
+    .createHash("sha256")
+    .update(`${secret}:${signatureHeader}`, "utf8")
+    .digest("hex")}`;
+}
+
+/**
+ * Atomically reserve a mutating request signature across API instances.
+ * Redis SET NX is used when REDIS_URL is configured; the verifier's local
+ * cache remains the fallback for single-instance deployments.
+ */
+export async function reserveApiGatewaySignature({
+  secret,
+  signatureHeader,
+  method,
+  toleranceSeconds,
+  redisClient,
+}) {
+  if (!isReplayProtectedMethod(method)) return { reserved: true };
+
+  if (!process.env.REDIS_URL && !redisClient) return { reserved: true };
+
+  try {
+    const client = redisClient || (await connectRedisClient());
+    if (!client?.isOpen) {
+      throw new Error("Redis is unavailable for distributed replay protection");
+    }
+
+    const result = await client.set(
+      distributedReplayKey(secret, signatureHeader),
+      "1",
+      { NX: true, EX: Math.max(1, Math.ceil(toleranceSeconds)) },
+    );
+
+    if (result !== "OK") {
+      apiGatewayReplayBlockedTotal.inc();
+      logger.warn("Rejected replayed API gateway signature from distributed cache");
+      return { reserved: false, replay: true };
+    }
+
+    return { reserved: true };
+  } catch (err) {
+    logger.error({ err }, "Distributed API gateway replay protection unavailable");
+    return {
+      reserved: false,
+      code: "API_GATEWAY_REPLAY_PROTECTION_UNAVAILABLE",
+      reason: "API gateway replay protection is temporarily unavailable",
+    };
+  }
+}
+
 function signaturesEqual(a, b) {
   const aBuf = Buffer.from(a, "hex");
   const bBuf = Buffer.from(b, "hex");
@@ -381,11 +438,18 @@ export function verifyApiGatewayRequestSignature({
       return { valid: false, reason: "Missing or insufficient signature secret" };
     }
 
-    const timestamp = Number.parseInt(String(timestampHeader || ""), 10);
-    if (!Number.isFinite(timestamp)) {
+    const timestampValue = String(timestampHeader || "").trim();
+    if (!/^[0-9]+$/.test(timestampValue)) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
       logger.warn({ timestampHeader, clientIp }, "Missing or invalid x-api-timestamp header");
+      return { valid: false, reason: "Missing or invalid x-api-timestamp header" };
+    }
+    const timestamp = Number(timestampValue);
+    if (!Number.isSafeInteger(timestamp)) {
+      recordApiGatewaySignatureAttempt(clientIp, false, now);
+      _recordCircuitBreakerFailure(now);
+      logger.warn({ clientIp }, "API gateway timestamp exceeds safe integer range");
       return { valid: false, reason: "Missing or invalid x-api-timestamp header" };
     }
 
@@ -424,7 +488,7 @@ export function verifyApiGatewayRequestSignature({
     // that has already been used within its own tolerance window is a
     // replay of a captured request, not a legitimate second use. Scoped to
     // state-changing methods only - see REPLAY_PROTECTED_METHODS.
-    const isReplayProtected = REPLAY_PROTECTED_METHODS.has(String(method || "GET").toUpperCase());
+    const isReplayProtected = isReplayProtectedMethod(method);
     if (isReplayProtected && _isReplayedSignature(receivedSignature, now)) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);

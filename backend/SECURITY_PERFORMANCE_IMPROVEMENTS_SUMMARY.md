@@ -1,3 +1,13 @@
+# API Gateway Security Patch
+
+API gateway timestamps are accepted only as canonical, unsigned decimal Unix seconds that fit within JavaScript's safe integer range. Values with a decimal, sign, hexadecimal prefix, trailing data, or unsafe magnitude are rejected before signature verification.
+
+Mutating signed requests use an atomic Redis `SET NX` reservation keyed by a SHA-256 digest of the API secret and signature. This closes the replay race between API Gateway instances. Configure `REDIS_URL` in multi-instance deployments; when configured Redis is unavailable, authentication fails closed with `API_GATEWAY_REPLAY_PROTECTION_UNAVAILABLE` (HTTP 503) rather than accepting a request without distributed replay protection.
+
+The API-key middleware only accepts a pre-populated merchant context from the trusted x402 bridge (`req.x402`). A merchant object by itself is never sufficient to bypass API-key lookup and expiry checks. Requests using API gateway signatures must continue to send `x-api-key`, `x-api-signature` (`sha256=` plus 64 lowercase hexadecimal characters), and `x-api-timestamp`.
+
+Regression coverage is provided by `src/lib/api-gateway-signature.test.js` and `src/lib/auth.test.js`. Run `npm test -- --run src/lib/api-gateway-signature.test.js src/lib/auth.test.js` from `backend/` to validate the patch.
+
 # Security and Performance Improvements Summary
 
 **Project**: Stellar Payment API - Transaction Signer & Ledger Monitor  

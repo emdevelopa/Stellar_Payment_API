@@ -1,6 +1,9 @@
 import bcrypt from "bcryptjs";
 import { recordMerchantApiUsage } from "./api-usage.js";
-import { verifyApiGatewayRequestSignature } from "./api-gateway-signature.js";
+import {
+  reserveApiGatewaySignature,
+  verifyApiGatewayRequestSignature,
+} from "./api-gateway-signature.js";
 import { queryWithRetry } from "./db.js";
 
 const SALT_ROUNDS = 12;
@@ -73,6 +76,7 @@ export function createApiKeyAuth({
   supabaseClient = null, // unused for API key auth; retained for session-auth compat
   usageRecorder = recordMerchantApiUsage,
   verifyGatewaySignature = verifyApiGatewayRequestSignature,
+  reserveGatewaySignature = reserveApiGatewaySignature,
   requireSignature = false,
   merchantLookup = defaultMerchantLookup,
 } = {}) {
@@ -80,7 +84,7 @@ export function createApiKeyAuth({
     try {
       // Another auth layer (e.g. x402 token bridge) may have already attached a
       // merchant context. If so, honor it and continue.
-      if (req.merchant?.id) {
+      if (req.x402 && req.merchant?.id) {
         try {
           await usageRecorder({ merchantId: req.merchant.id, req });
         } catch (usageError) {
@@ -132,6 +136,26 @@ export function createApiKeyAuth({
             code: signatureResult.code || "API_SIGNATURE_INVALID",
             reason: signatureResult.reason,
             ...(signatureResult.rateLimitInfo && { rateLimitInfo: signatureResult.rateLimitInfo }),
+          });
+        }
+
+        const reservation = await reserveGatewaySignature({
+          secret: apiKey,
+          signatureHeader,
+          method: req.method,
+          toleranceSeconds: Number(
+            process.env.API_GATEWAY_SIGNATURE_TOLERANCE_SECONDS || 300,
+          ),
+        });
+        if (!reservation.reserved) {
+          return res.status(reservation.replay ? 401 : 503).json({
+            error: reservation.replay
+              ? "Invalid API gateway signature"
+              : "API gateway replay protection is temporarily unavailable",
+            code: reservation.replay
+              ? "API_GATEWAY_REPLAY_DETECTED"
+              : reservation.code,
+            ...(reservation.reason && { reason: reservation.reason }),
           });
         }
       }

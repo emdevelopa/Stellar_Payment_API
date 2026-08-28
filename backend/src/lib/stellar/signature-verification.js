@@ -40,7 +40,10 @@ export async function verifyTransactionSignature(
   networkPassphrase,
   options = {}
 ) {
-  const { maxRetries = 3, retryDelay = 1000 } = options;
+  // Clamp caller-supplied retry options to prevent resource exhaustion from
+  // untrusted or misconfigured callers (VULN-15).
+  const maxRetries = Math.min(Math.max(0, Number(options.maxRetries ?? 3)), 5);
+  const retryDelay = Math.min(Math.max(0, Number(options.retryDelay ?? 1000)), 5000);
   const startTime = Date.now();
   
   if (!txHash || typeof txHash !== "string") {
@@ -84,6 +87,28 @@ export async function verifyTransactionSignature(
   }
 
   const { transaction, isFeeBump } = parseResult;
+
+  // NPE-02: transaction.source can be null/undefined if the SDK returns a
+  // partially populated object.  A null sourceAccountId would cause
+  // horizonClient.loadAccount(null) to produce an unrecoverable error.
+  if (!transaction.source || typeof transaction.source !== "string") {
+    logger.error(
+      { txHash, isFeeBump },
+      "verifyTransactionSignature: transaction.source is null or not a string",
+    );
+    signatureVerificationOperations.inc({ result: "error" });
+    signatureVerificationLatency.observe(
+      { result: "error" },
+      (Date.now() - startTime) / 1000,
+    );
+    return {
+      valid: false,
+      reason: "Transaction is missing a source account",
+      isMultiSig: false,
+      signatureCount: 0,
+      thresholdMet: false,
+    };
+  }
 
   // Step 3: Load source account signers & thresholds
   const accountResult = await loadSourceAccount(
@@ -140,6 +165,54 @@ async function fetchTransactionWithRetry(
   while (retryCount <= maxRetries) {
     try {
       const tx = await horizonClient.fetchTransaction(txHash);
+
+      // NPE-01: Horizon can return a null/undefined response or a response
+      // object that is missing `envelope_xdr`.  Guard here so downstream code
+      // never dereferences a null `tx` or a null `tx.envelope_xdr`.
+      if (tx == null) {
+        logger.error(
+          { txHash, retryCount },
+          "verifyTransactionSignature: Horizon returned null transaction",
+        );
+        signatureVerificationOperations.inc({ result: "error" });
+        signatureVerificationLatency.observe(
+          { result: "error" },
+          (Date.now() - startTime) / 1000,
+        );
+        return {
+          success: false,
+          result: {
+            valid: false,
+            reason: "Horizon returned an empty transaction response",
+            isMultiSig: false,
+            signatureCount: 0,
+            thresholdMet: false,
+          },
+        };
+      }
+
+      if (typeof tx.envelope_xdr !== "string" || tx.envelope_xdr.trim() === "") {
+        logger.error(
+          { txHash, retryCount, txKeys: Object.keys(tx) },
+          "verifyTransactionSignature: Horizon response missing envelope_xdr",
+        );
+        signatureVerificationOperations.inc({ result: "error" });
+        signatureVerificationLatency.observe(
+          { result: "error" },
+          (Date.now() - startTime) / 1000,
+        );
+        return {
+          success: false,
+          result: {
+            valid: false,
+            reason: "Transaction response is missing the envelope XDR",
+            isMultiSig: false,
+            signatureCount: 0,
+            thresholdMet: false,
+          },
+        };
+      }
+
       return { success: true, transaction: tx };
     } catch (err) {
       const isTransient = 
@@ -180,12 +253,14 @@ async function fetchTransactionWithRetry(
         { result: "error" },
         (Date.now() - startTime) / 1000
       );
-      
+
+      // Return a generic reason to callers to avoid leaking internal network
+      // topology or Horizon URL details (VULN-04).
       return {
         success: false,
         result: {
           valid: false,
-          reason: `Failed to fetch transaction from Horizon: ${err.message}`,
+          reason: "Failed to fetch transaction from Horizon",
           isMultiSig: false,
           signatureCount: 0,
           thresholdMet: false,
@@ -249,12 +324,14 @@ function parseTransactionEnvelope(tx, txHash, networkPassphrase, startTime) {
         { result: "error" },
         (Date.now() - startTime) / 1000
       );
-      
+
+      // Return a generic reason to callers — raw XDR parse errors from the
+      // Stellar SDK can expose SDK version and internal class names (VULN-04).
       return {
         success: false,
         result: {
           valid: false,
-          reason: `Failed to parse transaction XDR: ${err.message}`,
+          reason: "Failed to parse transaction XDR",
           isMultiSig: false,
           signatureCount: 0,
           thresholdMet: false,
@@ -294,8 +371,33 @@ function parseTransactionEnvelope(tx, txHash, networkPassphrase, startTime) {
 async function loadSourceAccount(horizonClient, sourceAccountId, txHash, startTime) {
   try {
     const accountData = await horizonClient.loadAccount(sourceAccountId);
-    
-    const signers = accountData.signers ?? [];
+
+    // NPE-03: loadAccount may resolve with null/undefined if the Horizon
+    // client implementation does not throw on a 404 but instead returns a
+    // falsy value.  Guard before accessing any property.
+    if (accountData == null) {
+      logger.error(
+        { txHash, sourceAccountId },
+        "verifyTransactionSignature: loadAccount returned null",
+      );
+      signatureVerificationOperations.inc({ result: "error" });
+      signatureVerificationLatency.observe(
+        { result: "error" },
+        (Date.now() - startTime) / 1000,
+      );
+      return {
+        success: false,
+        result: {
+          valid: false,
+          reason: "Could not load source account for weight verification",
+          isMultiSig: false,
+          signatureCount: 0,
+          thresholdMet: false,
+        },
+      };
+    }
+
+    const signers = Array.isArray(accountData.signers) ? accountData.signers : [];
     const medThreshold = accountData.thresholds?.med_threshold ?? 0;
     const isMultiSig = signers.length > 1 || medThreshold > 1;
 
@@ -316,12 +418,14 @@ async function loadSourceAccount(horizonClient, sourceAccountId, txHash, startTi
       { result: "error" },
       (Date.now() - startTime) / 1000
     );
-    
+
+    // Return a generic reason — raw account-load errors can expose internal
+    // Horizon URLs or network addresses (VULN-04).
     return {
       success: false,
       result: {
         valid: false,
-        reason: `Could not load source account for weight verification: ${err.message}`,
+        reason: "Could not load source account for weight verification",
         isMultiSig: false,
         signatureCount: 0,
         thresholdMet: false,
@@ -331,55 +435,160 @@ async function loadSourceAccount(horizonClient, sourceAccountId, txHash, startTi
 }
 
 /**
- * Verify signatures against account signers
+ * Verify signatures against account signers.
+ *
+ * Security fixes applied here:
+ *  VULN-03 — effectiveThreshold: honour med_threshold=0 as "no threshold
+ *             required" per the Stellar protocol instead of silently
+ *             substituting 1. When the threshold is 0, any single valid
+ *             signature from an authorised signer is sufficient.
+ *  VULN-09 — False-positive replay detection: the usedSigners check now
+ *             runs AFTER the hint fast-path so only hint-matching signers
+ *             that were already consumed trigger the replay counter.
+ *  VULN-10 — Signature count cap: reject envelopes with more than 20
+ *             signatures before entering the loop (Stellar protocol limit).
+ *  VULN-13 — Keypair pre-computation: build the hint lookup map once
+ *             outside the signature loop instead of calling
+ *             Keypair.fromPublicKey inside the O(N×M) nested loop.
  */
 function verifySignatures(transaction, signers, medThreshold, txHash, startTime) {
-  // Build a lookup map: publicKey → weight for O(1) access
-  const signerWeightMap = new Map(
-    signers.map((s) => [s.key, s.weight])
-  );
+  // VULN-10: Reject envelopes that exceed the Stellar protocol maximum of 20
+  // signatures before entering the nested loop. Crafted envelopes with
+  // hundreds of signatures would otherwise cause CPU amplification.
+  const MAX_SIGNATURES = 20;
+  if (transaction.signatures.length > MAX_SIGNATURES) {
+    logger.warn(
+      {
+        txHash,
+        signatureCount: transaction.signatures.length,
+        max: MAX_SIGNATURES,
+      },
+      "verifyTransactionSignature: Signature count exceeds protocol maximum",
+    );
+    return {
+      valid: false,
+      reason: `Signature count ${transaction.signatures.length} exceeds maximum allowed (${MAX_SIGNATURES})`,
+      thresholdMet: false,
+    };
+  }
 
-  // The transaction hash is the payload that was signed
-  const txHashBytes = transaction.hash();
+  // NPE-13 + NPE-04: Pre-compute Keypair objects and their hints once (O(N)).
+  // Simultaneously filter out any signer entry that is null/undefined or has a
+  // missing/non-string key — a malformed Horizon response could include such
+  // entries and Keypair.fromPublicKey(null) would throw an NPE.
+  const signerEntries = [];
+  for (const s of signers) {
+    if (s == null || typeof s.key !== "string" || s.key.trim() === "") {
+      logger.warn(
+        { txHash, signerEntry: s },
+        "verifyTransactionSignature: skipping malformed signer entry (null or missing key)",
+      );
+      continue;
+    }
+    try {
+      const keyPair = StellarSdk.Keypair.fromPublicKey(s.key);
+      // NPE-05 pre-check: signatureHint() should always return a Buffer, but
+      // guard against a null return from a mocked/stubbed Keypair.
+      const hint = keyPair.signatureHint();
+      if (hint == null) {
+        logger.warn(
+          { txHash, publicKey: s.key },
+          "verifyTransactionSignature: signatureHint() returned null — skipping signer",
+        );
+        continue;
+      }
+      signerEntries.push({
+        publicKey: s.key,
+        // NPE-04: treat missing weight as 0 rather than propagating undefined
+        // into arithmetic, which would produce NaN and silently corrupt
+        // totalWeight comparisons.
+        weight: typeof s.weight === "number" ? s.weight : 0,
+        keyPair,
+        hint,
+      });
+    } catch (keypairErr) {
+      // NPE-04: Keypair.fromPublicKey throws if the key is syntactically
+      // invalid (wrong length, bad checksum, etc.).  Skip silently so one
+      // bad signer does not abort verification for the whole transaction.
+      logger.warn(
+        { txHash, publicKey: s.key, err: keypairErr.message },
+        "verifyTransactionSignature: could not construct Keypair for signer — skipping",
+      );
+    }
+  }
+
+  // NPE-06: transaction.hash() computes the XDR-serialised hash of the
+  // transaction envelope.  It can throw if the transaction object is in an
+  // unexpected state (e.g. missing network passphrase in some SDK versions).
+  // Wrap it so a malformed transaction does not cause an unhandled exception.
+  let txHashBytes;
+  try {
+    txHashBytes = transaction.hash();
+    if (txHashBytes == null) {
+      throw new Error("transaction.hash() returned null");
+    }
+  } catch (hashErr) {
+    logger.error(
+      { txHash, err: hashErr.message },
+      "verifyTransactionSignature: transaction.hash() failed",
+    );
+    return {
+      valid: false,
+      reason: "Failed to compute transaction hash for signature verification",
+      thresholdMet: false,
+    };
+  }
 
   let totalWeight = 0;
   let validSignatureCount = 0;
-  const usedSigners = new Set(); // Prevent signature replay
+  const usedSigners = new Set(); // Prevent the same signer's weight being counted twice.
   let replayAttemptsDetected = 0;
 
   for (const decoratedSig of transaction.signatures) {
-    // hint is the last 4 bytes of the public key — use it to narrow candidates
+    // NPE-05: hint() and signature() are SDK methods that should always return
+    // Buffers, but a null/undefined return (possible in tests or with a
+    // stubbed/mocked SDK) would cause Buffer.equals to throw.  Skip the
+    // signature entirely if either accessor returns a falsy value.
     const hint = decoratedSig.hint();
     const sigBytes = decoratedSig.signature();
 
-    for (const [publicKey, weight] of signerWeightMap) {
-      if (usedSigners.has(publicKey)) {
+    if (hint == null || sigBytes == null) {
+      logger.warn(
+        { txHash },
+        "verifyTransactionSignature: decoratedSig returned null hint or signature — skipping",
+      );
+      continue;
+    }
+
+    for (const entry of signerEntries) {
+      // VULN-09 fix: check hint FIRST (cheap) before the usedSigners guard.
+      // Previously the usedSigners check ran before the hint check, so every
+      // already-consumed signer incremented the replay counter even when its
+      // hint did not match the current signature — producing false positives
+      // in multi-sig accounts.
+      if (!hint.equals(entry.hint)) continue;
+
+      if (usedSigners.has(entry.publicKey)) {
         replayAttemptsDetected++;
-        continue; // Skip already used signers - replay attempt
+        continue;
       }
 
-      // Quick hint check before expensive crypto
-      const keyPair = StellarSdk.Keypair.fromPublicKey(publicKey);
-      const keyHint = keyPair.signatureHint();
-
-      if (!hint.equals(keyHint)) continue;
-
-      // Full Ed25519 signature verification
+      // Full Ed25519 signature verification.
       try {
-        const isValid = keyPair.verify(txHashBytes, sigBytes);
+        const isValid = entry.keyPair.verify(txHashBytes, sigBytes);
         if (isValid) {
-          totalWeight += weight;
+          totalWeight += entry.weight;
           validSignatureCount += 1;
-          usedSigners.add(publicKey);
-          break; // move to next signature
+          usedSigners.add(entry.publicKey);
+          break; // move to next outer signature
         }
       } catch {
-        // Malformed signature bytes — skip
+        // Malformed signature bytes — skip silently.
       }
     }
   }
 
-  // Log replay attempts for security monitoring
+  // Log replay attempts for security monitoring.
   if (replayAttemptsDetected > 0) {
     signatureVerificationReplayDetected.inc();
     logger.warn(
@@ -388,29 +597,38 @@ function verifySignatures(transaction, signers, medThreshold, txHash, startTime)
         replayAttemptsDetected,
         totalSignatures: transaction.signatures.length,
       },
-      "verifyTransactionSignature: Signature replay attempts detected"
+      "verifyTransactionSignature: Signature replay attempts detected",
     );
   }
 
-  // Check medium threshold — Payment operations require medium threshold authorisation
-  const effectiveThreshold = medThreshold > 0 ? medThreshold : 1;
-  const thresholdMet = totalWeight >= effectiveThreshold;
+  // VULN-03 fix: honour med_threshold=0 as "no threshold required" (Stellar
+  // protocol definition). The previous code substituted 1, which was an
+  // undocumented policy divergence that could reject valid transactions from
+  // accounts intentionally configured with a zero threshold.
+  // When medThreshold === 0, any single authorised signer is sufficient, so
+  // we require at least one valid signature (validSignatureCount > 0) rather
+  // than a weight comparison.
+  const thresholdMet =
+    medThreshold === 0
+      ? validSignatureCount > 0
+      : totalWeight >= medThreshold;
+
+  const displayThreshold = medThreshold === 0 ? "0 (any authorised signer)" : String(medThreshold);
 
   if (!thresholdMet) {
     logger.warn(
       {
         txHash,
         totalWeight,
-        requiredThreshold: effectiveThreshold,
+        medThreshold,
         signatureCount: transaction.signatures.length,
         validSignatureCount,
       },
-      "verifyTransactionSignature: Insufficient signing weight"
+      "verifyTransactionSignature: Insufficient signing weight",
     );
-    
     return {
       valid: false,
-      reason: `Insufficient signing weight: accumulated ${totalWeight}, required ${effectiveThreshold} (medium threshold)`,
+      reason: `Insufficient signing weight: accumulated ${totalWeight}, required ${displayThreshold} (medium threshold)`,
       thresholdMet: false,
     };
   }
@@ -419,17 +637,17 @@ function verifySignatures(transaction, signers, medThreshold, txHash, startTime)
     {
       txHash,
       totalWeight,
-      threshold: effectiveThreshold,
+      medThreshold,
       signatureCount: transaction.signatures.length,
       validSignatureCount,
       durationMs: Date.now() - startTime,
     },
-    "verifyTransactionSignature: Successfully verified"
+    "verifyTransactionSignature: Successfully verified",
   );
 
   return {
     valid: true,
-    reason: `Signature verification passed: weight ${totalWeight} >= threshold ${effectiveThreshold}`,
+    reason: `Signature verification passed: weight ${totalWeight} >= threshold ${displayThreshold}`,
     thresholdMet: true,
   };
 }

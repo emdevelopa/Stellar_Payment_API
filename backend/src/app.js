@@ -319,11 +319,19 @@ export async function createApp({ redisClient }) {
   app.use("/api", auditRouter);
   app.use("/api/payments", paymentDetailsRouter); // NEW — GET /api/payments/:id
 
-  // Transaction Signer — rate-limited signature verification endpoint (#912)
+  // Transaction Signer — authenticated, rate-limited signature verification endpoint (#912)
+  // requireApiKeyAuth() is mandatory here: the endpoint triggers Horizon API calls and
+  // must not be reachable by unauthenticated parties. Rate limiters run after auth so
+  // that only authenticated actors consume budget.
   const transactionSignerMiddlewares = createTransactionSignerMiddlewares({
     redisClient: redisAvailable ? redisClient : undefined,
   });
-  app.post("/api/verify-signature", ...transactionSignerMiddlewares, handleVerifySignature);
+  app.post(
+    "/api/verify-signature",
+    requireApiKeyAuth(),
+    ...transactionSignerMiddlewares,
+    handleVerifySignature,
+  );
 
   // SEP-0001 stellar.toml endpoint (public, no auth required)
   app.use("/", sep0001Router);

@@ -23,6 +23,21 @@ describe("audit-security", () => {
     expect(value).toBe('{"a":1,"b":2}');
   });
 
+  it("preserves the timestamp when sanitizing a Date value (#1331)", () => {
+    // Date has no own enumerable properties, so the generic object-serialization
+    // path used to silently collapse any Date into "{}", losing the actual
+    // value entirely — e.g. a profile-change audit event recording a
+    // timestamp field change.
+    const date = new Date("2026-01-01T12:00:00.000Z");
+    expect(sanitizeAuditValue(date)).toBe('"2026-01-01T12:00:00.000Z"');
+  });
+
+  it("produces different hashes for payloads that differ only by Date value (#1331)", () => {
+    const before = hashAuditPayload({ old_value: new Date("2026-01-01T00:00:00.000Z") });
+    const after = hashAuditPayload({ old_value: new Date("2026-06-01T00:00:00.000Z") });
+    expect(before).not.toBe(after);
+  });
+
   it("redacts sensitive audit field names", () => {
     expect(sanitizeAuditKey("api_key")).toBe("[REDACTED]");
     expect(sanitizeAuditKey("notification_email")).toBe("notification_email");

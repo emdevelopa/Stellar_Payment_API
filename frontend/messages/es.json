@@ -748,5 +748,41 @@
       "signed": "Transacción firmada con éxito",
       "submitted": "Transacción enviada con éxito"
     }
+  },
+  "transactionFilters": {
+    "title": "Filtros",
+    "landmarkLabel": "Filtros de transacciones",
+    "closeFilters": "Cerrar filtros",
+    "ariaLabel": "Borrar búsqueda",
+    "applyingToResults": "Aplicando a los resultados…",
+    "clearAll": "Borrar todos los filtros",
+    "clearAllAriaLabel": "Borrar {count, plural, one {1 filtro activo} other {# filtros activos}}",
+    "clearing": "Borrando…",
+    "search": {
+      "label": "Búsqueda",
+      "placeholder": "Buscar por ID o descripción",
+      "syncLabel": "Buscando…"
+    },
+    "status": {
+      "label": "Estado",
+      "all": "Todos los estados",
+      "pending": "Pendiente",
+      "confirmed": "Confirmado",
+      "failed": "Fallido",
+      "refunded": "Reembolsado",
+      "syncLabel": "Actualizando estado…"
+    },
+    "asset": {
+      "label": "Filtro de activo",
+      "all": "Todos",
+      "syncLabel": "Actualizando activo…"
+    },
+    "dateRange": {
+      "label": "Rango de fechas",
+      "from": "Desde",
+      "to": "Hasta",
+      "fromSyncLabel": "Actualizando fecha de inicio…",
+      "toSyncLabel": "Actualizando fecha de fin…"
+    }
   }
 }

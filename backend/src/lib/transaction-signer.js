@@ -250,6 +250,23 @@ export class DistributedReplayCache {
 const replayCache = new ReplayCache();
 
 /**
+ * In-flight verification promises keyed by normalized txHash.
+ *
+ * Race condition / data inconsistency fix (#1340, #1341): the replay check
+ * (Step 2 below) and the replay *record* (Step 6, `recordVerificationSuccess`)
+ * are separated by an async Horizon network call (Step 4). Without this map,
+ * two concurrent requests carrying the same txHash both observe "not yet
+ * replayed" before either finishes, so both proceed to verify independently
+ * — defeating replay protection for the duration of the race, and risking
+ * two divergent results (e.g. one cache write racing another, or a caller
+ * treating the transaction as verified twice) for what must be a single
+ * logical outcome per txHash. Concurrent duplicate requests now await the
+ * one in-progress verification instead of each running the full pipeline.
+ * @type {Map<string, Promise<object>>}
+ */
+const inFlightVerifications = new Map();
+
+/**
  * Module-level distributed replay cache. Starts without Redis; call
  * `initDistributedReplayCache(redisClient)` from app startup to enable
  * cross-instance replay protection.
@@ -384,70 +401,96 @@ export async function verifyTransactionSignatureSecure(txHash, options = {}) {
 
     const normalizedHash = txHash.toLowerCase();
 
-    // ── Step 2: Replay detection ───────────────────────────────────────────────
-    // Check local cache first (O(1), no I/O), then Redis (VULN-06 fix: cross-
-    // instance replay protection in horizontally scaled deployments).
-    replayCache.prune();
-    const localReplay = replayCache.has(normalizedHash);
-    const distributedReplay = localReplay ? false : await distributedReplayCache.has(normalizedHash);
-
-    if (localReplay || distributedReplay) {
-      txSignatureReplayAttempts.inc();
-      txSignatureVerificationErrors.inc({ error_type: "replay_attempt" });
-      logger.warn(
-        { txHash: normalizedHash, source: localReplay ? "local" : "distributed" },
-        "TransactionSigner: replay attempt detected — txHash already verified",
-      );
-      return { valid: false, reason: "replay: txHash was already verified", replay: true };
+    // A verification for this exact hash is already in flight — await its
+    // result instead of racing it (see `inFlightVerifications` above).
+    const existing = inFlightVerifications.get(normalizedHash);
+    if (existing) {
+      return await existing;
     }
 
-    // ── Step 3: Verification cache lookup ──────────────────────────────────────
-    const cache = getTransactionSignerCache();
-    const cached = await cache.get(normalizedHash);
-    if (cached.hit) {
-      // NPE-10: cached.result can theoretically be null if the cache entry was
-      // evicted or corrupted between the hit flag being set and the result being
-      // read (e.g. NPE-08 guard rejecting a malformed Redis payload).  Fall
-      // through to a fresh verification rather than returning null to callers.
-      if (cached.result == null) {
-        logger.warn(
-          { txHash: normalizedHash },
-          "TransactionSigner: cache hit but result is null — falling through to fresh verification",
-        );
-      } else {
-        txSignatureVerificationTotal.inc({ outcome: cached.result?.valid ? "valid" : "invalid" });
-        logger.debug(
-          { txHash: normalizedHash, cached: true },
-          "TransactionSigner: returning cached verification result",
-        );
-        return cached.result;
-      }
-    }
-
-    // ── Step 4: Core cryptographic verification ────────────────────────────────
-    let result;
+    const verificationPromise = runVerificationPipeline(normalizedHash, options);
+    inFlightVerifications.set(normalizedHash, verificationPromise);
     try {
-      result = await verifyTransactionSignature(normalizedHash, options);
-    } catch (err) {
-      return recordVerificationException(normalizedHash, err);
+      return await verificationPromise;
+    } finally {
+      inFlightVerifications.delete(normalizedHash);
     }
-
-    const finalResult = result ?? { valid: false, reason: "verifier returned no result" };
-
-    // ── Step 5: Cache the result ───────────────────────────────────────────────
-    await cache.set(normalizedHash, finalResult, !!finalResult.valid);
-
-    // ── Step 6: Metrics and logging ────────────────────────────────────────────
-    if (finalResult.valid) {
-      recordVerificationSuccess(normalizedHash, finalResult);
-    } else {
-      recordVerificationFailure(normalizedHash, finalResult);
-    }
-
-    return finalResult;
   } finally {
     timerEnd();
   }
+}
+
+/**
+ * Steps 2–6 of the verification pipeline (replay detection through result
+ * caching/metrics), for a single normalized txHash. Only ever invoked once
+ * per in-flight txHash — see `inFlightVerifications` in the caller.
+ *
+ * @param {string} normalizedHash
+ * @param {object} options
+ * @returns {Promise<{ valid: boolean, reason?: string, replay?: boolean, [key: string]: unknown }>}
+ */
+async function runVerificationPipeline(normalizedHash, options) {
+  // ── Step 2: Replay detection ───────────────────────────────────────────────
+  // Check local cache first (O(1), no I/O), then Redis (VULN-06 fix: cross-
+  // instance replay protection in horizontally scaled deployments).
+  replayCache.prune();
+  const localReplay = replayCache.has(normalizedHash);
+  const distributedReplay = localReplay ? false : await distributedReplayCache.has(normalizedHash);
+
+  if (localReplay || distributedReplay) {
+    txSignatureReplayAttempts.inc();
+    txSignatureVerificationErrors.inc({ error_type: "replay_attempt" });
+    logger.warn(
+      { txHash: normalizedHash, source: localReplay ? "local" : "distributed" },
+      "TransactionSigner: replay attempt detected — txHash already verified",
+    );
+    return { valid: false, reason: "replay: txHash was already verified", replay: true };
+  }
+
+  // ── Step 3: Verification cache lookup ──────────────────────────────────────
+  const cache = getTransactionSignerCache();
+  const cached = await cache.get(normalizedHash);
+  if (cached.hit) {
+    // NPE-10: cached.result can theoretically be null if the cache entry was
+    // evicted or corrupted between the hit flag being set and the result being
+    // read (e.g. NPE-08 guard rejecting a malformed Redis payload).  Fall
+    // through to a fresh verification rather than returning null to callers.
+    if (cached.result == null) {
+      logger.warn(
+        { txHash: normalizedHash },
+        "TransactionSigner: cache hit but result is null — falling through to fresh verification",
+      );
+    } else {
+      txSignatureVerificationTotal.inc({ outcome: cached.result?.valid ? "valid" : "invalid" });
+      logger.debug(
+        { txHash: normalizedHash, cached: true },
+        "TransactionSigner: returning cached verification result",
+      );
+      return cached.result;
+    }
+  }
+
+  // ── Step 4: Core cryptographic verification ────────────────────────────────
+  let result;
+  try {
+    result = await verifyTransactionSignature(normalizedHash, options);
+  } catch (err) {
+    return recordVerificationException(normalizedHash, err);
+  }
+
+  const finalResult = result ?? { valid: false, reason: "verifier returned no result" };
+
+  // ── Step 5: Cache the result ───────────────────────────────────────────────
+  await cache.set(normalizedHash, finalResult, !!finalResult.valid);
+
+  // ── Step 6: Metrics and logging ────────────────────────────────────────────
+  if (finalResult.valid) {
+    recordVerificationSuccess(normalizedHash, finalResult);
+  } else {
+    recordVerificationFailure(normalizedHash, finalResult);
+  }
+
+  return finalResult;
 }
 
 // ── Replay Cache Exports (Testing) ───────────────────────────────────────────

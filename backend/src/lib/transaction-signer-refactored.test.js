@@ -200,6 +200,72 @@ describe("Transaction Signer — Refactored Module (Issue #1077)", () => {
     });
   });
 
+  // ── Concurrency (Issues #1340, #1341) ───────────────────────────────────────
+
+  describe("Concurrent duplicate requests", () => {
+    it("dedupes concurrent verifications of the same txHash into a single core-verifier call", async () => {
+      // Before the fix: the replay check and replay record are separated by
+      // an async Horizon call, so two concurrent requests for the same hash
+      // would both pass the "not yet replayed" check and both invoke the
+      // core verifier independently.
+      const results = await Promise.all([
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+      ]);
+
+      for (const res of results) {
+        expect(res.valid).toBe(true);
+      }
+      expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns a consistent result to every concurrent caller, not divergent ones", async () => {
+      const results = await Promise.all([
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+      ]);
+
+      expect(results[0]).toBe(results[1]);
+    });
+
+    it("does not report a false replay between two concurrent requests for the same hash", async () => {
+      // Neither concurrent call should see "replay: txHash was already
+      // verified" — that would only be correct for a *second, later* request
+      // after the first has actually completed and recorded the hash.
+      const results = await Promise.all([
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+      ]);
+
+      for (const res of results) {
+        expect(res.replay).toBeFalsy();
+      }
+    });
+
+    it("still runs a fresh verification for a later, non-concurrent request after the in-flight one resolves", async () => {
+      await verifyTransactionSignatureSecure(VALID_TX_HASH);
+      expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(1);
+
+      clearReplayCache();
+      resetTransactionSignerCacheForTest();
+
+      await verifyTransactionSignatureSecure(VALID_TX_HASH);
+      expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(2);
+    });
+
+    it("dedupes concurrent requests independently per distinct txHash", async () => {
+      const otherHash = "b".repeat(64);
+
+      await Promise.all([
+        verifyTransactionSignatureSecure(VALID_TX_HASH),
+        verifyTransactionSignatureSecure(otherHash),
+      ]);
+
+      expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(2);
+    });
+  });
+
   // ── Error handling ──────────────────────────────────────────────────────────
 
   describe("Error handling", () => {

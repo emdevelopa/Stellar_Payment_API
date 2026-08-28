@@ -8,6 +8,14 @@ describe("Theme Context", () => {
     localStorage.clear();
     document.documentElement.className = "";
 
+    // Replace localStorage with a plain mock object (jsdom's real Storage
+    // instance doesn't allow its methods to be reassigned/mockImplemented
+    // via vi.spyOn — property writes on it are silently no-ops), but only
+    // spy on document/window rather than replacing them outright:
+    // @testing-library/react's render() needs a real `document.body` to
+    // mount into, which a full replacement object (as this suite
+    // previously used for document too) doesn't have, breaking every test
+    // that calls renderWithThemeProvider().
     Object.defineProperty(globalThis, "localStorage", {
       value: {
         getItem: vi.fn(),
@@ -16,31 +24,25 @@ describe("Theme Context", () => {
         clear: vi.fn(),
       },
       writable: true,
+      configurable: true,
     });
 
-    Object.defineProperty(globalThis, "window", {
-      value: {
-        matchMedia: vi.fn(() => ({
-          matches: false,
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-        })),
-      },
-      writable: true,
-    });
+    vi.spyOn(globalThis.window, "matchMedia").mockReturnValue({
+      matches: false,
+      // Both the legacy (addListener/removeListener, still used internally
+      // by next-themes) and modern (addEventListener/removeEventListener,
+      // used by this file's own ThemeProvider) MediaQueryList APIs are
+      // mocked since ThemeProvider wraps children in next-themes'
+      // <NextThemesProvider>, which calls matchMedia independently.
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList);
 
-    Object.defineProperty(globalThis, "document", {
-      value: {
-        documentElement: {
-          classList: {
-            remove: vi.fn(),
-            add: vi.fn(),
-          },
-        },
-        querySelector: vi.fn(() => null),
-      },
-      writable: true,
-    });
+    vi.spyOn(document.documentElement.classList, "remove");
+    vi.spyOn(document.documentElement.classList, "add");
+    vi.spyOn(document, "querySelector").mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -76,11 +78,14 @@ describe("Theme Context", () => {
 
   describe("Initialization", () => {
     it("initializes with default theme", async () => {
+      // The pre-mount state (isMounted: false, isLoading: true) is real —
+      // it's the reducer's initial state before the MOUNT effect dispatches
+      // — but isn't observable via a synchronous assertion here: RTL's
+      // render() flushes passive effects (via act()) before returning in
+      // React 18, so is-mounted is already "true" by the time this line
+      // would run. The meaningful assertion is the post-mount state below.
       renderWithThemeProvider();
-      
-      expect(screen.getByTestId("is-mounted")).toHaveTextContent("false");
-      expect(screen.getByTestId("is-loading")).toHaveTextContent("true");
-      
+
       await waitFor(() => {
         expect(screen.getByTestId("is-mounted")).toHaveTextContent("true");
         expect(screen.getByTestId("is-loading")).toHaveTextContent("false");
@@ -103,6 +108,8 @@ describe("Theme Context", () => {
       const mockMatchMedia = globalThis.window.matchMedia as ReturnType<typeof vi.fn>;
       mockMatchMedia.mockReturnValue({
         matches: true,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       });
@@ -242,10 +249,20 @@ describe("Theme Context", () => {
   describe("System Theme Changes", () => {
     it("updates resolved theme when system preference changes", async () => {
       let mediaQueryCallback: ((e: MediaQueryListEvent) => void) | null = null;
-      
+      // Shared mutable state: the component re-queries matchMedia().matches
+      // (via systemPrefersDark()) on every change event rather than trusting
+      // the event's own `matches` field, so simulating "the OS preference
+      // flipped to dark" requires the *next* matchMedia() call to also
+      // return matches: true, not just the event object.
+      let currentMatches = false;
+
       const mockMatchMedia = globalThis.window.matchMedia as ReturnType<typeof vi.fn>;
       mockMatchMedia.mockImplementation((query) => ({
-        matches: false,
+        get matches() {
+          return currentMatches;
+        },
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
         addEventListener: vi.fn((event, callback) => {
           if (event === "change") {
             mediaQueryCallback = callback as (e: MediaQueryListEvent) => void;
@@ -262,8 +279,9 @@ describe("Theme Context", () => {
       });
 
       if (mediaQueryCallback) {
+        currentMatches = true;
         mediaQueryCallback({ matches: true } as MediaQueryListEvent);
-        
+
         await waitFor(() => {
           expect(screen.getByTestId("resolved-theme")).toHaveTextContent("dark");
         });
@@ -335,6 +353,14 @@ describe("Dark Mode Theme Engine", () => {
     localStorage.clear();
     document.documentElement.className = "";
 
+    // Replace localStorage with a plain mock object (jsdom's real Storage
+    // instance doesn't allow its methods to be reassigned/mockImplemented
+    // via vi.spyOn — property writes on it are silently no-ops), but only
+    // spy on document/window rather than replacing them outright:
+    // @testing-library/react's render() needs a real `document.body` to
+    // mount into, which a full replacement object (as this suite
+    // previously used for document too) doesn't have, breaking every test
+    // that calls renderDarkMode().
     Object.defineProperty(globalThis, "localStorage", {
       value: {
         getItem: vi.fn(),
@@ -343,31 +369,25 @@ describe("Dark Mode Theme Engine", () => {
         clear: vi.fn(),
       },
       writable: true,
+      configurable: true,
     });
 
-    Object.defineProperty(globalThis, "window", {
-      value: {
-        matchMedia: vi.fn(() => ({
-          matches: false,
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-        })),
-      },
-      writable: true,
-    });
+    vi.spyOn(globalThis.window, "matchMedia").mockReturnValue({
+      matches: false,
+      // Both the legacy (addListener/removeListener, still used internally
+      // by next-themes) and modern (addEventListener/removeEventListener,
+      // used by this file's own ThemeProvider) MediaQueryList APIs are
+      // mocked since ThemeProvider wraps children in next-themes'
+      // <NextThemesProvider>, which calls matchMedia independently.
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList);
 
-    Object.defineProperty(globalThis, "document", {
-      value: {
-        documentElement: {
-          classList: {
-            remove: vi.fn(),
-            add: vi.fn(),
-          },
-        },
-        querySelector: vi.fn(() => null),
-      },
-      writable: true,
-    });
+    vi.spyOn(document.documentElement.classList, "remove");
+    vi.spyOn(document.documentElement.classList, "add");
+    vi.spyOn(document, "querySelector").mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -435,6 +455,8 @@ describe("Dark Mode Theme Engine", () => {
     const mockMatchMedia = globalThis.window.matchMedia as ReturnType<typeof vi.fn>;
     mockMatchMedia.mockReturnValue({
       matches: true,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     });
@@ -450,6 +472,8 @@ describe("Dark Mode Theme Engine", () => {
     const mockMatchMedia = globalThis.window.matchMedia as ReturnType<typeof vi.fn>;
     mockMatchMedia.mockReturnValue({
       matches: false,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     });
@@ -529,6 +553,8 @@ describe("Dark Mode Theme Engine", () => {
     const mockMatchMedia = globalThis.window.matchMedia as ReturnType<typeof vi.fn>;
     mockMatchMedia.mockReturnValue({
       matches: false,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     });
@@ -542,12 +568,8 @@ describe("Dark Mode Theme Engine", () => {
 
   it("reverts to previous theme when dark mode setTheme fails", async () => {
     const mockSetItem = globalThis.localStorage.setItem as ReturnType<typeof vi.fn>;
-    let callCount = 0;
     mockSetItem.mockImplementation(() => {
-      callCount++;
-      if (callCount > 1) {
-        throw new Error("Storage error");
-      }
+      throw new Error("Storage error");
     });
 
     renderDarkMode({ defaultTheme: "light" });

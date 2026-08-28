@@ -355,22 +355,22 @@ export function RealTimeBalanceSync({
                   animate="visible"
                   exit="exit"
                   transition={{ duration: 0.25, ease: "easeOut" }}
-                  className="group relative flex items-center justify-between gap-4 py-3.5 px-4 transition-colors hover:bg-white/50 dark:hover:bg-slate-700/30"
+                  className="group relative flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3.5 px-4 transition-colors hover:bg-white/50 dark:hover:bg-slate-700/30"
                   aria-label={t("balanceItemAriaLabel", {
                     asset: b.code,
                     balance: formattedBalance,
                   })}
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-blue-100 text-xs font-bold text-sky-700 dark:from-sky-900/30 dark:to-blue-900/30 dark:text-sky-400">
+                  <div className="flex min-w-0 shrink-0 items-center gap-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-100 to-blue-100 text-xs font-bold text-sky-700 dark:from-sky-900/30 dark:to-blue-900/30 dark:text-sky-400">
                       {b.code.slice(0, 2)}
                     </div>
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-300">
                       {b.code}
                     </span>
                   </div>
                   <motion.span
-                    className="text-base tabular-nums font-bold text-slate-900 dark:text-white"
+                    className="min-w-0 break-all text-right text-base tabular-nums font-bold text-slate-900 dark:text-white"
                     key={`${b.code}-${b.balance}`}
                     initial={
                       shouldReduceMotion

@@ -7,6 +7,7 @@ import {
   _apiGatewayRateLimitState,
   _verifiedSignatureCache,
   getApiGatewaySignatureCacheStats,
+  reserveApiGatewaySignature,
 } from "./api-gateway-signature.js";
 
 // All secrets must be >= 16 characters (MIN_SECRET_LENGTH enforcement, issue #767)
@@ -89,6 +90,76 @@ describe("api-gateway-signature", () => {
 
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/invalid x-api-signature/i);
+  });
+
+  it.each(["1713916800abc", "1713916800.5", "+1713916800", "0x6611f800"])(
+    "rejects non-canonical timestamp %s",
+    (timestampHeader) => {
+      const result = verifyApiGatewayRequestSignature({
+        secret: VALID_SECRET,
+        method: "GET",
+        path: "/health",
+        timestampHeader,
+        signatureHeader: "sha256=" + "a".repeat(64),
+        body: {},
+        now: 1713916800 * 1000,
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.reason).toMatch(/invalid x-api-timestamp/i);
+    },
+  );
+
+  describe("distributed replay reservation", () => {
+    it("atomically reserves a mutating signature with Redis SET NX", async () => {
+      const set = vi.fn().mockResolvedValue("OK");
+      const redisClient = { isOpen: true, set };
+
+      const result = await reserveApiGatewaySignature({
+        secret: VALID_SECRET,
+        signatureHeader: "sha256=" + "a".repeat(64),
+        method: "POST",
+        toleranceSeconds: 300,
+        redisClient,
+      });
+
+      expect(result).toEqual({ reserved: true });
+      expect(set).toHaveBeenCalledWith(
+        expect.stringMatching(/^api-gateway:replay:[a-f0-9]{64}$/),
+        "1",
+        { NX: true, EX: 300 },
+      );
+    });
+
+    it("rejects a signature when Redis reports that it is already reserved", async () => {
+      const redisClient = { isOpen: true, set: vi.fn().mockResolvedValue(null) };
+
+      const result = await reserveApiGatewaySignature({
+        secret: VALID_SECRET,
+        signatureHeader: "sha256=" + "b".repeat(64),
+        method: "POST",
+        toleranceSeconds: 300,
+        redisClient,
+      });
+
+      expect(result).toEqual({ reserved: false, replay: true });
+    });
+
+    it("fails closed when configured Redis is unavailable", async () => {
+      const redisClient = { isOpen: false, set: vi.fn() };
+
+      const result = await reserveApiGatewaySignature({
+        secret: VALID_SECRET,
+        signatureHeader: "sha256=" + "c".repeat(64),
+        method: "POST",
+        toleranceSeconds: 300,
+        redisClient,
+      });
+
+      expect(result.reserved).toBe(false);
+      expect(result.code).toBe("API_GATEWAY_REPLAY_PROTECTION_UNAVAILABLE");
+      expect(redisClient.set).not.toHaveBeenCalled();
+    });
   });
 
   // ── Security audit: minimum secret length (#767) ──────────────────────────

@@ -11,6 +11,7 @@
  */
 
 import { createAuditWriter } from "./audit-writer.js";
+import { createQueuedAuditWriter } from "./audit-writer-queue.js";
 import {
   consumeAuditLogRateLimit,
   createAuditLogRateLimitKey,
@@ -23,7 +24,8 @@ import { auditLogRateLimitRejectionsTotal } from "./metrics.js";
 
 const AUDIT_SOURCE = "login_attempt";
 
-const auditWriter = createAuditWriter({ source: AUDIT_SOURCE, label: "audit-helper" });
+const baseWriter = createAuditWriter({ source: AUDIT_SOURCE, label: "audit-helper" });
+const auditWriter = createQueuedAuditWriter(baseWriter, "login-audit-queue");
 
 export function getAuditCircuitState() {
   return auditWriter.getState();

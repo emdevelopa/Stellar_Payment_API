@@ -63,7 +63,15 @@ const filterItemVariants: Variants = {
 
 // ─── Small reusable pieces ───────────────────────────────────────────────────
 
-/** Enhanced spinning ring with visual feedback while a filter is syncing to the URL. */
+/**
+ * Enhanced spinning ring with visual feedback while a filter is syncing to
+ * the URL. `aria-label` on the `role="status"` element is the spinner's
+ * entire accessible name — no separate `sr-only` text node is needed
+ * alongside it (screen readers use `aria-label`, not the element's text
+ * content, once it's set), and adding one only risked being announced
+ * twice when this component sits next to visible text repeating the same
+ * label (see the Clear All button's "Clearing…" state).
+ */
 function SyncSpinner({ label = "Syncing…" }: { label?: string }) {
   return (
     <span
@@ -97,7 +105,6 @@ function SyncSpinner({ label = "Syncing…" }: { label?: string }) {
           />
         </svg>
       </motion.div>
-      <span className="sr-only">{label}</span>
     </span>
   );
 }
@@ -276,7 +283,7 @@ function FilterContent({
           <div className="flex items-center justify-between">
             <label
               htmlFor={`sidebar-search${suffix}`}
-              className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]"
+              className="text-[11px] font-bold uppercase tracking-widest text-[#6B6B6B]"
             >
               {t("search.label")}
             </label>
@@ -384,7 +391,7 @@ function FilterContent({
           <div className="flex items-center justify-between">
             <label
               htmlFor={`sidebar-status${suffix}`}
-              className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]"
+              className="text-[11px] font-bold uppercase tracking-widest text-[#6B6B6B]"
             >
               {t("status.label")}
             </label>
@@ -448,7 +455,7 @@ function FilterContent({
           variants={filterItemVariants}
           className="flex flex-col gap-2"
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6B6B6B]">
             {t("asset.label")}
           </p>
           <div
@@ -492,7 +499,7 @@ function FilterContent({
           variants={filterItemVariants}
           className="mt-2 flex flex-col gap-4 border-t border-[#F0F0F0] pt-4"
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6B6B6B]">
             {t("dateRange.label")}
           </p>
           <div className="flex flex-col gap-3">
@@ -657,7 +664,7 @@ export default function TransactionFilterSidebar({
       <div
         className="hidden lg:block w-[320px] h-fit sticky top-24"
         role="complementary"
-        aria-label={t("title")}
+        aria-label={t("landmarkLabel")}
       >
         <FilterContent {...sharedProps} isMobile={false} />
       </div>
@@ -685,7 +692,7 @@ export default function TransactionFilterSidebar({
               className="fixed inset-y-0 right-0 z-[110] w-[min(320px,90vw)] lg:hidden overflow-y-auto"
               role="dialog"
               aria-modal="true"
-              aria-label="Filter sidebar"
+              aria-label={t("landmarkLabel")}
             >
               <FilterContent {...sharedProps} isMobile={true} />
             </motion.aside>

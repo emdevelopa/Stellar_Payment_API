@@ -770,5 +770,41 @@
       "signed": "Transaction signed successfully",
       "submitted": "Transaction submitted successfully"
     }
+  },
+  "transactionFilters": {
+    "title": "Filters",
+    "landmarkLabel": "Transaction filters",
+    "closeFilters": "Close filters",
+    "ariaLabel": "Clear search",
+    "applyingToResults": "Applying to results…",
+    "clearAll": "Clear all filters",
+    "clearAllAriaLabel": "Clear all {count, plural, one {1 active filter} other {# active filters}}",
+    "clearing": "Clearing…",
+    "search": {
+      "label": "Search",
+      "placeholder": "Search by ID or description",
+      "syncLabel": "Searching…"
+    },
+    "status": {
+      "label": "Status",
+      "all": "All Statuses",
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "failed": "Failed",
+      "refunded": "Refunded",
+      "syncLabel": "Updating status…"
+    },
+    "asset": {
+      "label": "Asset filter",
+      "all": "All",
+      "syncLabel": "Updating asset…"
+    },
+    "dateRange": {
+      "label": "Date range",
+      "from": "From",
+      "to": "To",
+      "fromSyncLabel": "Updating start date…",
+      "toSyncLabel": "Updating end date…"
+    }
   }
 }

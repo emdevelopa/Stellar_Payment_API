@@ -4,6 +4,7 @@ const SENSITIVE_KEY_RE = /(secret|token|password|api[_-]?key|authorization|signa
 const DEFAULT_AUDIT_RATE_LIMIT_MAX = 60;
 const DEFAULT_AUDIT_RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_AUDIT_FIELD_MAX_LENGTH = 2048;
+const MAX_AUDIT_RATE_LIMIT_KEYS = 10_000;
 
 /**
  * Allowlist of permitted audit action identifiers.
@@ -28,6 +29,19 @@ const ALLOWED_AUDIT_ACTIONS = new Set([
 ]);
 
 const auditRateLimitState = new Map();
+
+function pruneExpiredAuditRateLimitEntries(now, windowMs) {
+  let cleaned = 0;
+
+  for (const [key, state] of auditRateLimitState.entries()) {
+    if (now >= state.windowStart + windowMs) {
+      auditRateLimitState.delete(key);
+      cleaned += 1;
+    }
+  }
+
+  return cleaned;
+}
 
 function stableStringify(value, depth = 0, seen = new WeakSet()) {
   if (depth > 10) {
@@ -154,19 +168,17 @@ export function consumeAuditLogRateLimit(
 ) {
   if (!key) return { allowed: true, remaining: max, resetTime: now + windowMs };
 
+  pruneExpiredAuditRateLimitEntries(now, windowMs);
+
   // Evict expired entries if Map size exceeds safety threshold (DoS / OOM protection)
-  if (auditRateLimitState.size >= 10000) {
-    for (const [k, v] of auditRateLimitState.entries()) {
-      if (now >= v.windowStart + windowMs) {
-        auditRateLimitState.delete(k);
-      }
-    }
-    // Hard cap eviction if still over threshold
-    if (auditRateLimitState.size >= 10000) {
-      const oldestKeys = Array.from(auditRateLimitState.keys()).slice(0, 100);
-      for (const k of oldestKeys) {
-        auditRateLimitState.delete(k);
-      }
+  if (auditRateLimitState.size >= MAX_AUDIT_RATE_LIMIT_KEYS) {
+    const oldestKeys = Array.from(auditRateLimitState.entries())
+      .sort(([, a], [, b]) => a.windowStart - b.windowStart)
+      .slice(0, Math.max(100, Math.ceil(auditRateLimitState.size * 0.1)))
+      .map(([k]) => k);
+
+    for (const k of oldestKeys) {
+      auditRateLimitState.delete(k);
     }
   }
 
@@ -198,17 +210,21 @@ export function consumeAuditLogRateLimit(
  * Get comprehensive rate limit statistics for audit logging (issue #902).
  * Useful for monitoring and debugging rate limit behavior.
  */
-export function getAuditRateLimitStats() {
-  const now = Date.now();
+export function getAuditRateLimitStats({ now = Date.now() } = {}) {
+  const windowMs = Number(
+    process.env.AUDIT_LOG_RATE_LIMIT_WINDOW_MS || DEFAULT_AUDIT_RATE_LIMIT_WINDOW_MS,
+  );
+  pruneExpiredAuditRateLimitEntries(now, windowMs);
+
   const stats = {
     totalKeys: auditRateLimitState.size,
     activeWindows: 0,
     expiredWindows: 0,
     maxRequestsPerWindow: Number(process.env.AUDIT_LOG_RATE_LIMIT_MAX || DEFAULT_AUDIT_RATE_LIMIT_MAX),
-    windowMs: Number(process.env.AUDIT_LOG_RATE_LIMIT_WINDOW_MS || DEFAULT_AUDIT_RATE_LIMIT_WINDOW_MS),
+    windowMs,
   };
 
-  for (const [key, state] of auditRateLimitState.entries()) {
+  for (const [, state] of auditRateLimitState.entries()) {
     if (now >= state.windowStart + stats.windowMs) {
       stats.expiredWindows++;
     } else {
@@ -223,8 +239,7 @@ export function getAuditRateLimitStats() {
  * Cleanup expired audit rate limit entries to prevent memory exhaustion (issue #902).
  * Should be called periodically (e.g., via cron or on a schedule).
  */
-export function cleanupExpiredAuditRateLimits() {
-  const now = Date.now();
+export function cleanupExpiredAuditRateLimits({ now = Date.now() } = {}) {
   const windowMs = Number(
     process.env.AUDIT_LOG_RATE_LIMIT_WINDOW_MS || DEFAULT_AUDIT_RATE_LIMIT_WINDOW_MS,
   );

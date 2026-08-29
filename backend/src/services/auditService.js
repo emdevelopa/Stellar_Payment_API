@@ -38,11 +38,15 @@ export const auditService = {
 
     const offset = (p - 1) * l;
 
-    // Single query: window function returns the full-table count alongside
-    // each row, eliminating the separate COUNT(*) round-trip (issue #770).
-    const result = await pool.query(
-      `SELECT id, merchant_id, action, field_changed, old_value, new_value, ip_address, user_agent, timestamp, payload_hash, signature,
-              COUNT(*) OVER() AS total_count
+    const countResult = await pool.query(
+      "SELECT COUNT(*)::int AS total_count FROM audit_logs WHERE merchant_id = $1",
+      [merchantId],
+    );
+
+    const totalCount = parseInt(countResult.rows[0]?.total_count ?? 0, 10);
+
+    const rowsResult = await pool.query(
+      `SELECT id, merchant_id, action, field_changed, old_value, new_value, ip_address, user_agent, timestamp, payload_hash, signature
        FROM audit_logs
        WHERE merchant_id = $1
        ORDER BY timestamp DESC
@@ -50,12 +54,13 @@ export const auditService = {
       [merchantId, l, offset],
     );
 
-    const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-
-    // Verify cryptographic integrity of each row before returning
-    const logs = result.rows.map(({ total_count: _tc, ...row }) => {
+    const logs = rowsResult.rows.map((row) => {
       const integrity = verifyRowIntegrity(row);
       auditLogIntegrityVerificationsTotal.inc({ result: integrity.status });
+
+      const hashVerified = row.payload_hash == null ? null : integrity.verified && integrity.status === "verified";
+      const signatureVerified = row.signature == null || !process.env.AUDIT_LOG_SIGNING_SECRET ? null : integrity.verified && integrity.status === "verified";
+
       return {
         id: row.id,
         action: row.action,
@@ -65,6 +70,8 @@ export const auditService = {
         ip_address: row.ip_address,
         user_agent: row.user_agent,
         timestamp: row.timestamp,
+        hash_verified: hashVerified,
+        signature_verified: signatureVerified,
         integrity_status: integrity.status,
       };
     });

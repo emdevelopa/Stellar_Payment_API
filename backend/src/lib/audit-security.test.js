@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   consumeAuditLogRateLimit,
   createAuditLogRateLimitKey,
+  getAuditRateLimitStats,
   hashAuditPayload,
   resetAuditRateLimitStateForTests,
   sanitizeAuditKey,
@@ -192,6 +193,25 @@ describe("audit-security", () => {
       windowMs: 60000,
     });
     expect(res.allowed).toBe(true);
+  });
+
+  it("proactively removes expired rate-limit entries before they accumulate", () => {
+    consumeAuditLogRateLimit("stale-key", {
+      now: 0,
+      max: 2,
+      windowMs: 100,
+    });
+
+    consumeAuditLogRateLimit("fresh-key", {
+      now: 150,
+      max: 2,
+      windowMs: 100,
+    });
+
+    const stats = getAuditRateLimitStats({ now: 150 });
+    expect(stats.totalKeys).toBe(1);
+    expect(stats.activeWindows).toBe(1);
+    expect(stats.expiredWindows).toBe(0);
   });
 
   it("reconstructs payloads and verifies row integrity correctly", () => {

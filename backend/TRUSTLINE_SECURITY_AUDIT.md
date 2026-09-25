@@ -72,6 +72,8 @@ Scope: `src/lib/trustline-manager.js`, `src/routes/trustlines.js`, and database 
 
 **Monitoring**: Access circuit breaker metrics via `TrustlineErrorRecovery.getCircuitBreakerMetrics()`
 
+**Logging**: `TrustlineManager` initialization and failures emit structured logs through the shared pino logger (`src/lib/logger.js`); no `console.*` output is produced by this module.
+
 ---
 
 ### Issue #742: Security Audit (SEP-12 KYC) ✓

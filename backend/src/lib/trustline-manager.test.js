@@ -54,6 +54,10 @@ vi.mock('stellar-sdk', () => ({
   Transaction: mockStellarTransaction,
 }));
 vi.mock('express-rate-limit', () => ({ default: mockRateLimit, ipKeyGenerator: mockIpKeyGenerator }));
+const mockLogger = vi.hoisted(() => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+vi.mock('./logger.js', () => mockLogger);
 
 // Now import the modules
 import {
@@ -1028,6 +1032,27 @@ describe('Trustline Manager - Integration Tests', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Database connection failed');
+  });
+
+  test('initialization logs through the structured logger instead of console', async () => {
+    const { logger } = await import('./logger.js');
+    vi.clearAllMocks();
+
+    queryWithRetry.mockResolvedValue({ rows: [] });
+    const ok = await manager.initialize();
+    expect(ok.success).toBe(true);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ indexResults: expect.any(Array) }),
+      'Trustline Manager initialized with database optimizations',
+    );
+
+    queryWithRetry.mockRejectedValue(new Error('Database connection failed'));
+    const failed = await manager.initialize();
+    expect(failed.success).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ context: 'trustline-manager.initialize' }),
+      'Failed to initialize Trustline Manager',
+    );
   });
 });
 

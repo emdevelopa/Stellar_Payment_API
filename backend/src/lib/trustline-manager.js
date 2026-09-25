@@ -22,6 +22,7 @@ import {
   RATE_LIMIT_REDIS_PREFIX,
 } from "./rate-limit.js";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { logger } from "./logger.js";
 
 // Rate limiting constants for trustline operations
 export const TRUSTLINE_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -1538,13 +1539,16 @@ export class TrustlineManager {
   async initialize() {
     try {
       const indexResults = await this.queryOptimizer.createOptimizedIndexes();
-      console.log(
-        "Trustline Manager initialized with database optimizations:",
-        indexResults,
+      logger.info(
+        { indexResults },
+        "Trustline Manager initialized with database optimizations",
       );
       return { success: true, indexResults };
     } catch (error) {
-      console.error("Failed to initialize Trustline Manager:", error);
+      logger.error(
+        { err: error, context: "trustline-manager.initialize" },
+        "Failed to initialize Trustline Manager",
+      );
       return { success: false, error: error.message };
     }
   }

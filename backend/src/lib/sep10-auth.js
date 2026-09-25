@@ -85,6 +85,26 @@ function getServerSigningKey() {
   return process.env.SEP10_SERVER_SIGNING_KEY;
 }
 
+/**
+ * Normalise a thrown value into an Error (#1293).
+ * A store client rejecting with `null`/`undefined` would otherwise be rethrown
+ * as-is, and `next(undefined)` makes Express treat the request as successful
+ * and leave it hanging.
+ */
+function toError(value, label) {
+  if (value instanceof Error) return value;
+  const message =
+    value && typeof value.message === "string"
+      ? value.message
+      : `${label} failed with a non-error rejection`;
+  const error = new Error(message);
+  if (value && typeof value === "object") {
+    if (value.code !== undefined) error.code = value.code;
+    if (value.status !== undefined) error.status = value.status;
+  }
+  return error;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -108,7 +128,8 @@ export async function withSep10StoreRecovery(fn, label) {
   for (let attempt = 0; attempt <= STORE_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
       return await fn();
-    } catch (err) {
+    } catch (thrown) {
+      const err = toError(thrown, label);
       lastError = err;
       if (!isRetryableSep10StoreError(err) || attempt === STORE_RETRY_DELAYS_MS.length) {
         if (isRetryableSep10StoreError(err)) {
@@ -222,12 +243,18 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
       NETWORK_PASSPHRASE,
     );
 
-    if (transaction.operations.length !== 1) {
+    // A FeeBumpTransaction proxies `operations` but has no `timeBounds`, which
+    // previously crashed the time-bound destructuring below (#1293).
+    if (!(transaction instanceof StellarSdk.Transaction)) {
+      return { valid: false, error: "Invalid challenge structure", code: "INVALID_STRUCTURE" };
+    }
+
+    if (!Array.isArray(transaction.operations) || transaction.operations.length !== 1) {
       return { valid: false, error: "Invalid challenge structure", code: "INVALID_STRUCTURE" };
     }
 
     const operation = transaction.operations[0];
-    if (operation.type !== "manageData") {
+    if (!operation || operation.type !== "manageData") {
       return { valid: false, error: "Invalid operation type", code: "INVALID_OPERATION" };
     }
 
@@ -250,19 +277,28 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
       return { valid: false, error: "Challenge nonce already used", code: "NONCE_REPLAY" };
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    const { minTime, maxTime } = transaction.timeBounds;
+    if (!transaction.timeBounds) {
+      return { valid: false, error: "Challenge missing time bounds", code: "INVALID_TIME_BOUNDS" };
+    }
 
-    if (now < parseInt(minTime, 10) || now > parseInt(maxTime, 10)) {
+    const now = Math.floor(Date.now() / 1000);
+    const minTime = parseInt(transaction.timeBounds.minTime, 10);
+    const maxTime = parseInt(transaction.timeBounds.maxTime, 10);
+
+    if (!Number.isFinite(minTime) || !Number.isFinite(maxTime)) {
+      return { valid: false, error: "Challenge missing time bounds", code: "INVALID_TIME_BOUNDS" };
+    }
+
+    if (now < minTime || now > maxTime) {
       return { valid: false, error: "Challenge expired", code: "CHALLENGE_EXPIRED" };
     }
 
     const txHash = transaction.hash();
+    const signatures = Array.isArray(transaction.signatures) ? transaction.signatures : [];
 
-    const serverKeypairForVerify = StellarSdk.Keypair.fromSecret(serverSigningKey);
-    const serverSigned = transaction.signatures.some((sig) => {
+    const serverSigned = signatures.some((sig) => {
       try {
-        return serverKeypairForVerify.verify(txHash, sig.signature());
+        return serverKeypair.verify(txHash, sig.signature());
       } catch {
         return false;
       }
@@ -273,7 +309,7 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
     }
 
     const clientKeypair = StellarSdk.Keypair.fromPublicKey(clientAccountId);
-    const clientSigned = transaction.signatures.some((sig) => {
+    const clientSigned = signatures.some((sig) => {
       try {
         return clientKeypair.verify(txHash, sig.signature());
       } catch {
@@ -290,7 +326,9 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
     }
 
     return { valid: true };
-  } catch {
+  } catch (err) {
+    // Fail closed, but keep a trace so unexpected parser failures are visible.
+    logger.warn({ err: err?.message }, "sep10 challenge verification failed unexpectedly");
     return { valid: false, error: "Authentication failed", code: "AUTHENTICATION_FAILED" };
   }
 }
@@ -299,13 +337,26 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
  * Look up a merchant by Stellar recipient with transient-error recovery (#587).
  */
 export async function lookupMerchantByStellarAddress(clientAccount, supabaseClient) {
+  if (typeof clientAccount !== "string" || clientAccount.length === 0) {
+    throw new Sep10AuthError("INVALID_ACCOUNT", "Stellar account is required", 400);
+  }
+  if (!supabaseClient || typeof supabaseClient.from !== "function") {
+    throw new Error("SEP-10 merchant lookup requires a store client");
+  }
+
   return withSep10StoreRecovery(async () => {
-    const { data, error } = await supabaseClient
+    const response = await supabaseClient
       .from("merchants")
       .select("id, email, business_name, notification_email")
       .eq("recipient", clientAccount)
       .is("deleted_at", null)
       .maybeSingle();
+
+    if (!response) {
+      throw new Error("SEP-10 merchant lookup returned no response");
+    }
+
+    const { data, error } = response;
 
     if (error) {
       if (isRetryableSep10StoreError(error)) {
@@ -315,11 +366,16 @@ export async function lookupMerchantByStellarAddress(clientAccount, supabaseClie
       throw error;
     }
 
-    return data;
+    return data ?? null;
   }, "sep10_merchant_lookup");
 }
 
 export function generateSessionToken(merchantId, email) {
+  // Never mint a token whose subject is null/undefined (#1293).
+  if (merchantId === null || merchantId === undefined || merchantId === "") {
+    throw new Error("Cannot issue a session token without a merchant id");
+  }
+
   return jwt.sign(
     {
       id: merchantId,

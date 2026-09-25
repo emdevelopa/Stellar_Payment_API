@@ -9,6 +9,7 @@ import {
   withSep10StoreRecovery,
   lookupMerchantByStellarAddress,
   Sep10AuthError,
+  generateSessionToken,
   MAX_CHALLENGE_XDR_BYTES,
   _resetNonceCacheForTests,
 } from "./sep10-auth.js";
@@ -175,5 +176,147 @@ describe("SEP-0010 Authentication", () => {
 
     const result = await lookupMerchantByStellarAddress(clientKeypair.publicKey(), supabaseClient);
     expect(result).toEqual(merchant);
+  });
+
+  describe("null / undefined hardening (#1293)", () => {
+    function signedChallenge() {
+      const tx = StellarSdk.TransactionBuilder.fromXDR(
+        generateChallenge(clientKeypair.publicKey(), HOME_DOMAIN),
+        StellarSdk.Networks.TESTNET,
+      );
+      tx.sign(clientKeypair);
+      return tx;
+    }
+
+    it("rejects a fee-bump wrapped challenge instead of dereferencing missing timeBounds", () => {
+      const inner = signedChallenge();
+      const feeBump = StellarSdk.TransactionBuilder.buildFeeBumpTransaction(
+        clientKeypair,
+        "200",
+        inner,
+        StellarSdk.Networks.TESTNET,
+      );
+      feeBump.sign(clientKeypair);
+
+      const result = verifyChallenge(feeBump.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(result).toEqual({
+        valid: false,
+        error: "Invalid challenge structure",
+        code: "INVALID_STRUCTURE",
+      });
+    });
+
+    it("rejects a manageData challenge with a null value", () => {
+      const account = new StellarSdk.Account(serverKeypair.publicKey(), "-1");
+      const now = Math.floor(Date.now() / 1000);
+      const tx = new StellarSdk.TransactionBuilder(account, {
+        fee: "100",
+        networkPassphrase: StellarSdk.Networks.TESTNET,
+        timebounds: { minTime: now, maxTime: now + 300 },
+      })
+        .addOperation(
+          StellarSdk.Operation.manageData({
+            name: `${HOME_DOMAIN} auth`,
+            value: null,
+            source: clientKeypair.publicKey(),
+          }),
+        )
+        .build();
+      tx.sign(serverKeypair);
+      tx.sign(clientKeypair);
+
+      const result = verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(result.code).toBe("INVALID_NONCE");
+    });
+
+    it.each([undefined, null, 42, {}])(
+      "returns INVALID_XDR for a non-string challenge (%s)",
+      (value) => {
+        const result = verifyChallenge(value, clientKeypair.publicKey(), HOME_DOMAIN);
+        expect(result.valid).toBe(false);
+        expect(result.code).toBe("INVALID_XDR");
+      },
+    );
+
+    it.each([undefined, null])("returns INVALID_ACCOUNT for a %s client account", (value) => {
+      const result = verifyChallenge(signedChallenge().toXDR(), value, HOME_DOMAIN);
+      expect(result.code).toBe("INVALID_ACCOUNT");
+    });
+
+    it("withSep10StoreRecovery converts an undefined rejection into an Error", async () => {
+      const fn = vi.fn().mockRejectedValue(undefined);
+
+      const error = await withSep10StoreRecovery(fn, "test").catch((e) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe("test failed with a non-error rejection");
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("withSep10StoreRecovery keeps code/message from plain-object rejections", async () => {
+      const fn = vi.fn().mockRejectedValue({ message: "duplicate key", code: "23505" });
+
+      const error = await withSep10StoreRecovery(fn, "test").catch((e) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe("duplicate key");
+      expect(error.code).toBe("23505");
+    });
+
+    it("lookupMerchantByStellarAddress rejects a missing account without querying", async () => {
+      const supabaseClient = { from: vi.fn() };
+
+      await expect(lookupMerchantByStellarAddress(undefined, supabaseClient)).rejects.toMatchObject({
+        code: "INVALID_ACCOUNT",
+        httpStatus: 400,
+      });
+      expect(supabaseClient.from).not.toHaveBeenCalled();
+    });
+
+    it("lookupMerchantByStellarAddress fails clearly without a store client", async () => {
+      await expect(
+        lookupMerchantByStellarAddress(clientKeypair.publicKey(), null),
+      ).rejects.toThrow("SEP-10 merchant lookup requires a store client");
+    });
+
+    it("lookupMerchantByStellarAddress handles an empty store response", async () => {
+      const supabaseClient = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue(undefined),
+              }),
+            }),
+          }),
+        }),
+      };
+
+      await expect(
+        lookupMerchantByStellarAddress(clientKeypair.publicKey(), supabaseClient),
+      ).rejects.toThrow("SEP-10 merchant lookup returned no response");
+    });
+
+    it("lookupMerchantByStellarAddress normalises a missing merchant to null", async () => {
+      const supabaseClient = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          }),
+        }),
+      };
+
+      await expect(
+        lookupMerchantByStellarAddress(clientKeypair.publicKey(), supabaseClient),
+      ).resolves.toBeNull();
+    });
+
+    it.each([undefined, null, ""])("refuses to issue a session token for merchant id %s", (id) => {
+      expect(() => generateSessionToken(id, "a@example.com")).toThrow(
+        "Cannot issue a session token without a merchant id",
+      );
+    });
   });
 });

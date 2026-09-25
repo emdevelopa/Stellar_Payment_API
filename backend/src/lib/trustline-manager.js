@@ -524,6 +524,8 @@ export class TrustlineErrorRecovery {
         // States: 'closed' | 'open' | 'half-open'
         state: "closed",
         successAfterHalfOpen: 0,
+        // True while a half-open probe is running; prevents concurrent probes
+        probeInFlight: false,
         metrics: {
           totalFailures: 0,
           totalRecoveries: 0,
@@ -553,6 +555,7 @@ export class TrustlineErrorRecovery {
         // Transition to half-open: allow a single probe
         s.state = "half-open";
         s.successAfterHalfOpen = 0;
+        s.probeInFlight = false;
         return "probe";
       }
       // Still within the open window
@@ -571,6 +574,7 @@ export class TrustlineErrorRecovery {
   static _recordFailure(context, error) {
     const s = this._getState(context);
     s.failures++;
+    s.probeInFlight = false;
     s.lastFailureTime = Date.now();
     s.metrics.totalFailures++;
     s.metrics.lastErrorMessage = error?.message ?? String(error);
@@ -589,14 +593,16 @@ export class TrustlineErrorRecovery {
 
   static _recordSuccess(context) {
     const s = this._getState(context);
+    s.probeInFlight = false;
     if (s.state === "half-open") {
       // Probe succeeded – close the circuit
       s.state = "closed";
       s.failures = 0;
       s.metrics.totalRecoveries++;
     } else {
+      // Only a success after prior failures counts as a recovery
+      if (s.failures > 0) s.metrics.totalRecoveries++;
       s.failures = 0;
-      s.metrics.totalRecoveries++;
     }
 
     // Update recovery metrics (Task #880 - Enhanced monitoring)
@@ -786,7 +792,17 @@ export class TrustlineErrorRecovery {
       maxAttempts = MAX_RETRY_ATTEMPTS,
     } = {},
   ) {
-    const disposition = this._circuitBreakerDisposition(context);
+    let disposition = this._circuitBreakerDisposition(context);
+
+    if (disposition === "probe") {
+      // Half-open allows a single in-flight probe; concurrent callers are rejected
+      const breaker = this._getState(context);
+      if (breaker.probeInFlight) {
+        disposition = "reject";
+      } else {
+        breaker.probeInFlight = true;
+      }
+    }
 
     if (disposition === "reject") {
       const cbError = new Error(
@@ -839,7 +855,7 @@ export class TrustlineErrorRecovery {
             this._pushToDeadLetterQueue({
               context,
               errorType: errorClass.type,
-              errorMessage: error.message,
+              errorMessage: error?.message,
               attempts: attempt,
             });
           }
@@ -890,11 +906,11 @@ export class TrustlineErrorRecovery {
    * Classify errors for appropriate recovery strategy.
    */
   static classifyError(error) {
-    const message = error.message?.toLowerCase() || "";
-    const status = error.status || error.response?.status;
+    const message = error?.message?.toLowerCase() || "";
+    const status = error?.status || error?.response?.status;
 
     // Timeout errors - retryable
-    if (error.isTimeout || message.includes("timed out")) {
+    if (error?.isTimeout || message.includes("timed out")) {
       return {
         type: "timeout",
         retryable: true,
@@ -1023,13 +1039,13 @@ export class TrustlineErrorRecovery {
 
   static enhanceError(originalError, context, attempts, errorClass) {
     const enhanced = new Error(
-      `${context} failed after ${attempts} attempt${attempts !== 1 ? "s" : ""}: ${originalError.message} (${errorClass.reason})`,
+      `${context} failed after ${attempts} attempt${attempts !== 1 ? "s" : ""}: ${originalError?.message ?? String(originalError)} (${errorClass.reason})`,
     );
     enhanced.originalError = originalError;
     enhanced.context = context;
     enhanced.attempts = attempts;
     enhanced.errorClass = errorClass;
-    enhanced.status = originalError.status || 500;
+    enhanced.status = originalError?.status || 500;
     enhanced.recoverable = errorClass.retryable;
     return enhanced;
   }

@@ -72,6 +72,8 @@ Scope: `src/lib/trustline-manager.js`, `src/routes/trustlines.js`, and database 
 
 **Monitoring**: Access circuit breaker metrics via `TrustlineErrorRecovery.getCircuitBreakerMetrics()`
 
+**Granular Metrics (issue #1043)**: `src/lib/trustline-manager-metrics.js` exposes the trustline series (signature verification outcomes/latency/cache hits, rate-limit rejections per limiter track, per-context circuit breaker state, recovery outcomes, and dead-letter queue depth/entries) from its own registry; the `/metrics` endpoint merges it with the core and payment processor registries.
+
 **Logging**: `TrustlineManager` initialization and failures emit structured logs through the shared pino logger (`src/lib/logger.js`); no `console.*` output is produced by this module.
 
 ---

@@ -17,6 +17,9 @@ import { logger } from "./logger.js";
 /** Max age (seconds) accepted for a request signature — replay protection. */
 export const SIGNATURE_MAX_AGE_SECONDS = 300;
 
+/** Max accepted memo length; bounds stored key size. */
+const MAX_MEMO_LENGTH = 64;
+
 /** KYC lifecycle statuses (SEP-12 §Status). */
 export const KYC_STATUSES = ["ACCEPTED", "PROCESSING", "NEEDS_INFO", "REJECTED"];
 
@@ -173,6 +176,15 @@ function assertValidAccount(account) {
   }
 }
 
+/** Coerce a missing memo to "" and reject non-string/oversized values. */
+function normalizeMemo(memo) {
+  if (memo === undefined || memo === null) return "";
+  if (typeof memo !== "string" || memo.length > MAX_MEMO_LENGTH) {
+    throw new KycError("INVALID_MEMO", "memo must be a string of at most 64 characters", 400);
+  }
+  return memo;
+}
+
 /** Derive a KYC status from the supplied fields. */
 function deriveStatus(fields) {
   const hasCore = fields.first_name && fields.last_name && fields.email_address;
@@ -184,7 +196,7 @@ function mapRow(row) {
     id: row.id,
     account: row.stellar_account,
     memo: row.memo,
-    fields: row.fields,
+    fields: row.fields ?? {},
     status: row.status,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -203,7 +215,8 @@ function mapRow(row) {
  *
  * `deps` allows injecting `query` / `verifySignature` for testing.
  */
-export async function putCustomer(input, deps = {}) {
+export async function putCustomer(rawInput, deps = {}) {
+  const input = { ...(rawInput ?? {}), memo: normalizeMemo(rawInput?.memo) };
   const query = deps.query || queryWithRetry;
   const verifySignature = deps.verifySignature || verifyCustomerSignature;
   const now = deps.now;
@@ -226,23 +239,38 @@ export async function putCustomer(input, deps = {}) {
     });
   }
   const fields = parsed.data;
-  const memo = input.memo ?? "";
+  const memo = input.memo;
   const status = deriveStatus(fields);
 
   // Single-round-trip parameterised upsert (#591, #593). The ON CONFLICT
-  // target matches the sep12_kyc_account_memo_uidx unique index.
+  // target matches the sep12_kyc_account_memo_uidx unique index. The WHERE
+  // guard only lets a strictly newer signed request overwrite a record, so
+  // concurrent or replayed older writes cannot clobber newer data.
   const sql = `
-    INSERT INTO sep12_kyc_customers (stellar_account, memo, fields, status, updated_at)
-    VALUES ($1, $2, $3::jsonb, $4, now())
+    INSERT INTO sep12_kyc_customers (stellar_account, memo, fields, status, signed_at, updated_at)
+    VALUES ($1, $2, $3::jsonb, $4, $5, now())
     ON CONFLICT (stellar_account, memo)
-    DO UPDATE SET fields = EXCLUDED.fields, status = EXCLUDED.status, updated_at = now()
+    DO UPDATE SET fields = EXCLUDED.fields, status = EXCLUDED.status,
+                  signed_at = EXCLUDED.signed_at, updated_at = now()
+    WHERE sep12_kyc_customers.signed_at < EXCLUDED.signed_at
     RETURNING id, status`;
 
+  const signedAt = Math.floor(Number(input.timestamp));
   const result = await withRecovery(
-    () => query(sql, [input.account, memo, JSON.stringify(fields), status], { label: "sep12_put" }),
+    () =>
+      query(sql, [input.account, memo, JSON.stringify(fields), status, signedAt], {
+        label: "sep12_put",
+      }),
     "sep12_put",
   );
 
+  if (result.rows.length === 0) {
+    throw new KycError(
+      "STALE_REQUEST",
+      "A newer KYC update already exists for this customer",
+      409,
+    );
+  }
   return { id: result.rows[0].id, status: result.rows[0].status };
 }
 
@@ -250,9 +278,10 @@ export async function putCustomer(input, deps = {}) {
  * Fetch a customer's KYC record (SEP-12 `GET /customer`). Uses the unique
  * (stellar_account, memo) index and selects only the needed columns (#591).
  */
-export async function getCustomer({ account, memo = "" }, deps = {}) {
+export async function getCustomer({ account, memo } = {}, deps = {}) {
   const query = deps.query || queryWithRetry;
   assertValidAccount(account);
+  memo = normalizeMemo(memo);
 
   const sql = `
     SELECT id, stellar_account, memo, fields, status, created_at, updated_at
@@ -276,7 +305,7 @@ export async function getCustomer({ account, memo = "" }, deps = {}) {
  * Requires a valid signature from the account holder (#739).
  */
 export async function deleteCustomer(
-  { account, memo = "", timestamp, signature },
+  { account, memo, timestamp, signature } = {},
   deps = {},
 ) {
   const query = deps.query || queryWithRetry;
@@ -284,6 +313,7 @@ export async function deleteCustomer(
   const now = deps.now;
 
   assertValidAccount(account);
+  memo = normalizeMemo(memo);
 
   const signatureResult = verifySignature(
     { account, memo, timestamp, signature, fields: {} },

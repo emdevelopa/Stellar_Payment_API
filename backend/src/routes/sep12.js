@@ -36,7 +36,9 @@ export const SEP12_RATE_LIMIT_WRITE_MAX = Number(
 export function buildSep12RateLimitKey(req) {
   const rawAccount =
     req.query?.account ?? req.body?.account ?? req.params?.account ?? "unknown";
-  const account = Array.isArray(rawAccount) ? rawAccount[0] : String(rawAccount);
+  // Truncate to a Stellar account length so attacker-chosen values cannot
+  // inflate the limiter's in-memory key store.
+  const account = (Array.isArray(rawAccount) ? String(rawAccount[0]) : String(rawAccount)).slice(0, 56);
   const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || "unknown-ip");
   return `sep12:${account}:${ip}`;
 }

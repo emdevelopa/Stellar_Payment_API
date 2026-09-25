@@ -1128,6 +1128,45 @@ describe('TrustlineRateLimiter – Violation Metrics', () => {
     snapshot['copy-key'].count = 9999;
     expect(TrustlineRateLimiter.getRateLimitViolationMetrics()['copy-key'].count).toBe(1);
   });
+
+  test('violation tracking stays bounded under many unique keys', () => {
+    for (let i = 0; i < 10050; i++) {
+      TrustlineRateLimiter.recordViolation(`flood-${i}`);
+    }
+    const metrics = TrustlineRateLimiter.getRateLimitViolationMetrics();
+    expect(Object.keys(metrics).length).toBe(10000);
+    expect(metrics['flood-0']).toBeUndefined();
+    expect(metrics['flood-10049']).toBeDefined();
+  });
+});
+
+describe('TrustlineSignatureVerifier - cache bounds', () => {
+  test('evicts oldest and expired entries to stay bounded', () => {
+    const verifier = new TrustlineSignatureVerifier();
+    const now = Date.now();
+    verifier.verificationCache.set('expired', { result: {}, timestamp: now - verifier.cacheTimeout - 1 });
+    for (let i = 0; i < 1000; i++) {
+      verifier.verificationCache.set(`k${i}`, { result: {}, timestamp: now });
+    }
+    verifier._pruneCache();
+    expect(verifier.verificationCache.has('expired')).toBe(false);
+    expect(verifier.verificationCache.size).toBeLessThan(1000);
+    expect(verifier.verificationCache.has('k0')).toBe(false);
+    expect(verifier.verificationCache.has('k999')).toBe(true);
+  });
+});
+
+describe('TrustlineRateLimiter - internal token comparison', () => {
+  afterEach(() => {
+    delete process.env.INTERNAL_SERVICE_TOKEN;
+  });
+
+  test('rejects tokens of a different length and non-string values', () => {
+    process.env.INTERNAL_SERVICE_TOKEN = 'secret-token';
+    expect(TrustlineRateLimiter.isInternalService({ headers: { 'x-internal-service-token': 'secret' } })).toBe(false);
+    expect(TrustlineRateLimiter.isInternalService({ headers: { 'x-internal-service-token': ['secret-token'] } })).toBe(false);
+    expect(TrustlineRateLimiter.isInternalService({ headers: { 'x-internal-service-token': 'secret-token' } })).toBe(true);
+  });
 });
 
 describe('TrustlineRateLimiter – Burst Rate Limiter', () => {

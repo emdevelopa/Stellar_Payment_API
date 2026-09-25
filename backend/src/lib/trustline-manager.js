@@ -8,7 +8,7 @@
  * - Task #596: Optimized SQL queries for trustline data
  */
 
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import * as StellarSdk from "stellar-sdk";
 import { queryWithRetry } from "./db.js";
 import {
@@ -46,6 +46,10 @@ const CIRCUIT_BREAKER_HALF_OPEN_PROBE_MS = 5 * 1000; // time before allowing pro
 const OPERATION_TIMEOUT_MS = 15 * 1000; // default per-operation timeout
 const DLQ_MAX_SIZE = 100; // maximum dead-letter queue entries
 const ERROR_RECOVERY_METRICS_WINDOW_MS = 60 * 1000; // 1 minute window for recovery metrics
+
+// Bounds for in-memory stores keyed by caller-influenced values (tx hashes, IPs)
+const VERIFICATION_CACHE_MAX_ENTRIES = 1000;
+const RATE_LIMIT_VIOLATIONS_MAX_KEYS = 10000;
 
 /**
  * Per-key rate limit violation tracking.
@@ -115,6 +119,7 @@ export class TrustlineSignatureVerifier {
         if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
           return cached.result;
         }
+        if (cached) this.verificationCache.delete(cacheKey);
       }
 
       // Step 1: Basic signature verification
@@ -150,6 +155,7 @@ export class TrustlineSignatureVerifier {
 
       // Cache the result
       if (!skipCache) {
+        this._pruneCache();
         this.verificationCache.set(cacheKey, {
           result,
           timestamp: Date.now(),
@@ -293,6 +299,22 @@ export class TrustlineSignatureVerifier {
   }
 
   /**
+   * Drop expired entries and evict the oldest ones so the cache stays bounded.
+   */
+  _pruneCache() {
+    const now = Date.now();
+    for (const [key, entry] of this.verificationCache) {
+      if (now - entry.timestamp >= this.cacheTimeout) {
+        this.verificationCache.delete(key);
+      }
+    }
+    while (this.verificationCache.size >= VERIFICATION_CACHE_MAX_ENTRIES) {
+      const oldest = this.verificationCache.keys().next().value;
+      this.verificationCache.delete(oldest);
+    }
+  }
+
+  /**
    * Clear verification cache
    */
   clearCache() {
@@ -358,9 +380,17 @@ export class TrustlineRateLimiter {
   static isInternalService(req) {
     const internalToken = req?.headers?.["x-internal-service-token"];
     const configuredToken = process.env.INTERNAL_SERVICE_TOKEN;
-    return Boolean(
-      configuredToken && internalToken && internalToken === configuredToken,
-    );
+    if (
+      !configuredToken ||
+      typeof internalToken !== "string" ||
+      internalToken.length === 0
+    ) {
+      return false;
+    }
+    // Compare fixed-length digests in constant time to avoid timing leaks.
+    const provided = createHash("sha256").update(internalToken).digest();
+    const expected = createHash("sha256").update(configuredToken).digest();
+    return timingSafeEqual(provided, expected);
   }
 
   /**
@@ -372,6 +402,13 @@ export class TrustlineRateLimiter {
       count: 0,
       lastSeen: null,
     };
+    if (
+      !rateLimitViolations.has(key) &&
+      rateLimitViolations.size >= RATE_LIMIT_VIOLATIONS_MAX_KEYS
+    ) {
+      // Evict the oldest tracked key so attacker-controlled keys cannot grow the map unbounded.
+      rateLimitViolations.delete(rateLimitViolations.keys().next().value);
+    }
     rateLimitViolations.set(key, {
       count: current.count + 1,
       lastSeen: new Date().toISOString(),

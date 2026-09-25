@@ -10,6 +10,8 @@ import {
   lookupMerchantByStellarAddress,
   Sep10AuthError,
   generateSessionToken,
+  consumeChallengeNonce,
+  releaseChallengeNonce,
   MAX_CHALLENGE_XDR_BYTES,
   _resetNonceCacheForTests,
 } from "./sep10-auth.js";
@@ -317,6 +319,90 @@ describe("SEP-0010 Authentication", () => {
       expect(() => generateSessionToken(id, "a@example.com")).toThrow(
         "Cannot issue a session token without a merchant id",
       );
+    });
+  });
+
+  describe("nonce claim ordering (#1295)", () => {
+    function freshChallenge() {
+      return StellarSdk.TransactionBuilder.fromXDR(
+        generateChallenge(clientKeypair.publicKey(), HOME_DOMAIN),
+        StellarSdk.Networks.TESTNET,
+      );
+    }
+
+    it("an unsigned copy of a challenge does not burn the nonce for the real client", () => {
+      const unsigned = freshChallenge();
+      const unsignedXdr = unsigned.toXDR();
+
+      const attacker = verifyChallenge(unsignedXdr, clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(attacker.code).toBe("CLIENT_SIGNATURE_INVALID");
+
+      const signed = StellarSdk.TransactionBuilder.fromXDR(unsignedXdr, StellarSdk.Networks.TESTNET);
+      signed.sign(clientKeypair);
+      const legit = verifyChallenge(signed.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(legit.valid).toBe(true);
+    });
+
+    it("a copy signed by the wrong key does not burn the nonce", () => {
+      const tx = freshChallenge();
+      const xdr = tx.toXDR();
+
+      const forged = StellarSdk.TransactionBuilder.fromXDR(xdr, StellarSdk.Networks.TESTNET);
+      forged.sign(StellarSdk.Keypair.random());
+      expect(verifyChallenge(forged.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(
+        false,
+      );
+
+      tx.sign(clientKeypair);
+      expect(verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(true);
+    });
+
+    it("an expired challenge is rejected without claiming its nonce", () => {
+      vi.useFakeTimers();
+      try {
+        const tx = freshChallenge();
+        tx.sign(clientKeypair);
+        const nonce = tx.operations[0].value.toString();
+
+        vi.setSystemTime(Date.now() + 10 * 60 * 1000);
+        const result = verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+        expect(result.code).toBe("CHALLENGE_EXPIRED");
+        expect(consumeChallengeNonce(nonce)).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("returns the claimed nonce on success", () => {
+      const tx = freshChallenge();
+      tx.sign(clientKeypair);
+
+      const result = verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(result).toEqual({ valid: true, nonce: tx.operations[0].value.toString() });
+    });
+
+    it("consumeChallengeNonce lets exactly one caller claim a nonce", () => {
+      const claims = Array.from({ length: 50 }, () => consumeChallengeNonce("n".repeat(32)));
+      expect(claims.filter(Boolean)).toHaveLength(1);
+    });
+
+    it("releaseChallengeNonce makes a claimed nonce usable again", () => {
+      const tx = freshChallenge();
+      tx.sign(clientKeypair);
+      const xdr = tx.toXDR();
+
+      const first = verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).code).toBe(
+        "NONCE_REPLAY",
+      );
+
+      releaseChallengeNonce(first.nonce);
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(true);
+    });
+
+    it("releaseChallengeNonce ignores non-string input", () => {
+      expect(() => releaseChallengeNonce(undefined)).not.toThrow();
+      expect(() => releaseChallengeNonce(null)).not.toThrow();
     });
   });
 });

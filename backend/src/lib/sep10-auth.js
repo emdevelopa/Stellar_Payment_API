@@ -66,11 +66,26 @@ function startNonceCleanup() {
   if (_nonceCleanupTimer.unref) _nonceCleanupTimer.unref();
 }
 
-function isNonceReused(nonce) {
-  if (_usedNonces.has(nonce)) return true;
+/**
+ * Atomically claim a challenge nonce (#1295).
+ * The check and the insert run in the same synchronous tick, so two concurrent
+ * verify requests for the same challenge can never both succeed.
+ * @returns {boolean} true if the nonce was claimed, false if already used.
+ */
+export function consumeChallengeNonce(nonce) {
+  if (_usedNonces.has(nonce)) return false;
   _usedNonces.add(nonce);
   if (_usedNonces.size === 1) startNonceCleanup();
-  return false;
+  return true;
+}
+
+/**
+ * Give a claimed nonce back when no session token was issued for it, e.g. the
+ * merchant store was temporarily unavailable and the client was told to retry.
+ */
+export function releaseChallengeNonce(nonce) {
+  if (typeof nonce !== "string") return;
+  _usedNonces.delete(nonce);
 }
 
 export function _resetNonceCacheForTests() {
@@ -216,7 +231,9 @@ export function generateChallenge(clientAccountId, homeDomain = getHomeDomain())
 
 /**
  * Verify a signed SEP-0010 challenge transaction.
- * @returns {{ valid: boolean, error?: string, code?: string }}
+ * On success the challenge nonce is consumed and returned so the caller can
+ * release it if it fails to issue a session token.
+ * @returns {{ valid: boolean, nonce?: string, error?: string, code?: string }}
  */
 export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getHomeDomain()) {
   const serverSigningKey = getServerSigningKey();
@@ -273,10 +290,6 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
       return { valid: false, error: "Invalid challenge nonce", code: "INVALID_NONCE" };
     }
 
-    if (isNonceReused(valueStr)) {
-      return { valid: false, error: "Challenge nonce already used", code: "NONCE_REPLAY" };
-    }
-
     if (!transaction.timeBounds) {
       return { valid: false, error: "Challenge missing time bounds", code: "INVALID_TIME_BOUNDS" };
     }
@@ -325,7 +338,14 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
       };
     }
 
-    return { valid: true };
+    // Claim the nonce only after every check has passed (#1295). Claiming it
+    // earlier let an unsigned or tampered copy of an intercepted challenge
+    // "burn" the nonce before the legitimate client submitted it.
+    if (!consumeChallengeNonce(valueStr)) {
+      return { valid: false, error: "Challenge nonce already used", code: "NONCE_REPLAY" };
+    }
+
+    return { valid: true, nonce: valueStr };
   } catch (err) {
     // Fail closed, but keep a trace so unexpected parser failures are visible.
     logger.warn({ err: err?.message }, "sep10 challenge verification failed unexpectedly");

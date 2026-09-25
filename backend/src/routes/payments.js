@@ -56,9 +56,12 @@ import {
   paymentProcessorRefundsTotal,
 } from "../lib/payment-processor-metrics.js";
 import {
+  getExchangeRateQuote,
+  NoPathFoundError,
+} from "../services/exchangeRateService.js";
+import {
   findMatchingPayment,
   findAnyRecentPayment,
-  findStrictReceivePaths,
   getNetworkFeeStats,
   verifyTransactionSignature,
 } from "../lib/stellar.js";
@@ -1249,44 +1252,37 @@ function createPaymentsRouter({
           });
         }
 
-        const quote = await findStrictReceivePaths({
-          sourceAccount,
-          destAssetCode: data.asset,
-          destAssetIssuer: data.asset_issuer,
-          destAmount: String(data.amount),
-          sourceAssetCode: sourceAsset,
-          sourceAssetIssuer,
-        });
-
-        if (!quote) {
-          return res.status(404).json({
-            error: "No path found for this asset pair",
+        let quote;
+        try {
+          quote = await getExchangeRateQuote({
+            sourceAssetCode: sourceAsset,
+            sourceAssetIssuer,
+            destAssetCode: data.asset,
+            destAssetIssuer: data.asset_issuer,
+            destAmount: String(data.amount),
+            sourceAccount,
           });
+        } catch (err) {
+          if (err instanceof NoPathFoundError) {
+            return res.status(404).json({
+              error: "No path found for this asset pair",
+            });
+          }
+          throw err;
         }
 
-        const SLIPPAGE = 0.01; // 1%
-        const sendMax = (
-          parseFloat(quote.source_amount) *
-          (1 + SLIPPAGE)
-        ).toFixed(7);
-
-        exchangeRateSlippageApplied.inc({ slippage_pct: String(SLIPPAGE) });
-        exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
-        exchangeRateQuoteDuration.observe(
-          { ...assetLabels, result: "success" },
-          (Date.now() - startTime) / 1000,
-        );
+        exchangeRateSlippageApplied.inc({ slippage_pct: String(quote.slippage) });
 
         res.json({
-          source_asset: quote.source_asset_code,
-          source_asset_issuer: quote.source_asset_issuer,
-          source_amount: quote.source_amount,
-          send_max: sendMax,
+          source_asset: quote.sourceAsset,
+          source_asset_issuer: quote.sourceAssetIssuer,
+          source_amount: quote.sourceAmount,
+          send_max: quote.sendMax,
           destination_asset: data.asset,
           destination_asset_issuer: data.asset_issuer,
           destination_amount: String(data.amount),
           path: quote.path,
-          slippage: SLIPPAGE,
+          slippage: quote.slippage,
         });
       } catch (err) {
         exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });

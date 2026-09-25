@@ -333,7 +333,18 @@ describe('AssetIssuerRateLimiter (Issue #887)', () => {
                 ip: '1.2.3.4',
             };
             const key = AssetIssuerRateLimiter.getKey(req);
-            expect(key).toMatch(/^asset:issuer:api:[a-f0-9]{16}$/);
+            // Issue #1314: full SHA-256 digest (64 hex chars), not a
+            // truncated 16-char prefix — a short prefix is brute-forceable,
+            // letting an attacker collide with and share/exhaust another
+            // API key's rate-limit bucket.
+            expect(key).toMatch(/^asset:issuer:api:[a-f0-9]{64}$/);
+        });
+
+        test('should not truncate the API key hash (Issue #1314)', () => {
+            const req = { headers: { 'x-api-key': 'sk_live_abc' }, ip: '5.6.7.8' };
+            const key = AssetIssuerRateLimiter.getKey(req);
+            const hash = key.replace('asset:issuer:api:', '');
+            expect(hash).toHaveLength(64);
         });
 
         test('should use IP fallback when no merchant or API key', () => {
@@ -511,6 +522,85 @@ describe('AssetIssuerSignatureVerifier (Issue #888)', () => {
             await verifier.verifyOperation('txHash123', { skipCache: true });
 
             expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(2);
+        });
+
+        // Issue #1315: concurrent verifications of the same transaction
+        // used to race past the empty cache and each perform their own
+        // Horizon round trip. Concurrent calls for the same key should now
+        // coalesce onto a single in-flight verification.
+        test('coalesces concurrent calls for the same transaction into a single verification', async () => {
+            let resolveSignature;
+            mockVerifyTransactionSignature.mockReturnValue(
+                new Promise((resolve) => { resolveSignature = resolve; })
+            );
+
+            mockWithHorizonRetry.mockResolvedValue({
+                envelope_xdr: 'AAAA...',
+                source_account: 'GBXX',
+            });
+
+            const { Transaction } = await import('stellar-sdk');
+            Transaction.mockImplementation(() => ({
+                operations: [{ type: 'payment', asset: { isNative: () => false, getCode: () => 'USDC', getIssuer: () => 'GBXX' }, amount: '100' }],
+            }));
+
+            const call1 = verifier.verifyOperation('txHashRace');
+            const call2 = verifier.verifyOperation('txHashRace');
+
+            resolveSignature({
+                valid: true,
+                reason: 'Signature verified',
+                isMultiSig: false,
+                signatureCount: 1,
+                thresholdMet: true,
+            });
+
+            const [result1, result2] = await Promise.all([call1, call2]);
+
+            expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(1);
+            expect(result1).toEqual(result2);
+        });
+
+        test('does not coalesce calls with skipCache: true', async () => {
+            mockVerifyTransactionSignature.mockResolvedValue({
+                valid: true,
+                reason: 'Signature verified',
+                isMultiSig: false,
+                signatureCount: 1,
+                thresholdMet: true,
+            });
+            mockWithHorizonRetry.mockResolvedValue({ envelope_xdr: 'AAAA...', source_account: 'GBXX' });
+
+            const { Transaction } = await import('stellar-sdk');
+            Transaction.mockImplementation(() => ({
+                operations: [{ type: 'payment', asset: { isNative: () => false, getCode: () => 'USDC', getIssuer: () => 'GBXX' }, amount: '100' }],
+            }));
+
+            await Promise.all([
+                verifier.verifyOperation('txHashNoCoalesce', { skipCache: true }),
+                verifier.verifyOperation('txHashNoCoalesce', { skipCache: true }),
+            ]);
+
+            expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(2);
+        });
+
+        test('clears the pending-verification entry after completion so later calls run fresh', async () => {
+            mockVerifyTransactionSignature.mockResolvedValue({
+                valid: true,
+                reason: 'Signature verified',
+                isMultiSig: false,
+                signatureCount: 1,
+                thresholdMet: true,
+            });
+            mockWithHorizonRetry.mockResolvedValue({ envelope_xdr: 'AAAA...', source_account: 'GBXX' });
+
+            const { Transaction } = await import('stellar-sdk');
+            Transaction.mockImplementation(() => ({
+                operations: [{ type: 'payment', asset: { isNative: () => false, getCode: () => 'USDC', getIssuer: () => 'GBXX' }, amount: '100' }],
+            }));
+
+            await verifier.verifyOperation('txHashSequential');
+            expect(verifier.pendingVerifications.size).toBe(0);
         });
 
         test('should clear cache', () => {
@@ -762,6 +852,20 @@ describe('AssetIssuerQueryOptimizer (Issue #889)', () => {
             });
             const result = await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
             expect(result.rows[0].failure_rate_percent).toBe(5.00);
+        });
+
+        // Issue #1316: merchant_config previously omitted the deleted_at
+        // filter that every other merchant-scoped query in this file
+        // applies, so a soft-deleted merchant's allowed_issuers/
+        // payment_limits could still be joined into "current" health
+        // metrics — inconsistent with the rest of the module's soft-delete
+        // convention.
+        test('excludes soft-deleted merchants from the merchant_config CTE', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
+            const query = mockQueryWithRetry.mock.calls[0][0];
+            const merchantConfigSection = query.split('merchant_config AS')[1];
+            expect(merchantConfigSection).toContain('m.deleted_at IS NULL');
         });
     });
 

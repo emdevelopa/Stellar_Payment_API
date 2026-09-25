@@ -412,6 +412,17 @@ export async function optimizedQuery(
     signature = null,
   } = {},
 ) {
+  // Issue #1318: fail fast with a clear validation error instead of letting
+  // a null/undefined query text propagate into generateCacheKey()/
+  // cachedQuery(), where it previously surfaced as an unguarded null
+  // pointer exception several stack frames away from the actual mistake.
+  if (typeof text !== "string" || text.length === 0) {
+    const error = new Error("optimizedQuery requires a non-empty query string");
+    error.status = 400;
+    error.code = "DB_POOLER_INVALID_QUERY";
+    throw error;
+  }
+
   const now = Date.now();
   const startedAt = process.hrtime.bigint();
   const observeDuration = (status) => {
@@ -558,6 +569,12 @@ export async function optimizedWrite(text, values = [], options = {}) {
  * Extract the primary table name from a SQL query for cache invalidation.
  */
 function extractTableName(sql) {
+  // Issue #1318: a falsy/non-string `sql` (e.g. a write helper called with
+  // no query text) used to throw a null pointer exception on `.trim()`
+  // instead of simply reporting "no table name found".
+  if (typeof sql !== "string" || sql.length === 0) {
+    return null;
+  }
   const normalized = sql.trim().toUpperCase();
 
   // Match INSERT INTO, UPDATE, DELETE FROM patterns

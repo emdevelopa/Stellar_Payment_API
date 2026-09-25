@@ -369,6 +369,34 @@ describe("Database Pooler - Optimized Query (Integration)", () => {
       optimizedQuery("SELECT 1", [], { label: "test-rate-limit" }),
     ).rejects.toThrow("Global query rate limit exceeded");
   });
+
+  // Issue #1318: null/undefined/empty query text used to propagate into
+  // generateCacheKey()/cachedQuery() and throw an unguarded null pointer
+  // exception instead of a clear validation error at the entry point.
+  it("rejects a null query with a descriptive error instead of a null pointer exception", async () => {
+    await expect(
+      optimizedQuery(null, [], { label: "test-null-query" }),
+    ).rejects.toThrow(/non-empty query string/);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it("rejects an undefined query with a descriptive error", async () => {
+    await expect(
+      optimizedQuery(undefined, [], { label: "test-undefined-query" }),
+    ).rejects.toThrow(/non-empty query string/);
+  });
+
+  it("rejects an empty-string query with a descriptive error", async () => {
+    await expect(
+      optimizedQuery("", [], { label: "test-empty-query" }),
+    ).rejects.toThrow(/non-empty query string/);
+  });
+
+  it("does not increment the rate limiter for a rejected null query", async () => {
+    const before = queryRateLimiter.globalCount;
+    await expect(optimizedQuery(null, [])).rejects.toThrow();
+    expect(queryRateLimiter.globalCount).toBe(before);
+  });
 });
 
 describe("Database Pooler - getPoolerStats", () => {

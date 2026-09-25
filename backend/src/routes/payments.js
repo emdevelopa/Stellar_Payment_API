@@ -45,10 +45,6 @@ import {
   validatePerAssetLimits,
   validateAllowedIssuers,
 } from "../lib/payment-session-rules.js";
-import {
-  getExchangeRateCache,
-  generateRateCacheKey,
-} from "../lib/exchange-rate-cache.js";
 import { getSupabaseClient } from "../lib/supabase-client.js";
 import {
   paymentProcessorSessionsTotal,
@@ -60,9 +56,18 @@ import {
   paymentProcessorRefundsTotal,
 } from "../lib/payment-processor-metrics.js";
 import {
+  getExchangeRateQuote,
+  NoPathFoundError,
+} from "../services/exchangeRateService.js";
+import {
+  pathPaymentQuoteRequestsTotal,
+  pathPaymentQuoteStageDuration,
+  pathPaymentQuotePathHops,
+  pathPaymentQuoteRate,
+} from "../lib/path-payment-metrics.js";
+import {
   findMatchingPayment,
   findAnyRecentPayment,
-  findStrictReceivePaths,
   getNetworkFeeStats,
   verifyTransactionSignature,
 } from "../lib/stellar.js";
@@ -1213,6 +1218,11 @@ function createPaymentsRouter({
           .is("deleted_at", null)
           .maybeSingle();
 
+        pathPaymentQuoteStageDuration.observe(
+          { stage: "payment_lookup" },
+          (Date.now() - startTime) / 1000,
+        );
+
         if (error) {
           error.status = 500;
           throw error;
@@ -1220,6 +1230,7 @@ function createPaymentsRouter({
 
         if (!data) {
           exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "not_found" });
           return res.status(404).json({ error: "Payment not found" });
         }
 
@@ -1231,6 +1242,7 @@ function createPaymentsRouter({
             { ...assetLabels, result: "not_pending" },
             (Date.now() - startTime) / 1000,
           );
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "not_pending" });
           return res.status(409).json({
             error: "Path payment quote is only available for pending payments",
             status: data.status,
@@ -1247,81 +1259,74 @@ function createPaymentsRouter({
             { ...assetLabels, result: "same_asset" },
             (Date.now() - startTime) / 1000,
           );
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "same_asset" });
           return res.status(400).json({
             error:
               "Source asset is the same as destination asset. Use a direct payment.",
           });
         }
 
-        // Serve fresh quotes from the robust cache before hitting Horizon;
-        // stale-but-tolerable entries are revalidated below (issue #1045).
-        const quoteCache = getExchangeRateCache();
-        const quoteCacheKey = generateRateCacheKey(
-          sourceAsset,
-          data.asset,
-          String(data.amount),
-          sourceAssetIssuer,
-          data.asset_issuer,
+        const quoteStart = Date.now();
+        let quote;
+        try {
+          quote = await getExchangeRateQuote({
+            sourceAssetCode: sourceAsset,
+            sourceAssetIssuer,
+            destAssetCode: data.asset,
+            destAssetIssuer: data.asset_issuer,
+            destAmount: String(data.amount),
+            sourceAccount,
+          });
+        } catch (err) {
+          if (err instanceof NoPathFoundError) {
+            pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "no_path" });
+            return res.status(404).json({
+              error: "No path found for this asset pair",
+            });
+          }
+          throw err;
+        }
+        pathPaymentQuoteStageDuration.observe(
+          { stage: "horizon_quote" },
+          (Date.now() - quoteStart) / 1000,
         );
-        const cachedQuote = quoteCache.get(quoteCacheKey);
-        if (cachedQuote.hit && !cachedQuote.stale) {
+
+        // Cached quotes never reach Horizon, so count them here to keep
+        // exchange_rate_* success semantics from #1045 (issue #1047).
+        if (quote.cached) {
           exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
           exchangeRateQuoteDuration.observe(
             { ...assetLabels, result: "success" },
             (Date.now() - startTime) / 1000,
           );
-          return res.json(cachedQuote.data);
         }
 
-        const quote = await findStrictReceivePaths({
-          sourceAccount,
-          destAssetCode: data.asset,
-          destAssetIssuer: data.asset_issuer,
-          destAmount: String(data.amount),
-          sourceAssetCode: sourceAsset,
-          sourceAssetIssuer,
-        });
+        exchangeRateSlippageApplied.inc({ slippage_pct: String(quote.slippage) });
+        pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "success" });
+        pathPaymentQuotePathHops.observe(quote.path.length);
+        pathPaymentQuoteRate.observe({
+          source_asset: quote.sourceAsset,
+          dest_asset: assetLabels.dest_asset,
+        }, parseFloat(quote.sourceAmount) / parseFloat(quote.destinationAmount));
 
-        if (!quote) {
-          return res.status(404).json({
-            error: "No path found for this asset pair",
-          });
-        }
-
-        const SLIPPAGE = 0.01; // 1%
-        const sendMax = (
-          parseFloat(quote.source_amount) *
-          (1 + SLIPPAGE)
-        ).toFixed(7);
-
-        exchangeRateSlippageApplied.inc({ slippage_pct: String(SLIPPAGE) });
-        exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
-        exchangeRateQuoteDuration.observe(
-          { ...assetLabels, result: "success" },
-          (Date.now() - startTime) / 1000,
-        );
-
-        const quotePayload = {
-          source_asset: quote.source_asset_code,
-          source_asset_issuer: quote.source_asset_issuer,
-          source_amount: quote.source_amount,
-          send_max: sendMax,
+        res.json({
+          source_asset: quote.sourceAsset,
+          source_asset_issuer: quote.sourceAssetIssuer,
+          source_amount: quote.sourceAmount,
+          send_max: quote.sendMax,
           destination_asset: data.asset,
           destination_asset_issuer: data.asset_issuer,
           destination_amount: String(data.amount),
           path: quote.path,
-          slippage: SLIPPAGE,
-        };
-
-        quoteCache.set(quoteCacheKey, quotePayload);
-
-        res.json(quotePayload);
+          slippage: quote.slippage,
+        });
       } catch (err) {
         exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
         exchangeRateQuoteDuration.observe(
           { ...assetLabels, result: "error" },
           (Date.now() - startTime) / 1000,
         );
+        pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "error" });
         next(err);
       }
     }

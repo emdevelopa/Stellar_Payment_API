@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import * as StellarSdk from "stellar-sdk";
+import jwt from "jsonwebtoken";
 import {
   generateChallenge,
   verifyChallenge,
@@ -9,6 +10,14 @@ import {
   withSep10StoreRecovery,
   lookupMerchantByStellarAddress,
   Sep10AuthError,
+  generateSessionToken,
+  verifySessionToken,
+  consumeChallengeNonce,
+  releaseChallengeNonce,
+  pruneExpiredNonces,
+  NONCE_SWEEP_INTERVAL_MS,
+  CHALLENGE_EXPIRES_IN,
+  _getNonceCacheStatsForTests,
   MAX_CHALLENGE_XDR_BYTES,
   _resetNonceCacheForTests,
 } from "./sep10-auth.js";
@@ -175,5 +184,425 @@ describe("SEP-0010 Authentication", () => {
 
     const result = await lookupMerchantByStellarAddress(clientKeypair.publicKey(), supabaseClient);
     expect(result).toEqual(merchant);
+  });
+
+  describe("null / undefined hardening (#1293)", () => {
+    function signedChallenge() {
+      const tx = StellarSdk.TransactionBuilder.fromXDR(
+        generateChallenge(clientKeypair.publicKey(), HOME_DOMAIN),
+        StellarSdk.Networks.TESTNET,
+      );
+      tx.sign(clientKeypair);
+      return tx;
+    }
+
+    it("rejects a fee-bump wrapped challenge instead of dereferencing missing timeBounds", () => {
+      const inner = signedChallenge();
+      const feeBump = StellarSdk.TransactionBuilder.buildFeeBumpTransaction(
+        clientKeypair,
+        "200",
+        inner,
+        StellarSdk.Networks.TESTNET,
+      );
+      feeBump.sign(clientKeypair);
+
+      const result = verifyChallenge(feeBump.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(result).toEqual({
+        valid: false,
+        error: "Invalid challenge structure",
+        code: "INVALID_STRUCTURE",
+      });
+    });
+
+    it("rejects a manageData challenge with a null value", () => {
+      const account = new StellarSdk.Account(serverKeypair.publicKey(), "-1");
+      const now = Math.floor(Date.now() / 1000);
+      const tx = new StellarSdk.TransactionBuilder(account, {
+        fee: "100",
+        networkPassphrase: StellarSdk.Networks.TESTNET,
+        timebounds: { minTime: now, maxTime: now + 300 },
+      })
+        .addOperation(
+          StellarSdk.Operation.manageData({
+            name: `${HOME_DOMAIN} auth`,
+            value: null,
+            source: clientKeypair.publicKey(),
+          }),
+        )
+        .build();
+      tx.sign(serverKeypair);
+      tx.sign(clientKeypair);
+
+      const result = verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(result.code).toBe("INVALID_NONCE");
+    });
+
+    it.each([undefined, null, 42, {}])(
+      "returns INVALID_XDR for a non-string challenge (%s)",
+      (value) => {
+        const result = verifyChallenge(value, clientKeypair.publicKey(), HOME_DOMAIN);
+        expect(result.valid).toBe(false);
+        expect(result.code).toBe("INVALID_XDR");
+      },
+    );
+
+    it.each([undefined, null])("returns INVALID_ACCOUNT for a %s client account", (value) => {
+      const result = verifyChallenge(signedChallenge().toXDR(), value, HOME_DOMAIN);
+      expect(result.code).toBe("INVALID_ACCOUNT");
+    });
+
+    it("withSep10StoreRecovery converts an undefined rejection into an Error", async () => {
+      const fn = vi.fn().mockRejectedValue(undefined);
+
+      const error = await withSep10StoreRecovery(fn, "test").catch((e) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe("test failed with a non-error rejection");
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("withSep10StoreRecovery keeps code/message from plain-object rejections", async () => {
+      const fn = vi.fn().mockRejectedValue({ message: "duplicate key", code: "23505" });
+
+      const error = await withSep10StoreRecovery(fn, "test").catch((e) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe("duplicate key");
+      expect(error.code).toBe("23505");
+    });
+
+    it("lookupMerchantByStellarAddress rejects a missing account without querying", async () => {
+      const supabaseClient = { from: vi.fn() };
+
+      await expect(lookupMerchantByStellarAddress(undefined, supabaseClient)).rejects.toMatchObject({
+        code: "INVALID_ACCOUNT",
+        httpStatus: 400,
+      });
+      expect(supabaseClient.from).not.toHaveBeenCalled();
+    });
+
+    it("lookupMerchantByStellarAddress fails clearly without a store client", async () => {
+      await expect(
+        lookupMerchantByStellarAddress(clientKeypair.publicKey(), null),
+      ).rejects.toThrow("SEP-10 merchant lookup requires a store client");
+    });
+
+    it("lookupMerchantByStellarAddress handles an empty store response", async () => {
+      const supabaseClient = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue(undefined),
+              }),
+            }),
+          }),
+        }),
+      };
+
+      await expect(
+        lookupMerchantByStellarAddress(clientKeypair.publicKey(), supabaseClient),
+      ).rejects.toThrow("SEP-10 merchant lookup returned no response");
+    });
+
+    it("lookupMerchantByStellarAddress normalises a missing merchant to null", async () => {
+      const supabaseClient = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            }),
+          }),
+        }),
+      };
+
+      await expect(
+        lookupMerchantByStellarAddress(clientKeypair.publicKey(), supabaseClient),
+      ).resolves.toBeNull();
+    });
+
+    it.each([undefined, null, ""])("refuses to issue a session token for merchant id %s", (id) => {
+      expect(() => generateSessionToken(id, "a@example.com")).toThrow(
+        "Cannot issue a session token without a merchant id",
+      );
+    });
+  });
+
+  describe("nonce claim ordering (#1295)", () => {
+    function freshChallenge() {
+      return StellarSdk.TransactionBuilder.fromXDR(
+        generateChallenge(clientKeypair.publicKey(), HOME_DOMAIN),
+        StellarSdk.Networks.TESTNET,
+      );
+    }
+
+    it("an unsigned copy of a challenge does not burn the nonce for the real client", () => {
+      const unsigned = freshChallenge();
+      const unsignedXdr = unsigned.toXDR();
+
+      const attacker = verifyChallenge(unsignedXdr, clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(attacker.code).toBe("CLIENT_SIGNATURE_INVALID");
+
+      const signed = StellarSdk.TransactionBuilder.fromXDR(unsignedXdr, StellarSdk.Networks.TESTNET);
+      signed.sign(clientKeypair);
+      const legit = verifyChallenge(signed.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(legit.valid).toBe(true);
+    });
+
+    it("a copy signed by the wrong key does not burn the nonce", () => {
+      const tx = freshChallenge();
+      const xdr = tx.toXDR();
+
+      const forged = StellarSdk.TransactionBuilder.fromXDR(xdr, StellarSdk.Networks.TESTNET);
+      forged.sign(StellarSdk.Keypair.random());
+      expect(verifyChallenge(forged.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(
+        false,
+      );
+
+      tx.sign(clientKeypair);
+      expect(verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(true);
+    });
+
+    it("an expired challenge is rejected without claiming its nonce", () => {
+      vi.useFakeTimers();
+      try {
+        const tx = freshChallenge();
+        tx.sign(clientKeypair);
+        const nonce = tx.operations[0].value.toString();
+
+        vi.setSystemTime(Date.now() + 10 * 60 * 1000);
+        const result = verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+        expect(result.code).toBe("CHALLENGE_EXPIRED");
+        expect(consumeChallengeNonce(nonce)).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("returns the claimed nonce on success", () => {
+      const tx = freshChallenge();
+      tx.sign(clientKeypair);
+
+      const result = verifyChallenge(tx.toXDR(), clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(result).toEqual({ valid: true, nonce: tx.operations[0].value.toString() });
+    });
+
+    it("consumeChallengeNonce lets exactly one caller claim a nonce", () => {
+      const claims = Array.from({ length: 50 }, () => consumeChallengeNonce("n".repeat(32)));
+      expect(claims.filter(Boolean)).toHaveLength(1);
+    });
+
+    it("releaseChallengeNonce makes a claimed nonce usable again", () => {
+      const tx = freshChallenge();
+      tx.sign(clientKeypair);
+      const xdr = tx.toXDR();
+
+      const first = verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN);
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).code).toBe(
+        "NONCE_REPLAY",
+      );
+
+      releaseChallengeNonce(first.nonce);
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(true);
+    });
+
+    it("releaseChallengeNonce ignores non-string input", () => {
+      expect(() => releaseChallengeNonce(undefined)).not.toThrow();
+      expect(() => releaseChallengeNonce(null)).not.toThrow();
+    });
+  });
+
+  describe("nonce cache memory bounds (#1292)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      delete process.env.SEP10_NONCE_CACHE_MAX;
+    });
+
+    function verifyFresh() {
+      const tx = StellarSdk.TransactionBuilder.fromXDR(
+        generateChallenge(clientKeypair.publicKey(), HOME_DOMAIN),
+        StellarSdk.Networks.TESTNET,
+      );
+      tx.sign(clientKeypair);
+      const xdr = tx.toXDR();
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(true);
+      return xdr;
+    }
+
+    it("the periodic sweep drops nonces once their challenge has expired", () => {
+      verifyFresh();
+      verifyFresh();
+      expect(_getNonceCacheStatsForTests()).toEqual({ size: 2, sweeping: true });
+
+      vi.advanceTimersByTime((CHALLENGE_EXPIRES_IN + 1) * 1000 + NONCE_SWEEP_INTERVAL_MS);
+
+      expect(_getNonceCacheStatsForTests()).toEqual({ size: 0, sweeping: false });
+    });
+
+    it("the sweep keeps nonces of still-valid challenges, so replay stays blocked", () => {
+      const xdr = verifyFresh();
+
+      vi.advanceTimersByTime(NONCE_SWEEP_INTERVAL_MS * 3);
+
+      expect(_getNonceCacheStatsForTests().size).toBe(1);
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).code).toBe(
+        "NONCE_REPLAY",
+      );
+    });
+
+    it("a replayed challenge is still rejected after its nonce is swept", () => {
+      const xdr = verifyFresh();
+
+      vi.advanceTimersByTime((CHALLENGE_EXPIRES_IN + 1) * 1000 + NONCE_SWEEP_INTERVAL_MS);
+      expect(_getNonceCacheStatsForTests().size).toBe(0);
+
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).code).toBe(
+        "CHALLENGE_EXPIRED",
+      );
+    });
+
+    it("never grows past the configured cap", () => {
+      process.env.SEP10_NONCE_CACHE_MAX = "5";
+      const expiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_EXPIRES_IN;
+
+      for (let i = 0; i < 50; i += 1) {
+        expect(consumeChallengeNonce(`nonce-${i}`.padEnd(32, "x"), expiresAt)).toBe(true);
+      }
+
+      expect(_getNonceCacheStatsForTests().size).toBe(5);
+      // Most recent nonces are retained.
+      expect(consumeChallengeNonce("nonce-49".padEnd(32, "x"), expiresAt)).toBe(false);
+    });
+
+    it("evicts expired entries before live ones when the cap is reached", () => {
+      process.env.SEP10_NONCE_CACHE_MAX = "3";
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      consumeChallengeNonce("live".padEnd(32, "x"), nowSec + CHALLENGE_EXPIRES_IN);
+      consumeChallengeNonce("stale-1".padEnd(32, "x"), nowSec + 1);
+      consumeChallengeNonce("stale-2".padEnd(32, "x"), nowSec + 1);
+
+      vi.setSystemTime(Date.now() + 5_000);
+      consumeChallengeNonce("new".padEnd(32, "x"), nowSec + CHALLENGE_EXPIRES_IN);
+
+      expect(_getNonceCacheStatsForTests().size).toBe(2);
+      expect(consumeChallengeNonce("live".padEnd(32, "x"))).toBe(false);
+    });
+
+    it("pruneExpiredNonces reports how many entries were removed", () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      consumeChallengeNonce("a".repeat(32), nowSec + 1);
+      consumeChallengeNonce("b".repeat(32), nowSec + CHALLENGE_EXPIRES_IN);
+
+      expect(pruneExpiredNonces(Date.now() + 10_000)).toBe(1);
+      expect(_getNonceCacheStatsForTests().size).toBe(1);
+    });
+
+    it("stops the sweep timer when the cache empties", () => {
+      consumeChallengeNonce("a".repeat(32));
+      expect(_getNonceCacheStatsForTests().sweeping).toBe(true);
+
+      releaseChallengeNonce("a".repeat(32));
+      expect(_getNonceCacheStatsForTests()).toEqual({ size: 0, sweeping: false });
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("ignores an invalid SEP10_NONCE_CACHE_MAX", () => {
+      process.env.SEP10_NONCE_CACHE_MAX = "not-a-number";
+      for (let i = 0; i < 20; i += 1) consumeChallengeNonce(`n-${i}`.padEnd(32, "x"));
+      expect(_getNonceCacheStatsForTests().size).toBe(20);
+    });
+  });
+
+  describe("SEP-10 challenge integrity (#1294)", () => {
+    /** Build a server-signed challenge with overridable envelope fields. */
+    function customChallenge({
+      source = serverKeypair,
+      sequence = "-1",
+      minTime,
+      maxTime,
+      signers = [serverKeypair, clientKeypair],
+    } = {}) {
+      const now = Math.floor(Date.now() / 1000);
+      const tx = new StellarSdk.TransactionBuilder(
+        new StellarSdk.Account(source.publicKey(), sequence),
+        {
+          fee: "100",
+          networkPassphrase: StellarSdk.Networks.TESTNET,
+          timebounds: { minTime: minTime ?? now, maxTime: maxTime ?? now + CHALLENGE_EXPIRES_IN },
+        },
+      )
+        .addOperation(
+          StellarSdk.Operation.manageData({
+            name: `${HOME_DOMAIN} auth`,
+            value: "n".repeat(48),
+            source: clientKeypair.publicKey(),
+          }),
+        )
+        .build();
+      signers.forEach((kp) => tx.sign(kp));
+      return tx.toXDR();
+    }
+
+    const verify = (xdr) => verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN);
+
+    it("accepts a well-formed custom challenge (control)", () => {
+      expect(verify(customChallenge()).valid).toBe(true);
+    });
+
+    it("rejects a challenge whose source account is not the server", () => {
+      const other = StellarSdk.Keypair.random();
+      const result = verify(customChallenge({ source: other }));
+      expect(result).toMatchObject({ valid: false, code: "INVALID_STRUCTURE" });
+      expect(result.error).toBe("Challenge was not issued by this server");
+    });
+
+    it("rejects a challenge with a non-zero sequence number", () => {
+      expect(verify(customChallenge({ sequence: "41" })).code).toBe("INVALID_STRUCTURE");
+    });
+
+    it("rejects a challenge with an unbounded maxTime", () => {
+      expect(verify(customChallenge({ maxTime: 0 })).code).toBe("INVALID_TIME_BOUNDS");
+    });
+
+    it("rejects a challenge valid for longer than CHALLENGE_EXPIRES_IN", () => {
+      const now = Math.floor(Date.now() / 1000);
+      const result = verify(customChallenge({ minTime: now, maxTime: now + 86_400 }));
+      expect(result.code).toBe("INVALID_TIME_BOUNDS");
+    });
+
+    it("rejects a challenge carrying a third-party signature", () => {
+      const intruder = StellarSdk.Keypair.random();
+      const result = verify(customChallenge({ signers: [serverKeypair, clientKeypair, intruder] }));
+      expect(result.code).toBe("UNRECOGNIZED_SIGNATURE");
+    });
+
+    it("does not consume the nonce of a rejected challenge", () => {
+      const intruder = StellarSdk.Keypair.random();
+      verify(customChallenge({ signers: [serverKeypair, clientKeypair, intruder] }));
+      expect(verify(customChallenge()).valid).toBe(true);
+    });
+
+    it("issues HS256 session tokens", () => {
+      const token = generateSessionToken("m-1", "a@example.com");
+      expect(jwt.decode(token, { complete: true }).header.alg).toBe("HS256");
+      expect(verifySessionToken(token)).toMatchObject({ valid: true, payload: { id: "m-1" } });
+    });
+
+    it("rejects session tokens signed with a different HMAC algorithm", () => {
+      const token = jwt.sign({ id: "m-1", merchant_id: "m-1" }, process.env.JWT_SECRET, {
+        algorithm: "HS512",
+      });
+      expect(verifySessionToken(token).valid).toBe(false);
+    });
+
+    it("rejects unsigned (alg: none) session tokens", () => {
+      const token = jwt.sign({ id: "m-1", merchant_id: "m-1" }, null, { algorithm: "none" });
+      expect(verifySessionToken(token).valid).toBe(false);
+    });
   });
 });

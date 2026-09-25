@@ -13,11 +13,13 @@ import {
   getHomeDomain,
   getNetworkPassphrase,
   lookupMerchantByStellarAddress,
+  releaseChallengeNonce,
   Sep10AuthError,
   validateChallengeXdr,
 } from "../lib/sep10-auth.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { logLoginAttempt } from "../lib/audit.js";
+import { logger } from "../lib/logger.js";
 import { validateRequest } from "../lib/validation.js";
 import { authChallengeSchema, authVerifySchema } from "../lib/request-schemas.js";
 import {
@@ -122,14 +124,13 @@ export default function createAuthRouter({
         const { account } = req.body;
 
         const challengeXdr = generateChallenge(account);
-        const networkPassphrase =
-          process.env.STELLAR_NETWORK === "public"
-            ? "Public Global Stellar Network ; September 2015"
-            : "Test SDF Network ; September 2015";
 
+        // Advertise the exact passphrase the challenge was built with. The old
+        // case-sensitive check told wallets "testnet" when STELLAR_NETWORK was
+        // e.g. "PUBLIC", so they signed for the wrong network (#1294).
         res.json({
           transaction: challengeXdr,
-          network_passphrase: networkPassphrase,
+          network_passphrase: getNetworkPassphrase(),
         });
       } catch (err) {
         next(err);
@@ -144,6 +145,7 @@ export default function createAuthRouter({
     async (req, res, next) => {
       const ipAddress = req.ip ?? null;
       const userAgent = req.get("user-agent") ?? null;
+      let claimedNonce = null;
 
       try {
         const { transaction } = req.body;
@@ -181,6 +183,8 @@ export default function createAuthRouter({
           });
         }
 
+        claimedNonce = verification.nonce;
+
         const merchant = await lookupMerchantByStellarAddress(clientAccount, supabase);
 
         if (!merchant) {
@@ -214,6 +218,13 @@ export default function createAuthRouter({
           },
         });
       } catch (err) {
+        // No token was issued for this challenge, so hand the nonce back and
+        // let the client retry the same signed challenge (#1295).
+        if (claimedNonce && !res.headersSent) {
+          releaseChallengeNonce(claimedNonce);
+          logger.info({ code: err?.code }, "sep10 nonce released after failed token issuance");
+        }
+
         if (err instanceof Sep10AuthError) {
           return res.status(err.httpStatus).json({
             error: err.code,

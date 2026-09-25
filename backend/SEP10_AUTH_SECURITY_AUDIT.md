@@ -1,7 +1,7 @@
 # SEP-10 Authentication Security Audit
 
 **Module:** `backend/src/lib/sep10-auth.js`, `backend/src/routes/auth.js`  
-**Issues:** #588 (audit), #587 (error recovery), #733 (rate limiting)  
+**Issues:** #588 (audit), #587 (error recovery), #733 (rate limiting), #1292–#1295 (hardening)  
 **Date:** 2026-06-23
 
 ## Scope
@@ -12,7 +12,10 @@ This audit covers the SEP-0010 Web Authentication flow: challenge generation, si
 
 | Threat | Mitigation | Status |
 |--------|------------|--------|
-| Challenge replay | In-memory nonce cache rejects reused nonces | ✅ Implemented |
+| Challenge replay | In-memory nonce cache rejects reused nonces; entries live until the challenge expires (#1292) | ✅ Implemented |
+| Nonce burning / verify races | Nonce claimed atomically only after all checks pass; released if no token is issued (#1295) | ✅ Fixed |
+| Forged or non-conforming challenges | Server source account, sequence 0, bounded time window, no unrecognized signers (#1294) | ✅ Fixed |
+| JWT algorithm confusion | Session tokens signed and verified with HS256 only (#1294) | ✅ Fixed |
 | Oversized/malformed XDR | `validateChallengeXdr` enforces size (8 KB) and base64 charset | ✅ Implemented |
 | Home-domain spoofing | Challenge and verify both use `getHomeDomain()`; mismatch returns `HOME_DOMAIN_MISMATCH` | ✅ Fixed |
 | Missing server/client signatures | Both signatures verified against transaction hash | ✅ Implemented |
@@ -48,6 +51,34 @@ This audit covers the SEP-0010 Web Authentication flow: challenge generation, si
 
 **Status:** Accepted — intentional fail-closed behavior.
 
+### High — Nonce claimed before verification (#1295, fixed)
+
+**Issue:** `verifyChallenge` recorded the nonce before checking time bounds and signatures. Anyone who saw a challenge (unsigned or with a bogus signature) could submit it first and lock the real client out with `NONCE_REPLAY`. The nonce was also consumed when the merchant store returned a retryable 503, so the retry the API asked for always failed.
+
+**Fix:** The nonce is claimed with an atomic check-and-set (`consumeChallengeNonce`) as the last step of verification. `/auth/verify` calls `releaseChallengeNonce` when it fails before issuing a token. A nonce stays consumed once a token is issued or once the account is found to have no merchant.
+
+### High — Replay cache wiped under load / unbounded growth (#1292, fixed)
+
+**Issue:** Used nonces lived in a `Set` that was checked every 10 minutes and fully cleared once it held more than 10k entries. Memory grew without bound between sweeps, stale nonces were never dropped below the threshold, and a clear removed every *live* nonce, reopening replay for challenges that were still valid.
+
+**Fix:** A `Map` of nonce → challenge expiry. Expired entries are swept every 60s and the timer stops when the cache is empty. A hard cap (`SEP10_NONCE_CACHE_MAX`, default 10000) prunes expired entries first and then evicts the oldest live entries with a warning log. The cache is never cleared wholesale.
+
+### Medium — Incomplete SEP-10 challenge validation (#1294, fixed)
+
+**Issue:** The transaction source account, sequence number, time-bound window and extra signers were not checked, as SEP-10 requires. Session JWTs accepted any HMAC algorithm (e.g. HS512). `/auth/challenge` compared `STELLAR_NETWORK` case-sensitively while the signer lower-cased it, so `STELLAR_NETWORK=PUBLIC` advertised the testnet passphrase for a public-network challenge.
+
+**Fix:** Challenges are rejected unless they are sourced from the server account with sequence 0, have a finite window no longer than `CHALLENGE_EXPIRES_IN`, and are signed only by the server and the client. Tokens use HS256 only. The route advertises `getNetworkPassphrase()`.
+
+### Medium — Null dereferences hidden by catch-all (#1293, fixed)
+
+**Issue:** A fee-bump-wrapped challenge passed the operations check and then crashed reading `timeBounds`. A store rejecting with `undefined` was rethrown as-is, and `next(undefined)` left the request hanging. A token could be signed with a `null` merchant id.
+
+**Fix:** Explicit guards with specific error codes (`INVALID_STRUCTURE`, `INVALID_TIME_BOUNDS`). Unexpected verification errors are logged, non-Error rejections are normalised, and tokens are never minted without a merchant id.
+
+### Error codes returned by `/auth/verify`
+
+`INVALID_XDR`, `INVALID_ACCOUNT`, `INVALID_STRUCTURE`, `INVALID_OPERATION`, `ACCOUNT_MISMATCH`, `HOME_DOMAIN_MISMATCH`, `INVALID_NONCE`, `INVALID_TIME_BOUNDS`, `CHALLENGE_EXPIRED`, `SERVER_SIGNATURE_MISSING`, `CLIENT_SIGNATURE_INVALID`, `UNRECOGNIZED_SIGNATURE`, `NONCE_REPLAY`, `AUTHENTICATION_FAILED`.
+
 ## Rate Limiting (#733)
 
 | Endpoint | Key | Default window | Default max |
@@ -64,6 +95,7 @@ SEP10_CHALLENGE_RATE_LIMIT_WINDOW_MS=60000
 SEP10_CHALLENGE_RATE_LIMIT_MAX=20
 SEP10_VERIFY_RATE_LIMIT_WINDOW_MS=60000
 SEP10_VERIFY_RATE_LIMIT_MAX=10
+SEP10_NONCE_CACHE_MAX=10000
 ```
 
 ## Recommendations (future work)
@@ -74,8 +106,8 @@ SEP10_VERIFY_RATE_LIMIT_MAX=10
 
 ## Test Coverage
 
-- `backend/src/lib/sep10-auth.test.js` — nonce replay, home domain, XDR validation, store recovery
-- `backend/src/routes/auth.routes.test.js` — rate limits, retryable 503 on store failure
+- `backend/src/lib/sep10-auth.test.js` — nonce replay, home domain, XDR validation, store recovery, null guards (#1293), nonce claim ordering (#1295), cache expiry/cap (#1292), challenge integrity and JWT algorithm (#1294)
+- `backend/src/routes/auth.routes.test.js` — rate limits, retryable 503 on store failure, concurrent verify / retry-after-503 (#1295), advertised network passphrase (#1294)
 - `backend/src/lib/rate-limit.test.js` — SEP-10 key generation and limiter factories
 
 ## Security Assumptions
@@ -83,3 +115,4 @@ SEP10_VERIFY_RATE_LIMIT_MAX=10
 - `SEP10_SERVER_SIGNING_KEY` and `JWT_SECRET` are stored securely and rotated periodically.
 - `HOME_DOMAIN` matches the domain published in `stellar.toml`.
 - Redis (when used) is network-isolated and authenticated.
+- The nonce cache is per process. Behind multiple instances, the same signed challenge could be accepted once per instance until it expires (at most `CHALLENGE_EXPIRES_IN` seconds). See recommendation 1.

@@ -21,6 +21,8 @@ import {
   queryCacheSize,
 } from "./metrics.js";
 
+const _inFlightQueries = new Map();
+
 const DEFAULT_MAX_ENTRIES = Number.parseInt(
   process.env.DB_QUERY_CACHE_MAX_ENTRIES || "500",
   10,
@@ -85,7 +87,7 @@ export class QueryCache {
     this.cache.set(key, entry);
     queryCacheHitTotal.inc();
 
-    return entry.result;
+    return structuredClone(entry.result);
   }
 
   /**
@@ -106,7 +108,7 @@ export class QueryCache {
     }
 
     this.cache.set(key, {
-      result,
+      result: structuredClone(result),
       insertedAt: Date.now(),
     });
 
@@ -197,10 +199,25 @@ export async function cachedQuery(
     return cached;
   }
 
-  const result = await queryFn(text, values, options);
-  queryCache.set(cacheKey, result);
+  if (_inFlightQueries.has(cacheKey)) {
+    logger.debug({ label: options.label, cacheKey }, "Query cache hit (in-flight)");
+    return _inFlightQueries.get(cacheKey).then((res) => structuredClone(res));
+  }
 
-  return result;
+  const promise = queryFn(text, values, options)
+    .then((result) => {
+      queryCache.set(cacheKey, result);
+      _inFlightQueries.delete(cacheKey);
+      return structuredClone(result);
+    })
+    .catch((err) => {
+      _inFlightQueries.delete(cacheKey);
+      throw err;
+    });
+
+  _inFlightQueries.set(cacheKey, promise);
+
+  return promise;
 }
 
 /**

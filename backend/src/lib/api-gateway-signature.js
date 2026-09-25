@@ -62,7 +62,16 @@ function _cleanupExpiredSignatureCacheEntries(now = Date.now()) {
     }
   }
 
-  if (cleaned > 0) {
+  if (_verifiedSignatureCache.size > SIGNATURE_CACHE_CLEANUP_THRESHOLD * 2) {
+    const toDelete = _verifiedSignatureCache.size - SIGNATURE_CACHE_CLEANUP_THRESHOLD;
+    let deleted = 0;
+    for (const signature of _verifiedSignatureCache.keys()) {
+      if (deleted >= toDelete) break;
+      _verifiedSignatureCache.delete(signature);
+      deleted++;
+    }
+    logger.warn({ deleted }, "Force evicted API gateway signature cache entries to prevent memory leak");
+  } else if (cleaned > 0) {
     logger.debug({ cleaned, remaining: _verifiedSignatureCache.size }, "Cleaned expired API gateway signature cache entries");
   }
 }
@@ -110,7 +119,16 @@ function _cleanupStaleRateLimitEntries(now = Date.now()) {
     }
   }
 
-  if (cleaned > 0) {
+  if (_apiGatewayRateLimitState.size > RATE_LIMIT_CLEANUP_THRESHOLD * 2) {
+    const toDelete = _apiGatewayRateLimitState.size - RATE_LIMIT_CLEANUP_THRESHOLD;
+    let deleted = 0;
+    for (const key of _apiGatewayRateLimitState.keys()) {
+      if (deleted >= toDelete) break;
+      _apiGatewayRateLimitState.delete(key);
+      deleted++;
+    }
+    logger.warn({ deleted }, "Force evicted API gateway rate limit entries to prevent memory leak");
+  } else if (cleaned > 0) {
     logger.debug({ cleaned, remaining: _apiGatewayRateLimitState.size }, "Cleaned stale API gateway rate limit entries");
   }
 }
@@ -347,6 +365,10 @@ export function verifyApiGatewayRequestSignatureWithRotation({
     process.env.API_GATEWAY_SIGNATURE_TOLERANCE_SECONDS || DEFAULT_SIGNATURE_WINDOW_SECONDS,
   ),
 }) {
+  if (!secrets || !Array.isArray(secrets)) {
+    return { valid: false, reason: "No secrets provided for signature verification" };
+  }
+
   for (let keyIndex = 0; keyIndex < secrets.length; keyIndex++) {
     const secret = secrets[keyIndex];
     const result = verifyApiGatewayRequestSignature({

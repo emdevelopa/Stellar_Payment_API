@@ -68,7 +68,9 @@ describe("SEP-10 auth routes", () => {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           is: vi.fn().mockReturnValue({
-            maybeSingle: mockMaybeSingle,
+            limit: vi.fn().mockReturnValue({
+              maybeSingle: mockMaybeSingle,
+            }),
           }),
         }),
       }),

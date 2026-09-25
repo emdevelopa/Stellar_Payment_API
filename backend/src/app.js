@@ -19,6 +19,8 @@ import createSep12Router from "./routes/sep12.js";
 import trustlinesRouter from "./routes/trustlines.js";
 import paymentDetailsRouter from "./routes/paymentDetails.js";
 import x402Router from "./routes/x402.js";
+import authRouter from "./routes/auth.js";
+import sep12KycRouter from "./routes/sep12-kyc.js";
 import createAuthRouter from "./routes/auth.js";
 import auditRouter from "./routes/audit.js";
 
@@ -320,6 +322,7 @@ export async function createApp({ redisClient }) {
   app.use("/api", webhooksRouter);
   app.use("/api", auditRouter);
   app.use("/api/payments", paymentDetailsRouter); // NEW — GET /api/payments/:id
+  app.use("/api", sep12KycRouter); // SEP-12 KYC Integration
 
   // Transaction Signer — authenticated, rate-limited signature verification endpoint (#912)
   // requireApiKeyAuth() is mandatory here: the endpoint triggers Horizon API calls and

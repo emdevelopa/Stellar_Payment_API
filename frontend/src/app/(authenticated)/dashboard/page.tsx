@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import DashboardSkeleton from "@/components/DashboardSkeleton";
 import Link from "next/link";
 import {
@@ -9,11 +10,15 @@ import {
   useMerchantApiKey,
 } from "@/lib/merchant-store";
 import FirstApiKeyModal from "@/components/FirstApiKeyModal";
+import FirstPaymentCelebration from "@/components/FirstPaymentCelebration";
 import PaymentMetrics from "@/components/PaymentMetrics";
-import RecentPayments from "@/components/RecentPayments";
+import PaymentsTabs from "@/components/PaymentsTabs";
+import FiatOnrampModal from "@/components/FiatOnrampModal";
 
 export default function DashboardPage() {
+  const t = useTranslations("fiatOnramp");
   const [isFirstKeyModalOpen, setIsFirstKeyModalOpen] = useState(false);
+  const [isOnrampModalOpen, setIsOnrampModalOpen] = useState(false);
   const hydrated = useMerchantHydrated();
   const apiKey = useMerchantApiKey();
   const [loading, setLoading] = useState(true);
@@ -69,6 +74,27 @@ export default function DashboardPage() {
             Create Link
             <div className="absolute inset-0 -z-10 bg-white/20 opacity-0 transition-opacity group-hover:opacity-100" />
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsOnrampModalOpen(true)}
+            className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-300 transition-all hover:bg-white/10 hover:text-white"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            {t("triggerLabel")}
+          </button>
 
           <Link
             href="/docs"
@@ -132,34 +158,58 @@ export default function DashboardPage() {
           <PaymentMetrics />
         </section>
 
-        {/* Activity Table Section */}
+        {/* Payments + webhook delivery logs */}
         <section className="flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">
-              Recent Activity
-            </h2>
-            <Link
-              href="/payments"
-              className="group flex items-center gap-1.5 text-sm text-mint hover:text-glow transition-all"
-            >
-              View all payments
-              <svg
-                className="h-4 w-4 transition-transform group-hover:translate-x-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Activity</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Recent payments and webhook delivery attempts (status codes) for your integrations.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/payments"
+                className="group flex items-center gap-1.5 text-sm text-mint hover:text-glow transition-all"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M14 5l7 7-7 7"
-                />
-              </svg>
-            </Link>
+                View all payments
+                <svg
+                  className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M14 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+              <Link
+                href="/webhook-logs"
+                className="group flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-all"
+              >
+                Full webhook history
+                <svg
+                  className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M14 5l7 7-7 7"
+                  />
+                </svg>
+              </Link>
+            </div>
           </div>
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-1">
-            <RecentPayments />
+          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+            <PaymentsTabs />
           </div>
         </section>
       </div>
@@ -168,6 +218,11 @@ export default function DashboardPage() {
         isOpen={isFirstKeyModalOpen}
         onClose={() => setIsFirstKeyModalOpen(false)}
       />
+      <FiatOnrampModal
+        isOpen={isOnrampModalOpen}
+        onClose={() => setIsOnrampModalOpen(false)}
+      />
+      <FirstPaymentCelebration />
     </div>
   );
 }

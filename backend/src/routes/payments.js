@@ -2,17 +2,19 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import express from "express";
-import rateLimit from "express-rate-limit";
 import { paymentService } from "../services/paymentService.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import {
   paymentSessionZodSchema,
+  paymentZodSchema,
   refundConfirmSchema,
   pathPaymentQuoteQuerySchema,
   paymentsListQuerySchema
 } from "../lib/request-schemas.js";
 import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
+import { createVerifyPaymentRateLimit } from "../lib/rate-limit.js";
+import { createPathPaymentQuoteRateLimit } from "../lib/path-payment-quote-rate-limit.js";
 import { recaptchaMiddleware } from "../lib/recaptcha.js";
 import { sendWebhook, isEventSubscribed } from "../lib/webhooks.js";
 import { sendReceiptEmail } from "../lib/email.js";
@@ -29,30 +31,59 @@ import {
 import { getPayloadForVersion } from "../webhooks/resolver.js";
 import { streamManager } from "../lib/stream-manager.js";
 import {
+  exchangeRateQuoteRequests,
+  exchangeRateQuoteDuration,
+  exchangeRateSlippageApplied,
   paymentCreatedCounter,
   paymentConfirmedCounter,
   paymentConfirmationLatency,
   paymentFailedCounter,
 } from "../lib/metrics.js";
 import { sanitizeMetadataMiddleware } from "../lib/sanitize-metadata.js";
-import { supabase } from "../lib/supabase.js";
+import {
+  resolveAndValidateIssuer,
+  validatePerAssetLimits,
+  validateAllowedIssuers,
+} from "../lib/payment-session-rules.js";
+import { getSupabaseClient } from "../lib/supabase-client.js";
+import {
+  paymentProcessorSessionsTotal,
+  paymentProcessorSessionDuration,
+  paymentProcessorVerificationsTotal,
+  paymentProcessorVerificationDuration,
+  paymentProcessorStatusCacheHits,
+  paymentProcessorStatusCacheMisses,
+  paymentProcessorRefundsTotal,
+} from "../lib/payment-processor-metrics.js";
 import {
   findMatchingPayment,
   findAnyRecentPayment,
   findStrictReceivePaths,
   getNetworkFeeStats,
+  verifyTransactionSignature,
 } from "../lib/stellar.js";
 
 
 const createPaymentRateLimit = createCreatePaymentRateLimit();
+const pathPaymentQuoteRateLimit = createPathPaymentQuoteRateLimit();
 
-const defaultVerifyPaymentRateLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute window
-  max: 30,             // 30 requests per minute per IP (covers 10s polling)
-  message: { error: "Too many verification requests, please try again later." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const defaultVerifyPaymentRateLimit = createVerifyPaymentRateLimit();
+
+function isSignatureVerificationAccepted(result) {
+  if (result === true) {
+    return true;
+  }
+
+  return Boolean(result && typeof result === "object" && result.valid === true);
+}
+
+async function verifyTransactionSignatureIfAvailable(txHash) {
+  if (typeof verifyTransactionSignature !== "function") {
+    return { valid: true, skipped: true };
+  }
+
+  return verifyTransactionSignature(txHash);
+}
 
 
 
@@ -213,45 +244,63 @@ function createPaymentsRouter({
    *         description: Too many requests
    */
   async function createSession(req, res, next) {
+    const sessionStart = Date.now();
     try {
+      const supabase = await getSupabaseClient();
       const body = req.body;
+      const asset = body.asset?.toUpperCase();
       logger.info({ merchantId: req.merchant?.id, amount: body.amount, asset: body.asset }, "DEBUG: createSession started");
 
-      // Per-asset payment limit validation (#153)
-      const limits = req.merchant.payment_limits;
-      if (limits && typeof limits === "object") {
-        const assetLimits = limits[body.asset];
-        if (assetLimits) {
-          if (assetLimits.min !== undefined && body.amount < assetLimits.min) {
-            paymentFailedCounter.inc({ asset: body.asset, reason: "below_min" });
-            return res.status(400).json({
-              error: `Amount is below the minimum for ${body.asset}`,
-              min: assetLimits.min,
-              delta: Number((assetLimits.min - body.amount).toFixed(7)),
-            });
-          }
-          if (assetLimits.max !== undefined && body.amount > assetLimits.max) {
-            paymentFailedCounter.inc({ asset: body.asset, reason: "above_max" });
-            return res.status(400).json({
-              error: `Amount exceeds the maximum for ${body.asset}`,
-              max: assetLimits.max,
-              delta: Number((body.amount - assetLimits.max).toFixed(7)),
-            });
-          }
-        }
+      // Shared business-rule validation (issue #1087) — issuer presence/format.
+      const { assetIssuer, rejection: issuerRejection } = resolveAndValidateIssuer(
+        asset,
+        body.asset_issuer,
+      );
+      if (issuerRejection) {
+        paymentFailedCounter.inc({ asset: body.asset, reason: issuerRejection.reason });
+        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+        paymentProcessorSessionDuration.observe(
+          { asset: body.asset, outcome: "validation_failed" },
+          (Date.now() - sessionStart) / 1000,
+        );
+        return res.status(400).json({ error: issuerRejection.message });
       }
 
-      // Allowed-issuers check: if the merchant has configured a non-empty
-      // allowlist, only those issuer addresses may be used.
-      const allowedIssuers = req.merchant.allowed_issuers;
-      if (Array.isArray(allowedIssuers) && allowedIssuers.length > 0) {
-        if (!body.asset_issuer || !allowedIssuers.includes(body.asset_issuer)) {
-          paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
-          return res.status(400).json({
-            error:
-              "asset_issuer is not in the merchant's list of allowed issuers",
-          });
-        }
+      // Shared business-rule validation (issue #1087) — per-asset limits (#153).
+      const limitRejection = validatePerAssetLimits({
+        rawAsset: body.asset,
+        amount: body.amount,
+        paymentLimits: req.merchant.payment_limits,
+      });
+      if (limitRejection) {
+        paymentFailedCounter.inc({ asset: body.asset, reason: limitRejection.reason });
+        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+        paymentProcessorSessionDuration.observe(
+          { asset: body.asset, outcome: "validation_failed" },
+          (Date.now() - sessionStart) / 1000,
+        );
+        return res.status(400).json({
+          error: limitRejection.message,
+          ...limitRejection.details,
+        });
+      }
+
+      // Shared business-rule validation (issue #1087) — allowed-issuers check:
+      // if the merchant has configured a non-empty allowlist, only those
+      // issuer addresses may be used.
+      const allowedIssuerRejection = validateAllowedIssuers({
+        asset,
+        assetIssuer,
+        allowedIssuers: req.merchant.allowed_issuers,
+      });
+      if (allowedIssuerRejection) {
+        paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
+        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+        paymentProcessorSessionDuration.observe(
+          { asset: body.asset, outcome: "validation_failed" },
+          (Date.now() - sessionStart) / 1000,
+        );
+        return res.status(400).json({ error: allowedIssuerRejection.message });
       }
 
       const isSandbox = body.sandbox === true;
@@ -276,12 +325,12 @@ function createPaymentsRouter({
         id: paymentId,
         merchant_id: req.merchant.id,
         amount: body.amount,
-        asset: body.asset,
-        asset_issuer: body.asset_issuer || null,
+        asset,
+        asset_issuer: assetIssuer || null,
         recipient: body.recipient,
         description: body.description || null,
-        memo: body.memo || null,
-        memo_type: body.memo_type || null,
+        memo: body.message || body.memo || null,
+        memo_type: body.message ? "text" : (body.memo_type || null),
         webhook_url: body.webhook_url || null,
         client_id: body.client_id || null,
         status: "pending",
@@ -297,12 +346,22 @@ function createPaymentsRouter({
 
       if (insertError) {
         insertError.status = 500;
+        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "persistence_failed" });
+        paymentProcessorSessionDuration.observe(
+          { asset: body.asset, outcome: "persistence_failed" },
+          (Date.now() - sessionStart) / 1000,
+        );
         throw insertError;
       }
 
       // Only record production metrics for non-sandbox payments.
       if (!isSandbox) {
         paymentCreatedCounter.inc({ asset: body.asset });
+        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "created" });
+        paymentProcessorSessionDuration.observe(
+          { asset: body.asset, outcome: "created" },
+          (Date.now() - sessionStart) / 1000,
+        );
       }
 
       logger.info({ paymentId: paymentId }, "DEBUG: createSession success");
@@ -324,6 +383,7 @@ function createPaymentsRouter({
 
   router.post("/create-payment", createPaymentRateLimit, recaptchaMiddleware(), validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
   router.post("/sessions", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
+  router.post("/support-transactions", createPaymentRateLimit, validateRequest({ body: paymentZodSchema }), sanitizeMetadataMiddleware, createSession);
 
   /**
    * @swagger
@@ -356,12 +416,15 @@ function createPaymentsRouter({
     validateUuidParam(),
     async (req, res, next) => {
       try {
+        const supabase = await getSupabaseClient();
         // --- Redis read-through cache ---
         const redis = await connectRedisClient();
         const cached = await getCachedPayment(redis, req.params.id);
         if (cached) {
+          paymentProcessorStatusCacheHits.inc();
           return res.json({ payment: cached });
         }
+        paymentProcessorStatusCacheMisses.inc();
 
         const baseFields =
           "id, merchant_id, amount, asset, asset_issuer, recipient, description, memo, memo_type, status, tx_id, metadata, created_at";
@@ -509,7 +572,21 @@ function createPaymentsRouter({
     verifyPaymentRateLimit,
     validateUuidParam(),
     async (req, res, next) => {
+      const verifyStart = Date.now();
+      // Records the granular verification outcome exactly once per attempt
+      // (issue #1088). Skipped for 404s where no asset context exists.
+      let verifyOutcomeRecorded = false;
+      const recordVerificationOutcome = (outcome, asset) => {
+        if (verifyOutcomeRecorded) return;
+        verifyOutcomeRecorded = true;
+        paymentProcessorVerificationsTotal.inc({ asset: asset || "unknown", outcome });
+        paymentProcessorVerificationDuration.observe(
+          { asset: asset || "unknown", outcome },
+          (Date.now() - verifyStart) / 1000,
+        );
+      };
       try {
+        const supabase = await getSupabaseClient();
         let query = supabase
           .from("payments")
           .select(
@@ -538,6 +615,7 @@ function createPaymentsRouter({
         }
 
         if (data.status === "confirmed") {
+          recordVerificationOutcome("already_confirmed", data.asset);
           return res.json({
             status: "confirmed",
             tx_id: data.tx_id,
@@ -554,6 +632,14 @@ function createPaymentsRouter({
           memoType: data.memo_type,
           createdAt: data.created_at,
         });
+
+        if (match) {
+          const signatureResult = await verifyTransactionSignatureIfAvailable(match.transaction_hash);
+          if (!isSignatureVerificationAccepted(signatureResult)) {
+            recordVerificationOutcome("signature_invalid", data.asset);
+            return res.json({ status: "pending" });
+          }
+        }
 
         if (!match) {
           // Check if a payment arrived but with the wrong amount
@@ -588,6 +674,7 @@ function createPaymentsRouter({
               const redis = await connectRedisClient();
               await invalidatePaymentCache(redis, data.id);
 
+              recordVerificationOutcome("underpayment", data.asset);
               return res.status(402).json({
                 status: "failed",
                 reason: "underpayment",
@@ -620,6 +707,7 @@ function createPaymentsRouter({
               const redis = await connectRedisClient();
               await invalidatePaymentCache(redis, data.id);
 
+              recordVerificationOutcome("overpayment", data.asset);
               return res.json({
                 status: "confirmed",
                 tx_id: anyPayment.transaction_hash,
@@ -632,6 +720,7 @@ function createPaymentsRouter({
             }
           }
 
+          recordVerificationOutcome("pending_no_match", data.asset);
           return res.json({ status: "pending" });
         }
 
@@ -646,6 +735,7 @@ function createPaymentsRouter({
           .maybeSingle();
 
         if (existing) {
+          recordVerificationOutcome("tx_claim_conflict", data.asset);
           return res.json({ status: "pending" });
         }
 
@@ -669,6 +759,7 @@ function createPaymentsRouter({
 
         if (updateError) {
           if (updateError.code === "23505") {
+            recordVerificationOutcome("tx_claim_conflict", data.asset);
             return res.json({ status: "pending" }); // another payment claimed this tx
           }
           updateError.status = 500;
@@ -676,6 +767,7 @@ function createPaymentsRouter({
         }
 
         if (!updated) {
+          recordVerificationOutcome("tx_claim_conflict", data.asset);
           return res.json({ status: "pending" }); // already processed
         }
 
@@ -685,6 +777,7 @@ function createPaymentsRouter({
         // Record metrics for confirmation
         paymentConfirmedCounter.inc({ asset: data.asset });
         paymentConfirmationLatency.observe({ asset: data.asset }, latencySeconds);
+        recordVerificationOutcome("confirmed", data.asset);
 
         // Emit real-time event to the merchant's private room (issue #229)
         console.log("DEBUG: confirmed logic started. ID:", data.id);
@@ -771,6 +864,7 @@ function createPaymentsRouter({
           webhook: webhookResult,
         });
       } catch (err) {
+        recordVerificationOutcome("error", err?.asset);
         console.error("VERIFY_ROUTE_ERROR:", err);
         next(err);
       }
@@ -837,69 +931,11 @@ function createPaymentsRouter({
    */
   router.get("/payments", validateRequest({ query: paymentsListQuerySchema }), async (req, res, next) => {
     try {
-      let page = parseInt(req.query.page, 10) || 1;
-      let limit = parseInt(req.query.limit, 10) || 10;
-      const clientId =
-        typeof req.query.client_id === "string" && req.query.client_id.trim()
-          ? req.query.client_id.trim()
-          : null;
-
-      if (page < 1) page = 1;
-      if (limit < 1) limit = 1;
-      if (limit > 100) limit = 100;
-
-      const offset = (page - 1) * limit;
-
-      let countQuery = supabase
-        .from("payments")
-        .select("*", { count: "exact", head: true })
-        .eq("merchant_id", req.merchant.id)
-        .is("deleted_at", null);
-      if (clientId) {
-        countQuery = countQuery.eq("client_id", clientId);
-      }
-      countQuery = applyPaymentFilters(countQuery, req);
-      countQuery = applyMetadataFilters(countQuery, req.query);
-
-      const { count: totalCount, error: countError } = await countQuery;
-
-      if (countError) {
-        countError.status = 500;
-        throw countError;
-      }
-
-      let dataQuery = supabase
-        .from("payments")
-        .select(
-          "id, amount, asset, asset_issuer, recipient, description, client_id, status, tx_id, created_at",
-        )
-        .eq("merchant_id", req.merchant.id)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
-      if (clientId) {
-        dataQuery = dataQuery.eq("client_id", clientId);
-      }
-      dataQuery = applyPaymentFilters(dataQuery, req);
-      dataQuery = applyMetadataFilters(dataQuery, req.query);
-      const { data: payments, error: dataError } = await dataQuery.range(
-        offset,
-        offset + limit - 1,
-      );
-
-      if (dataError) {
-        dataError.status = 500;
-        throw dataError;
-      }
-
-      const totalPages = Math.ceil(totalCount / limit);
+      const result = await paymentService.getMerchantPayments(req.merchant.id, req.query);
 
       res.json({
-        payments: payments || [],
-        total_count: totalCount,
-        total_pages: totalPages,
-        page,
-        limit,
-        ...generatePaginationLinks(req, page, limit, totalPages),
+        ...result,
+        ...generatePaginationLinks(req, result.page, result.limit, result.total_pages),
       });
     } catch (err) {
       next(err);
@@ -947,70 +983,8 @@ function createPaymentsRouter({
    */
   router.get("/metrics/7day", async (req, res, next) => {
     try {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const { data: payments, error } = await supabase
-        .from("payments")
-        .select("amount, created_at, status")
-        .eq("merchant_id", req.merchant.id)
-        .gte("created_at", sevenDaysAgo.toISOString())
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        error.status = 500;
-        throw error;
-      }
-
-      const metricsMap = new Map();
-      let totalVolume = 0;
-      let confirmedCount = 0;
-
-      payments.forEach((payment) => {
-        const date = new Date(payment.created_at).toISOString().split("T")[0];
-        const volume = Number(payment.amount) || 0;
-
-        if (!metricsMap.has(date)) {
-          metricsMap.set(date, { date, volume: 0, count: 0, confirmed_count: 0 });
-        }
-
-        const dayMetric = metricsMap.get(date);
-        dayMetric.volume += volume;
-        dayMetric.count += 1;
-        
-        if (payment.status === "confirmed") {
-          dayMetric.confirmed_count += 1;
-          confirmedCount += 1;
-        }
-        
-        totalVolume += volume;
-      });
-
-      const data = [];
-      for (let i = 6; i >= 0; i -= 1) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split("T")[0];
-
-        if (metricsMap.has(dateStr)) {
-          data.push(metricsMap.get(dateStr));
-        } else {
-          data.push({ date: dateStr, volume: 0, count: 0, confirmed_count: 0 });
-        }
-      }
-
-      const totalPayments = payments.length;
-      const successRate = totalPayments > 0 
-        ? Number(((confirmedCount / totalPayments) * 100).toFixed(1)) 
-        : 0;
-
-      res.json({
-        data,
-        total_volume: Number(totalVolume.toFixed(2)),
-        total_payments: totalPayments,
-        confirmed_count: confirmedCount,
-        success_rate: successRate,
-      });
+      const result = await paymentService.getRollingMetrics(req.merchant.id);
+      res.json(result);
     } catch (err) {
       next(err);
     }
@@ -1104,6 +1078,7 @@ function createPaymentsRouter({
     async (req, res, next) => {
       try {
         const { tx_hash } = req.body;
+        const supabase = await getSupabaseClient();
 
         const { data: payment, error } = await supabase
           .from("payments")
@@ -1132,6 +1107,8 @@ function createPaymentsRouter({
             },
           })
           .eq("id", payment.id);
+
+        paymentProcessorRefundsTotal.inc({ stage: "confirm", outcome: "success" });
 
         res.json({
           status: "refunded",
@@ -1206,12 +1183,17 @@ function createPaymentsRouter({
    */
   router.get(
     "/path-payment-quote/:id",
+    pathPaymentQuoteRateLimit,
     validateUuidParam(),
     validateRequest({ query: pathPaymentQuoteQuerySchema }),
     async (req, res, next) => {
+      const startTime = Date.now();
+      const sourceAsset = req.query.source_asset;
+      const sourceAssetIssuer = req.query.source_asset_issuer || null;
+      const assetLabels = { source_asset: sourceAsset, dest_asset: "pending" };
+
       try {
-        const sourceAsset = req.query.source_asset;
-        const sourceAssetIssuer = req.query.source_asset_issuer || null;
+        const supabase = await getSupabaseClient();
         const sourceAccount = req.query.source_account;
 
         let query = supabase
@@ -1233,7 +1215,22 @@ function createPaymentsRouter({
         }
 
         if (!data) {
+          exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
           return res.status(404).json({ error: "Payment not found" });
+        }
+
+        assetLabels.dest_asset = data.asset;
+
+        if (data.status !== "pending") {
+          exchangeRateQuoteRequests.inc({ ...assetLabels, result: "not_pending" });
+          exchangeRateQuoteDuration.observe(
+            { ...assetLabels, result: "not_pending" },
+            (Date.now() - startTime) / 1000,
+          );
+          return res.status(409).json({
+            error: "Path payment quote is only available for pending payments",
+            status: data.status,
+          });
         }
 
         const sameAsset =
@@ -1241,6 +1238,11 @@ function createPaymentsRouter({
           sourceAssetIssuer === (data.asset_issuer || null);
 
         if (sameAsset) {
+          exchangeRateQuoteRequests.inc({ ...assetLabels, result: "same_asset" });
+          exchangeRateQuoteDuration.observe(
+            { ...assetLabels, result: "same_asset" },
+            (Date.now() - startTime) / 1000,
+          );
           return res.status(400).json({
             error:
               "Source asset is the same as destination asset. Use a direct payment.",
@@ -1268,6 +1270,13 @@ function createPaymentsRouter({
           (1 + SLIPPAGE)
         ).toFixed(7);
 
+        exchangeRateSlippageApplied.inc({ slippage_pct: String(SLIPPAGE) });
+        exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
+        exchangeRateQuoteDuration.observe(
+          { ...assetLabels, result: "success" },
+          (Date.now() - startTime) / 1000,
+        );
+
         res.json({
           source_asset: quote.source_asset_code,
           source_asset_issuer: quote.source_asset_issuer,
@@ -1280,6 +1289,11 @@ function createPaymentsRouter({
           slippage: SLIPPAGE,
         });
       } catch (err) {
+        exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
+        exchangeRateQuoteDuration.observe(
+          { ...assetLabels, result: "error" },
+          (Date.now() - startTime) / 1000,
+        );
         next(err);
       }
     }
@@ -1370,6 +1384,7 @@ function createPaymentsRouter({
    */
   router.delete("/payments/:id", validateUuidParam(), async (req, res, next) => {
     try {
+      const supabase = await getSupabaseClient();
       // First check if payment exists and is not already deleted
       const { data: existing, error: fetchError } = await supabase
         .from("payments")

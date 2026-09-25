@@ -1,16 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import AuthGuard from "@/components/AuthGuard";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
-import NotificationCenter from "@/components/NotificationCenter";
 import PaymentToastListener from "@/components/PaymentToastListener";
 import Sidebar from "@/components/Sidebar";
 import SupportOverlay from "@/components/SupportOverlay";
 import UserNav from "@/components/UserNav";
 import { useHydrateMerchantStore } from "@/lib/merchant-store";
 import { motion } from "framer-motion";
+
+/**
+ * #1189 — Bundle size optimisation:
+ * NotificationCenter (which pulls in framer-motion panel logic) is loaded
+ * dynamically so it does not bloat the initial authenticated-layout bundle.
+ * The bell trigger itself is tiny, so SSR is disabled — it is purely
+ * interactive and only meaningful after hydration.
+ */
+const NotificationCenter = dynamic(
+  () => import("@/components/NotificationCenter"),
+  { ssr: false }
+);
 
 export default function AuthenticatedLayout({
   children,

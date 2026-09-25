@@ -1,17 +1,20 @@
 "use client";
 
-import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { ReactNode } from "react";
+import { ThemeProvider as EnhancedThemeProvider } from "@/lib/theme-context";
 
-export default function ThemeProvider({ children }: { children: ReactNode }) {
+interface ThemeProviderWrapperProps {
+  readonly children: ReactNode;
+}
+
+export default function ThemeProvider({ children }: ThemeProviderWrapperProps) {
   return (
-    <NextThemesProvider
-      attribute="class"
+    <EnhancedThemeProvider
       defaultTheme="system"
       enableSystem={true}
       storageKey="merchant-theme-preference"
     >
       {children}
-    </NextThemesProvider>
+    </EnhancedThemeProvider>
   );
 }

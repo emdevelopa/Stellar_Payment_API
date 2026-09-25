@@ -1,0 +1,43 @@
+{
+  "title": "Filtros",
+  "clearAll": "Limpiar Todos los Filtros",
+  "clearing": "Limpiando…",
+  "applying": "Aplicando",
+  "syncingResults": "Sincronizando…",
+  "applyingToResults": "Aplicando a resultados…",
+  "applyingFilter": "Aplicando filtro…",
+  "search": {
+    "label": "Buscar",
+    "placeholder": "ID o descripción…",
+    "syncLabel": "Aplicando búsqueda a los resultados"
+  },
+  "status": {
+    "label": "Estado",
+    "all": "Todos los Estados",
+    "pending": "Pendiente",
+    "confirmed": "Confirmado",
+    "failed": "Fallido",
+    "refunded": "Reembolsado",
+    "syncLabel": "Aplicando filtro de estado"
+  },
+  "asset": {
+    "label": "Activo",
+    "all": "Todos",
+    "syncLabel": "Aplicando filtro de activo"
+  },
+  "dateRange": {
+    "label": "Rango de Fechas",
+    "from": "Desde",
+    "to": "Hasta",
+    "fromSyncLabel": "Aplicando fecha desde",
+    "toSyncLabel": "Aplicando fecha hasta"
+  },
+  "filterCount": "{count} filtro{count, plural, one {} other {s}} activo{count, plural, one {} other {s}}",
+  "noFilters": "",
+  "ariaLabel": "Limpiar búsqueda",
+  "ariaLabelClearFilter": "Limpiar filtro de {filterName}",
+  "ariaLabelAssetButton": "Filtro de activo {asset}",
+  "closeFilters": "Cerrar filtros",
+  "activeFiltersAnnounce": "{count} filtro{count, plural, one {} other {s}} activo{count, plural, one {} other {s}}",
+  "clearAllAriaLabel": "Limpiar todos los {count} filtro{count, plural, one {} other {s}} activo{count, plural, one {} other {s}}"
+}

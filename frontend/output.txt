@@ -1,0 +1,58 @@
+C:\Users\USER\OneDrive\Desktop\Open Source Projects\Stellar_Payment_API\frontend
+├── content
+|  └── docs
+├── instrumentation.ts
+├── messages
+|  ├── en.json
+|  ├── es.json
+|  └── pt.json
+├── next-env.d.ts
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── PAY_WITH_WALLET.md
+├── playwright.config.ts
+├── pnpm-lock.yaml
+├── postcss.config.js
+├── public
+|  ├── icons
+|  ├── manifest.json
+|  ├── sw.js
+|  ├── workbox-3c9d0171.js
+|  └── workbox-f1770938.js
+├── sentry.client.config.ts
+├── sentry.server.config.ts
+├── SENTRY_SETUP.md
+├── src
+|  ├── app
+|  ├── components
+|  ├── hooks
+|  ├── i18n
+|  ├── lib
+|  ├── types
+|  ├── utils
+|  └── vitest-setup-types.d.ts
+├── tailwind.config.js
+├── test-mdx.js
+├── test-results
+|  ├── activity-feed-hover-Activi-229ee-ork-for-keyboard-navigation-desktop-chrome
+|  ├── activity-feed-hover-Activi-229ee-ork-for-keyboard-navigation-mobile-chrome
+|  ├── activity-feed-hover-Activi-3e5d2-es-apply-Pluto-theme-colors-desktop-chrome
+|  ├── activity-feed-hover-Activi-3e5d2-es-apply-Pluto-theme-colors-mobile-chrome
+|  ├── activity-feed-hover-Activi-8b513-pply-theme-colors-and-scale-desktop-chrome
+|  ├── activity-feed-hover-Activi-8b513-pply-theme-colors-and-scale-mobile-chrome
+|  ├── activity-feed-hover-Activi-8d327--for-interactivity-feedback-desktop-chrome
+|  ├── activity-feed-hover-Activi-8d327--for-interactivity-feedback-mobile-chrome
+|  ├── activity-feed-hover-Activi-b53ff-es-apply-Pluto-theme-colors-desktop-chrome
+|  ├── activity-feed-hover-Activi-b53ff-es-apply-Pluto-theme-colors-mobile-chrome
+|  ├── activity-feed-hover-Activi-d1151-pply-theme-colors-and-scale-desktop-chrome
+|  └── activity-feed-hover-Activi-d1151-pply-theme-colors-and-scale-mobile-chrome
+├── tests
+|  ├── e2e
+|  └── transaction-history-hover.spec.ts
+├── tsconfig.json
+├── tsconfig.tsbuildinfo
+└── vitest.config.ts
+
+directory: 28 file: 26
+

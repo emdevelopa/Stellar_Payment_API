@@ -135,7 +135,7 @@ export default function CopyButton({ text, className = "" }: CopyButtonProps) {
         type="button"
         onClick={handleCopy}
         aria-label={t("ariaLabel")}
-        className={`relative overflow-hidden rounded-lg border border-white/10 bg-black/20 p-1.5 text-slate-300 transition-all hover:border-mint/40 hover:text-mint active:scale-95 ${className}`}
+        className={`relative overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-white p-1.5 text-[var(--text-secondary)] transition-all duration-300 hover:border-[var(--pluto-300)] hover:text-[var(--pluto-600)] hover:bg-[var(--pluto-50)]/50 active:scale-95 ${className}`}
         whileTap={{ scale: 0.95 }}
         whileHover={{ scale: 1.05 }}
         variants={glitchButtonVariants}
@@ -234,13 +234,15 @@ export default function CopyButton({ text, className = "" }: CopyButtonProps) {
       <AnimatePresence>
         {copied && (
           <motion.span
-            initial={{ opacity: 0, y: 10, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.8 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-mint/30 bg-tide px-2 py-1 font-mono text-xs text-mint shadow-lg"
+            initial={{ opacity: 0, y: 8, scale: 0.9, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
+            exit={{ opacity: 0, y: -8, scale: 0.9, x: "-50%" }}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+            className="absolute -top-11 left-1/2 whitespace-nowrap rounded-xl border border-[var(--pluto-100)] bg-white/95 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-600)] shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
           >
             {t("copied")}
+            {/* Arrow */}
+            <div className="absolute top-full left-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 border-b border-r border-[var(--pluto-100)] bg-white/95" />
           </motion.span>
         )}
       </AnimatePresence>

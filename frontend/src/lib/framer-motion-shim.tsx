@@ -1,4 +1,4 @@
-import { createElement, Fragment, type ReactNode } from "react";
+import { createElement, Fragment, useEffect, useState, type ReactNode } from "react";
 
 type MotionProps = {
   children?: ReactNode;
@@ -58,4 +58,21 @@ export const motion = new Proxy(
 
 export function AnimatePresence({ children }: { children?: ReactNode }) {
   return <Fragment>{children}</Fragment>;
+}
+
+export function useReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    updatePreference();
+    mediaQuery.addEventListener("change", updatePreference);
+    return () => mediaQuery.removeEventListener("change", updatePreference);
+  }, []);
+
+  return prefersReducedMotion;
 }

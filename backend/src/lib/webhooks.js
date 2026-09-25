@@ -2,7 +2,22 @@ import 'dotenv/config';
 import { createHmac, timingSafeEqual } from "crypto";
 import { promises as dns } from "dns";
 import { isIP } from "net";
-import { supabase } from "./supabase.js";
+import {
+  webhookDispatchAttemptsTotal,
+  webhookDispatchBlockedTotal,
+  webhookDispatchDuration,
+  webhookDispatchRetriesTotal,
+} from "./metrics.js";
+
+let supabaseClientPromise;
+
+async function getSupabaseClient() {
+  if (!supabaseClientPromise) {
+    supabaseClientPromise = import("./supabase.js").then((module) => module.supabase);
+  }
+
+  return supabaseClientPromise;
+}
 
 /**
  * Checks if a given IP address is private or loopback.
@@ -75,6 +90,23 @@ export async function validateWebhookUrl(url) {
 }
 
 const RETRY_DELAYS_MS = [10_000, 30_000, 60_000]; // 10s, 30s, 60s
+
+function getWebhookEventType(payload) {
+  return String(payload?.type || payload?.event_type || payload?.event || "unknown");
+}
+
+function recordWebhookAttempt(eventType, result, statusCode, startedAt) {
+  webhookDispatchAttemptsTotal.inc({
+    event_type: eventType,
+    result,
+    status_code: String(statusCode),
+  });
+  webhookDispatchDuration.observe(
+    { event_type: eventType, result },
+    (Date.now() - startedAt) / 1000,
+  );
+}
+
 
 /**
  * Signs a serialized payload string with HMAC-SHA256 using the shared secret.
@@ -154,6 +186,7 @@ async function logWebhookDelivery(paymentId, statusCode, responseBody, requestPa
   if (!paymentId) return;
 
   try {
+    const supabase = await getSupabaseClient();
     await supabase.from("webhook_delivery_logs").insert({
       payment_id: paymentId,
       status_code: statusCode,
@@ -167,21 +200,36 @@ async function logWebhookDelivery(paymentId, statusCode, responseBody, requestPa
 }
 
 async function attempt(url, payload, headers, paymentId) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload)
-  });
+  const eventType = getWebhookEventType(payload);
+  const startedAt = Date.now();
 
-  const text = await response.text().catch(() => "");
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
 
-  // Log the delivery attempt with request details
-  await logWebhookDelivery(paymentId, response.status, text, payload, headers);
+    const text = await response.text().catch(() => "");
 
-  return { ok: response.ok, status: response.status, body: text };
+    // Log the delivery attempt with request details
+    await logWebhookDelivery(paymentId, response.status, text, payload, headers);
+    recordWebhookAttempt(
+      eventType,
+      response.ok ? "success" : "failure",
+      response.status,
+      startedAt,
+    );
+
+    return { ok: response.ok, status: response.status, body: text };
+  } catch (err) {
+    recordWebhookAttempt(eventType, "error", 0, startedAt);
+    throw err;
+  }
 }
 
 function scheduleRetries(url, payload, headers, paymentId) {
+  const eventType = getWebhookEventType(payload);
   let attemptIndex = 0;
 
   function retry() {
@@ -189,6 +237,7 @@ function scheduleRetries(url, payload, headers, paymentId) {
       if (!result.ok && attemptIndex < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[attemptIndex];
         attemptIndex++;
+        webhookDispatchRetriesTotal.inc({ event_type: eventType, reason: "status" });
         console.log(`Webhook retry ${attemptIndex} for ${url} in ${delay}ms`);
         setTimeout(retry, delay);
       }
@@ -196,6 +245,7 @@ function scheduleRetries(url, payload, headers, paymentId) {
       if (attemptIndex < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[attemptIndex];
         attemptIndex++;
+        webhookDispatchRetriesTotal.inc({ event_type: eventType, reason: "error" });
         console.warn(`Webhook retry ${attemptIndex} (error) for ${url} in ${delay}ms:`, err.message);
         setTimeout(retry, delay);
       }
@@ -265,7 +315,12 @@ export function isEventSubscribed(merchant, eventType) {
  * @param {object}  [customHeaders={}] Merchant-defined extra headers.
  */
 export async function sendWebhook(url, payload, secret, paymentId = null, customHeaders = {}) {
-  if (!url) return { ok: false, skipped: true };
+  const eventType = getWebhookEventType(payload);
+
+  if (!url) {
+    webhookDispatchBlockedTotal.inc({ event_type: eventType, reason: "missing_url" });
+    return { ok: false, skipped: true };
+  }
 
   const signingSecret = secret || process.env.WEBHOOK_SECRET || "";
   const rawBody = JSON.stringify(payload);
@@ -287,6 +342,7 @@ export async function sendWebhook(url, payload, secret, paymentId = null, custom
   const isValid = await validateWebhookUrl(url);
   if (!isValid) {
     console.warn(`Webhook to ${url} blocked: Private or invalid IP address detected (SSRF protection).`);
+    webhookDispatchBlockedTotal.inc({ event_type: eventType, reason: "ssrf_protection" });
     return { ok: false, error: "Forbidden: Internal network access is blocked", skipped: false };
   }
 

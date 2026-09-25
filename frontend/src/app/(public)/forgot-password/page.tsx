@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
     <GuestGuard>
       <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-10 px-6 py-24 bg-white text-[#0A0A0A]">
         <header className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#6B6B6B]">
+          <p className="text-xs font-bold uppercase tracking-[0.4em] text-[#6B6B6B]">
             Account Recovery
           </p>
           <h1 className="mt-4 text-5xl font-serif font-black uppercase tracking-tight">
@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
         <section className="rounded-[2rem] border border-[#E8E8E8] bg-white p-8 shadow-[0_20px_60px_rgb(0,0,0,0.05)]">
           {!submitted ? (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">
+              <label htmlFor="email" className="text-xs font-bold uppercase tracking-[0.2em] text-[#6B6B6B]">
                 Email Address
               </label>
               <input
@@ -46,13 +46,13 @@ export default function ForgotPasswordPage() {
               />
               <button
                 type="submit"
-                className="mt-2 flex h-14 w-full items-center justify-center rounded-2xl bg-[var(--pluto-500)] text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-[var(--pluto-600)]"
+                className="mt-2 flex h-14 w-full items-center justify-center rounded-2xl bg-[var(--pluto-500)] text-xs font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-[var(--pluto-600)]"
               >
                 Continue
               </button>
             </form>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4" role="status">
               <p className="rounded-2xl border border-[#DDE7DD] bg-[#F6FBF6] px-4 py-3 text-sm font-medium text-[#235B23]">
                 Request received. If an account exists for {email}, recovery instructions will be sent.
               </p>
@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
           )}
         </section>
 
-        <footer className="text-center text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">
+        <footer className="text-center text-xs font-bold uppercase tracking-widest text-[#6B6B6B]">
           Remembered your password?{" "}
           <Link href="/login" className="text-[#0A0A0A] underline underline-offset-4 hover:text-black">
             Back to login

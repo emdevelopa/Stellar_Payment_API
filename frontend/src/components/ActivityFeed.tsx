@@ -21,8 +21,6 @@ interface Payment {
   created_at: string;
 }
 
-const SKELETON_ITEMS = [0, 1, 2];
-
 interface PaymentRowProps {
   payment: Payment;
   index: number;
@@ -44,7 +42,7 @@ const PaymentRow = memo(function PaymentRow({
     () => formatAmount(payment.amount, locale, hideCents),
     [payment.amount, locale, hideCents],
   );
-  const rowClassName = `group transition-all 150ms ease cursor-default hover:bg-[#F0F0F0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4a6fa5] ${index % 2 === 0 ? "bg-white" : "bg-[#F9F9F9]"}`;
+  const rowClassName = `group cursor-pointer outline-none transition-all duration-200 ease-in-out hover:bg-pluto-50 hover:shadow-sm active:bg-pluto-100 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pluto-500 ${index % 2 === 0 ? "bg-white" : "bg-[#F9F9F9]"}`;
   const statusClassName = `inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-tight ${
     payment.status === "confirmed"
       ? "bg-[#0A0A0A] text-white"
@@ -59,7 +57,7 @@ const PaymentRow = memo(function PaymentRow({
       className={rowClassName}
       aria-label={`Payment ${payment.description || "Transaction"} for ${formattedAmount} ${payment.asset}`}
     >
-      <td className="px-6 py-4">
+      <td className="border-l-0 border-transparent px-6 py-4 transition-all duration-200 group-hover:border-l-2 group-hover:border-l-pluto-500">
         <div className={statusClassName} aria-label={`Status: ${payment.status}`}>
           {payment.status}
         </div>
@@ -185,8 +183,6 @@ export default function ActivityFeed() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        {SKELETON_ITEMS.map((i) => (
-          <div key={i} className="h-16 w-full rounded-lg bg-[#F5F5F5]" />
         {[...Array(3)].map((_, i) => (
           <div key={i} className="h-14 w-full rounded-lg bg-[#F5F5F5] sm:h-16" />
         ))}
@@ -232,24 +228,36 @@ export default function ActivityFeed() {
         </div>
       </div>
 
+      {/* ── Mobile card list (visible below sm breakpoint) ── */}
       <div className="space-y-3 p-4 sm:hidden">
         {payments.map((payment, i) => (
           <div
             key={payment.id}
-            className={`rounded-lg border p-3 ${i % 2 === 0 ? "border-[#E8E8E8] bg-white" : "border-[#ECECEC] bg-[#F9F9F9]"}`}
+            /* Hover: lift with Pluto-50 tint + left accent border.
+               Active: scale-down for tactile tap feedback.
+               Focus-visible: keyboard-navigable with Pluto-500 ring. */
+            tabIndex={0}
+            role="row"
+            aria-label={`Payment ${payment.description || "Transaction"} for ${formatAmount(payment.amount, locale, hideCents)} ${payment.asset}`}
+            className={`rounded-lg border p-3 outline-none
+              transition-all duration-200 ease-in-out
+              hover:border-l-2 hover:border-l-pluto-500 hover:bg-pluto-50 hover:shadow-sm
+              active:scale-[0.985] active:bg-pluto-100
+              focus-visible:ring-2 focus-visible:ring-pluto-500 focus-visible:ring-offset-2
+              cursor-pointer
+              ${i % 2 === 0 ? "border-[#E8E8E8] bg-white" : "border-[#ECECEC] bg-[#F9F9F9]"}`}
           >
             <div className="mb-2 flex items-start justify-between gap-3">
               <p className="truncate text-sm font-semibold text-[#0A0A0A]">
                 {payment.description || "Transaction"}
               </p>
               <div
-                className={`shrink-0 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-tight ${
-                  payment.status === "confirmed"
+                className={`shrink-0 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-tight ${payment.status === "confirmed"
                     ? "bg-[#0A0A0A] text-white"
                     : payment.status === "pending"
                       ? "bg-[#F5F5F5] text-[#6B6B6B] border border-[#E8E8E8]"
                       : "bg-red-50 text-red-600 border border-red-100"
-                }`}
+                  }`}
                 aria-label={`Status: ${payment.status}`}
               >
                 {payment.status}
@@ -271,7 +279,7 @@ export default function ActivityFeed() {
       </div>
 
       <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-separate border-spacing-0">
           <thead>
             <tr className="bg-[#F9F9F9] border-b border-[#E8E8E8]">
               <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">

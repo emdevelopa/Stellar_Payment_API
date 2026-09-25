@@ -31,7 +31,13 @@ vi.mock('stellar-sdk', () => {
     })
   }))
 
-  return { Asset: MockAsset, Horizon: { Server: MockServer } }
+  return {
+    Asset: MockAsset,
+    Horizon: { Server: MockServer },
+    StrKey: {
+      isValidEd25519PublicKey: vi.fn((value) => typeof value === "string" && value.startsWith("G") && value.length === 56),
+    },
+  }
 })
 
 import { findMatchingPayment, getNetworkFeeStats } from './stellar.js'

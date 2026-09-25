@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import express from "express";
+import request from "supertest";
 
 const eq = vi.fn();
 const update = vi.fn(() => ({ eq }));
@@ -112,5 +114,38 @@ describe("POST /api/merchants/rotate-webhook-secret", () => {
     const responsePayload = res.json.mock.calls[0][0];
     expect(responsePayload.grace_period_hours).toBe(2);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsigned requests before rotating the secret", async () => {
+    const { default: createMerchantsRouter } = await import("./merchants.js");
+    const app = express();
+    app.use(express.json());
+    app.use("/api", createMerchantsRouter());
+
+    const response = await request(app)
+      .post("/api/merchants/rotate-webhook-secret")
+      .send({});
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: "Missing x-api-key header" });
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("merchant route authentication", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("protects webhook settings behind API key auth", async () => {
+    const { default: createMerchantsRouter } = await import("./merchants.js");
+    const app = express();
+    app.use(express.json());
+    app.use("/api", createMerchantsRouter());
+
+    const response = await request(app).get("/api/webhook-settings");
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: "Missing x-api-key header" });
   });
 });

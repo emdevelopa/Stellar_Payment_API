@@ -14,14 +14,21 @@ export default function PaymentsTabs() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Dashboard tab switcher: Payments vs Development Logs */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div
+        className="flex flex-wrap items-center gap-3"
+        role="tablist"
+        aria-label="Payments and development logs"
+      >
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               type="button"
+              role="tab"
+              aria-selected={isActive}
+              id={`activity-tab-${tab.id}`}
+              aria-controls={`activity-panel-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
               className={`rounded-full border px-4 py-1.5 text-xs font-semibold tracking-[0.18em] transition ${
                 isActive
@@ -35,7 +42,13 @@ export default function PaymentsTabs() {
         })}
       </div>
 
-      {activeTab === "payments" ? <RecentPayments /> : <WebhookLogs />}
+      <div
+        role="tabpanel"
+        id={`activity-panel-${activeTab}`}
+        aria-labelledby={`activity-tab-${activeTab}`}
+      >
+        {activeTab === "payments" ? <RecentPayments /> : <WebhookLogs />}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,23 @@
+{
+  "loadingTheme": "Loading theme settings",
+  "errorCleared": "Error cleared. Attempting to toggle contrast.",
+  "switchingTo": "Switching to {theme} theme.",
+  "themeChanged": "Theme successfully changed to {theme}.",
+  "themeError": "Failed to toggle theme. Please try again.",
+  "currentTheme": "Current theme: {theme}",
+  "systemTheme": "System ({theme})",
+  "ariaError": "Contrast toggle with error, press to retry switching theme",
+  "ariaLabel": "Accessibility Contrast Toggle, current theme: {theme}, press to switch to next theme",
+  "errorTitle": "Theme error: {error}. Press to retry.",
+  "titleSystem": "Theme: System ({theme})",
+  "description": "Use this button to cycle through light, dark, and system themes. The system theme follows your device preference. Press Space or Enter to activate.",
+  "theme": {
+    "light": "light",
+    "dark": "dark",
+    "system": "system"
+  },
+  "title": {
+    "light": "Theme: Light",
+    "dark": "Theme: Dark"
+  }
+}

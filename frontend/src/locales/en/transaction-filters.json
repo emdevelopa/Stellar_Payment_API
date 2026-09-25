@@ -1,0 +1,43 @@
+{
+  "title": "Filters",
+  "clearAll": "Clear All Filters",
+  "clearing": "Clearing…",
+  "applying": "Applying",
+  "syncingResults": "Syncing…",
+  "applyingToResults": "Applying to results…",
+  "applyingFilter": "Applying filter…",
+  "search": {
+    "label": "Search",
+    "placeholder": "ID or description…",
+    "syncLabel": "Applying search to results"
+  },
+  "status": {
+    "label": "Status",
+    "all": "All Statuses",
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "failed": "Failed",
+    "refunded": "Refunded",
+    "syncLabel": "Applying status filter"
+  },
+  "asset": {
+    "label": "Asset",
+    "all": "All",
+    "syncLabel": "Applying asset filter"
+  },
+  "dateRange": {
+    "label": "Date Range",
+    "from": "From",
+    "to": "To",
+    "fromSyncLabel": "Applying date from",
+    "toSyncLabel": "Applying date to"
+  },
+  "filterCount": "{count} filter{count, plural, one {} other {s}} active",
+  "noFilters": "",
+  "ariaLabel": "Clear search",
+  "ariaLabelClearFilter": "Clear {filterName} filter",
+  "ariaLabelAssetButton": "{asset} asset filter",
+  "closeFilters": "Close filters",
+  "activeFiltersAnnounce": "{count} filter{count, plural, one {} other {s}} active",
+  "clearAllAriaLabel": "Clear all {count} active filter{count, plural, one {} other {s}}"
+}

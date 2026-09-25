@@ -2,14 +2,9 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  getAnchorServices,
-  authenticateWithAnchor,
-  initiateWithdrawal,
-} from "@/lib/stellar";
-import { signWithFreighter, getFreighterPublicKey } from "@/lib/freighter";
 import { toast } from "sonner";
 import { Spinner } from "@/components/ui/Spinner";
+import { useSep24AnchorFlow } from "@/hooks/useSep24AnchorFlow";
 
 interface WithdrawalModalProps {
   isOpen: boolean;
@@ -32,59 +27,26 @@ export default function WithdrawalModal({
   isOpen,
   onClose,
 }: WithdrawalModalProps) {
-  const [step, setStep] = useState<"SELECT" | "AUTH" | "INTERACTIVE">("SELECT");
-  const [loading, setLoading] = useState(false);
-  const [interactiveUrl, setInteractiveUrl] = useState<string | null>(null);
+  const { step, isBusy, interactiveUrl, start, reset: resetFlow } = useSep24AnchorFlow({
+    networkPassphrase: "Test SDF Network ; September 2015",
+  });
   const [anchorDomain, setAnchorDomain] = useState(DEFAULT_ANCHOR);
   const [selectedAsset, setSelectedAsset] = useState(SUPPORTED_ASSETS[0]);
 
   const handleStartWithdrawal = async () => {
-    setLoading(true);
     try {
-      const publicKey = await getFreighterPublicKey();
-
-      // 1. Discovery
-      const services = await getAnchorServices(anchorDomain);
-      if (!services.webAuthEndpoint || !services.transferServer) {
-        throw new Error("Anchor does not support SEP-0024 or SEP-0010");
-      }
-
-      // 2. Auth (SEP-0010)
-      setStep("AUTH");
-      const jwt = await authenticateWithAnchor(
-        publicKey,
-        services.webAuthEndpoint,
-        async (xdr) => {
-          const res = await signWithFreighter(
-            xdr,
-            "Test SDF Network ; September 2015",
-          );
-          return res.signedXDR;
-        },
-      );
-
-      // 3. Initiate (SEP-0024)
-      const url = await initiateWithdrawal(
-        services.transferServer,
-        jwt,
-        selectedAsset.code,
-        publicKey,
-      );
-
-      setInteractiveUrl(url);
-      setStep("INTERACTIVE");
+      await start({
+        anchorDomain,
+        assetCode: selectedAsset.code,
+        direction: "withdraw",
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Withdrawal failed");
-      setStep("SELECT");
-    } finally {
-      setLoading(false);
     }
   };
 
   const reset = () => {
-    setStep("SELECT");
-    setInteractiveUrl(null);
-    setLoading(false);
+    resetFlow();
   };
 
   if (!isOpen) return null;
@@ -142,7 +104,7 @@ export default function WithdrawalModal({
 
           {/* Content */}
           <div className="p-8">
-            {step === "SELECT" && (
+            {step === "IDLE" && (
               <div className="flex flex-col gap-6">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -185,10 +147,10 @@ export default function WithdrawalModal({
 
                 <button
                   onClick={handleStartWithdrawal}
-                  disabled={loading}
+                  disabled={isBusy}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-4 text-sm font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                 >
-                  {loading ? (
+                  {isBusy ? (
                     <>
                       <Spinner size="sm" className="text-black" />
                       Processing...
@@ -200,7 +162,7 @@ export default function WithdrawalModal({
               </div>
             )}
 
-            {step === "AUTH" && (
+            {(step === "CONNECTING" || step === "AUTH" || step === "SUBMITTING") && (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="relative mb-6">
                   <div className="h-20 w-20 animate-ping rounded-full bg-accent/20" />
@@ -216,19 +178,18 @@ export default function WithdrawalModal({
               </div>
             )}
 
-            {step === "INTERACTIVE" && interactiveUrl && (
+            {step === "READY" && interactiveUrl && (
               <div className="h-[500px] w-full overflow-hidden rounded-xl border border-white/10 bg-white/5">
                 <iframe
                   src={interactiveUrl}
                   className="h-full w-full"
-                  onLoad={() => setLoading(false)}
                 />
               </div>
             )}
           </div>
 
           {/* Footer Info */}
-          {step !== "INTERACTIVE" && (
+          {step !== "READY" && (
             <div className="bg-white/[0.02] p-6 text-center">
               <p className="text-xs text-slate-500">
                 Secured by Stellar Network • SEP-0024 Standard

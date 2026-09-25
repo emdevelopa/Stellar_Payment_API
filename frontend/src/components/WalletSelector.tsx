@@ -173,8 +173,8 @@ export default function WalletSelector({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-bold text-white">{t("chooseWallet")}</p>
-        <p className="mt-0.5 text-xs text-slate-400">{t("description")}</p>
+        <p className="text-sm font-bold text-[#0A0A0A]">{t("chooseWallet")}</p>
+        <p className="mt-0.5 text-xs text-[#6B6B6B]">{t("description")}</p>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -215,16 +215,16 @@ export default function WalletSelector({
               {/* Label */}
               <div className="flex flex-1 flex-col gap-0.5">
                 {isConnecting ? (
-                  <span className="flex items-center gap-2 text-sm font-bold text-white">
+                  <span className="flex items-center gap-2 text-sm font-bold text-[#0A0A0A]">
                     <Spinner size="sm" />
                     {isWc ? t("walletConnectWaiting") : "Connecting…"}
                   </span>
                 ) : (
                   <>
-                    <span className="text-sm font-bold text-white transition-colors group-hover:text-mint">
+                    <span className="text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]">
                       {p.name}
                     </span>
-                    <span className="text-[10px] font-medium text-slate-500">
+                    <span className="text-[10px] font-medium text-[#6B6B6B]">
                       {isDisabled
                         ? isWc
                           ? t("noProjectId")
@@ -259,13 +259,13 @@ export default function WalletSelector({
       {/* WalletConnect QR */}
       {wcUri && (
         <div
-          className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-6"
+          className="flex flex-col items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-[#F9F9F9] p-6"
           aria-live="polite"
         >
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#6B6B6B]">
             {t("scanTitle")}
           </p>
-          <div className="rounded-xl bg-white p-3 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+          <div className="rounded-xl bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-[#E8E8E8]">
             <QRCodeSVG
               value={wcUri}
               size={200}
@@ -274,7 +274,7 @@ export default function WalletSelector({
               bgColor="#ffffff"
             />
           </div>
-          <p className="text-center text-[10px] text-slate-500">
+          <p className="text-center text-[10px] text-[#6B6B6B] font-medium">
             {t("scanDescription")}
           </p>
         </div>

@@ -13,12 +13,16 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     }
   });
 
-  // Track whether this is the first render to avoid writing the initial value
   const isFirstRender = useRef(true);
+  const skipNextWrite = useRef(false);
 
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
+      return;
+    }
+    if (skipNextWrite.current) {
+      skipNextWrite.current = false;
       return;
     }
     try {
@@ -28,5 +32,11 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     }
   }, [key, value]);
 
-  return [value, setValue] as const;
+  const removeItem = () => {
+    skipNextWrite.current = true;
+    localStorage.removeItem(key);
+    setValue(initialValue);
+  };
+
+  return [value, setValue, removeItem] as const;
 }

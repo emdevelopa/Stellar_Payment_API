@@ -43,9 +43,35 @@ module.exports = {
           "50%": { backgroundColor: "rgba(34, 197, 94, 0.15)" },
           "100%": { backgroundColor: "transparent" },
         },
+        shimmer: {
+          "0%": { backgroundPosition: "200% center" },
+          "100%": { backgroundPosition: "-200% center" },
+        },
+        "onboarding-fill": {
+          from: { transform: "scaleX(0)" },
+          to: { transform: "scaleX(1)" },
+        },
+        "onboarding-fade-up": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "onboarding-check-pop": {
+          "0%": { transform: "scale(0)", opacity: "0" },
+          "70%": { transform: "scale(1.15)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        "onboarding-spin": {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(360deg)" },
+        },
       },
       animation: {
         "payment-confirmed": "payment-confirmed 1.2s ease-out forwards",
+        shimmer: "shimmer 1.6s ease-in-out infinite",
+        "onboarding-fill": "onboarding-fill 0.55s cubic-bezier(0.16,1,0.3,1) forwards",
+        "onboarding-fade-up": "onboarding-fade-up 0.3s ease-out forwards",
+        "onboarding-check-pop": "onboarding-check-pop 0.35s cubic-bezier(0.16,1,0.3,1) forwards",
+        "onboarding-spin": "onboarding-spin 0.9s linear infinite",
       },
       backgroundColor: {
         dark: "#000000",

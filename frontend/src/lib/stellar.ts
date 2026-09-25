@@ -234,6 +234,39 @@ export async function initiateWithdrawal(
   return data.url;
 }
 
+/**
+ * SEP-0024: Initiate a hosted deposit (fiat → Stellar token onramp) to get the interactive URL
+ */
+export async function initiateDeposit(
+  transferServer: string,
+  jwt: string,
+  assetCode: string,
+  account: string,
+  amount?: string
+): Promise<string> {
+  const formData = new FormData();
+  formData.append("asset_code", assetCode);
+  formData.append("account", account);
+  if (amount) {
+    formData.append("amount", amount);
+  }
+
+  const res = await fetch(`${transferServer}/transactions/deposit/interactive`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+    },
+    body: formData,
+  });
+
+  const data = await res.json();
+  if (!data.url) {
+    throw new Error("Failed to initiate deposit: No URL returned");
+  }
+
+  return data.url;
+}
+
 export interface AssetBalance {
   code: string;
   issuer: string | null;

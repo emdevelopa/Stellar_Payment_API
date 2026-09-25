@@ -72,7 +72,7 @@ function AssetBadge({
     return (
       <span
         aria-hidden="true"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-white/15 via-mint/20 to-mint/40 text-mint shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#0A0A0A] to-[#6B6B6B] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
       >
         <svg
           viewBox="0 0 24 24"
@@ -116,11 +116,11 @@ const STATUS_MAP: Record<string, { label: string; classes: string }> = {
   },
   confirmed: {
     label: "Confirmed",
-    classes: "bg-mint/10 text-mint border border-mint/30",
+    classes: "bg-[var(--pluto-500)]/15 text-[var(--pluto-400)] border border-[var(--pluto-500)]/30",
   },
   completed: {
     label: "Completed",
-    classes: "bg-green-500/15 text-green-400 border border-green-500/30",
+    classes: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
   },
   failed: {
     label: "Failed",
@@ -420,7 +420,7 @@ export default function PaymentDetailModal({
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 p-6">
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-mint">
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-[var(--pluto-400)]">
               Payment Details
             </p>
             <p className="mt-1 font-mono text-xs text-slate-500">
@@ -584,7 +584,7 @@ export default function PaymentDetailModal({
                         href={`${EXPLORER_BASE}/tx/${payment.tx_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 truncate font-mono text-sm text-mint underline underline-offset-2 hover:text-glow"
+                        className="flex-1 truncate font-mono text-sm text-[var(--pluto-400)] underline underline-offset-2 hover:text-white"
                       >
                         {payment.tx_id}
                       </a>
@@ -657,7 +657,7 @@ export default function PaymentDetailModal({
                       type="button"
                       onClick={handlePay}
                       disabled={isProcessing}
-                      className="group relative flex h-12 w-full items-center justify-center rounded-xl bg-mint font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
+                      className="group relative flex h-12 w-full items-center justify-center rounded-xl bg-[var(--pluto-500)] font-bold text-white transition-all hover:bg-[var(--pluto-600)] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isProcessing ? (
                         <span className="flex items-center gap-2">
@@ -685,7 +685,7 @@ export default function PaymentDetailModal({
                       ) : (
                         `Pay with ${activeProvider!.name}`
                       )}
-                      <div className="absolute inset-0 -z-10 bg-mint/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
+                      <div className="absolute inset-0 -z-10 bg-[var(--pluto-500)]/20 opacity-0 blur-xl transition-opacity group-hover:opacity-100" />
                     </button>
                   ) : (
                     <WalletSelector
@@ -698,8 +698,8 @@ export default function PaymentDetailModal({
 
               {/* ── Status messages ── */}
               {isSettled && (
-                <div className="rounded-xl border border-mint/30 bg-mint/5 p-4 text-center">
-                  <p className="text-sm font-semibold text-mint">
+                <div className="rounded-xl border border-[var(--pluto-500)]/30 bg-[var(--pluto-500)]/5 p-4 text-center">
+                  <p className="text-sm font-semibold text-[var(--pluto-400)]">
                     This payment has been received.
                   </p>
                   <p className="mt-1 text-xs text-slate-400">

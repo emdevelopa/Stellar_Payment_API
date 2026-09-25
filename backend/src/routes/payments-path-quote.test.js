@@ -9,7 +9,12 @@ const { findStrictReceivePaths, supabaseFrom } = vi.hoisted(() => ({
 vi.mock("../lib/stellar.js", () => ({
     findStrictReceivePaths,
     findMatchingPayment: vi.fn(),
+    findAnyRecentPayment: vi.fn(),
     createRefundTransaction: vi.fn(),
+    getNetworkFeeStats: vi.fn(),
+    isValidStellarPublicKey: vi.fn(() => true),
+    validateMemo: vi.fn(() => ({ valid: true })),
+    verifyTransactionSignature: vi.fn(),
 }));
 
 vi.mock("../lib/supabase.js", () => ({
@@ -156,6 +161,42 @@ describe("GET /api/path-payment-quote/:id", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toContain("Use a direct payment");
+    expect(findStrictReceivePaths).not.toHaveBeenCalled();
+  });
+
+  it("rejects quote requests for payments that are no longer pending", async () => {
+    supabaseFrom.mockReturnValue(
+      createSupabaseSelectMock({
+        id: paymentId,
+        amount: 10,
+        asset: "USDC",
+        asset_issuer: "GDQOE23W4QK6WQ4R3BVCUO3PRA4VJ7A3M7MRWWX4V67WJYQ7QXKJQ4KJ",
+        recipient: "GB6REFUNDTESTRECIPIENTQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+        status: "confirmed",
+      }),
+    );
+
+    const handler = getPathPaymentQuoteHandler();
+    const res = createMockResponse();
+
+    await handler(
+      {
+        params: { id: paymentId },
+        query: {
+          source_asset: "XLM",
+          source_account: sourceAccount,
+        },
+        merchant: { id: "merchant-1" },
+      },
+      res,
+      vi.fn(),
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({
+      error: "Path payment quote is only available for pending payments",
+      status: "confirmed",
+    });
     expect(findStrictReceivePaths).not.toHaveBeenCalled();
   });
 });

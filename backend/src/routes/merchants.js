@@ -7,6 +7,7 @@ import { generateSessionToken } from "../lib/sep10-auth.js";
 import { getMerchantApiUsage } from "../lib/api-usage.js";
 import { z } from "zod";
 import { validateRequest } from "../lib/validation.js";
+import { createMerchantSecurityActionRateLimit } from "../lib/rate-limit.js";
 import {
   registerMerchantZodSchema,
   sessionBrandingSchema,
@@ -31,6 +32,9 @@ const defaultMerchantRegistrationRateLimit = rateLimit({
   legacyHeaders: false,
 });
 
+const defaultMerchantSecurityActionRateLimit =
+  createMerchantSecurityActionRateLimit();
+
 const rotateApiKeySchema = z.object({
   grace_period_hours: z.number().int().min(0).max(168).optional(),
 });
@@ -43,6 +47,7 @@ const setApiKeyExpirySchema = z.object({
 
 function createMerchantsRouter({
   merchantRegistrationRateLimit = defaultMerchantRegistrationRateLimit,
+  merchantSecurityActionRateLimit = defaultMerchantSecurityActionRateLimit,
 } = {}) {
   const router = express.Router();
 
@@ -274,6 +279,8 @@ function createMerchantsRouter({
    */
   router.post(
     "/merchants/rotate-webhook-secret",
+    requireApiKeyAuth({ requireSignature: true }),
+    merchantSecurityActionRateLimit,
     validateRequest({ body: rotateWebhookSecretSchema }),
     async (req, res, next) => {
       try {
@@ -422,7 +429,7 @@ function createMerchantsRouter({
   );
   // ─── Webhook Settings ────────────────────────────────────────────────────────
 
-  router.get("/merchant-profile", async (req, res, next) => {
+  router.get("/merchant-profile", requireApiKeyAuth(), async (req, res, next) => {
     try {
       const { data, error } = await supabase
         .from("merchants")
@@ -463,6 +470,8 @@ function createMerchantsRouter({
    */
   router.post(
     "/test-webhook",
+    requireApiKeyAuth(),
+    merchantSecurityActionRateLimit,
     validateRequest({ body: testWebhookSchema }),
     async (req, res, next) => {
       try {
@@ -516,7 +525,7 @@ function createMerchantsRouter({
    *       200:
    *         description: Current webhook settings
    */
-  router.get("/webhook-settings", async (req, res, next) => {
+  router.get("/webhook-settings", requireApiKeyAuth(), async (req, res, next) => {
     try {
       const { data, error } = await supabase
         .from("merchants")
@@ -577,6 +586,8 @@ function createMerchantsRouter({
    */
   router.put(
     "/webhook-settings",
+    requireApiKeyAuth(),
+    merchantSecurityActionRateLimit,
     validateRequest({ body: webhookSettingsSchema }),
     async (req, res, next) => {
       try {
@@ -627,7 +638,11 @@ function createMerchantsRouter({
     },
   );
 
-  router.post("/webhook-settings/verify", async (req, res, next) => {
+  router.post(
+    "/webhook-settings/verify",
+    requireApiKeyAuth({ requireSignature: true }),
+    merchantSecurityActionRateLimit,
+    async (req, res, next) => {
     try {
       const { data, error } = await supabase
         .from("merchants")
@@ -683,7 +698,11 @@ function createMerchantsRouter({
    *       401:
    *         description: Missing or invalid x-api-key header
    */
-  router.post("/regenerate-webhook-secret", async (req, res, next) => {
+  router.post(
+    "/regenerate-webhook-secret",
+    requireApiKeyAuth({ requireSignature: true }),
+    merchantSecurityActionRateLimit,
+    async (req, res, next) => {
     try {
       const newSecret = `whsec_${randomBytes(24).toString("hex")}`;
 
@@ -722,7 +741,11 @@ function createMerchantsRouter({
      *                 api_key:
      *                   type: string
      */
-    router.post("/merchants/generate-api-key", requireSessionAuth(), async (req, res, next) => {
+    router.post(
+      "/merchants/generate-api-key",
+      requireSessionAuth(),
+      merchantSecurityActionRateLimit,
+      async (req, res, next) => {
       try {
         const newApiKey = `sk_${randomBytes(24).toString("hex")}`;
     
@@ -767,7 +790,11 @@ function createMerchantsRouter({
      *       200:
      *         description: New API key generated with old key overlap period
      */
-    router.post("/merchants/rotate-api-key", requireApiKeyAuth(), async (req, res, next) => {
+    router.post(
+      "/merchants/rotate-api-key",
+      requireApiKeyAuth({ requireSignature: true }),
+      merchantSecurityActionRateLimit,
+      async (req, res, next) => {
       try {
         const body = rotateApiKeySchema.parse(req.body || {});
         const result = await merchantService.rotateApiKey(
@@ -823,7 +850,11 @@ function createMerchantsRouter({
      *                 format: date-time
      *                 description: ISO 8601 datetime when the API key expires
      */
-    router.put("/merchants/set-api-key-expiry", requireApiKeyAuth(), async (req, res, next) => {
+    router.put(
+      "/merchants/set-api-key-expiry",
+      requireApiKeyAuth({ requireSignature: true }),
+      merchantSecurityActionRateLimit,
+      async (req, res, next) => {
       try {
         const body = setApiKeyExpirySchema.parse(req.body);
         const result = await merchantService.setApiKeyExpiry(

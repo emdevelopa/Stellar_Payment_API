@@ -21,8 +21,13 @@ vi.mock('../lib/supabase.js', () => ({
 
 vi.mock('../lib/stellar.js', () => ({
     findMatchingPayment: vi.fn(),
+    findAnyRecentPayment: vi.fn(),
     findStrictReceivePaths: vi.fn(),
     createRefundTransaction: vi.fn(),
+    getNetworkFeeStats: vi.fn(),
+    isValidStellarPublicKey: vi.fn(() => true),
+    validateMemo: vi.fn(() => ({ valid: true })),
+    verifyTransactionSignature: vi.fn(),
 }));
 
 vi.mock('../lib/redis.js', () => ({

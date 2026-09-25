@@ -1,0 +1,218 @@
+C:\Users\USER\OneDrive\Desktop\Open Source Projects\Stellar_Payment_API
+├── ACTIVITY_FEED_HOVER_STATES.md
+├── backend
+|  ├── AUDIT_LOGGER_SECURITY_AUDIT.md
+|  ├── check-db-state.js
+|  ├── check-lock.js
+|  ├── DB_POOLER_SECURITY_AUDIT.md
+|  ├── DB_POOL_OPTIMIZATION_GUIDE.md
+|  ├── docker-compose.prod.yml
+|  ├── docker-compose.yml
+|  ├── Dockerfile
+|  ├── docs
+|  ├── jest.config.js
+|  ├── knexfile.js
+|  ├── logs
+|  ├── migrations
+|  ├── node_modules
+|  ├── output.txt
+|  ├── package-lock.json
+|  ├── package.json
+|  ├── public
+|  ├── reset-db.js
+|  ├── run-migrations.js
+|  ├── scripts
+|  ├── SECURITY_PERFORMANCE_IMPROVEMENTS_SUMMARY.md
+|  ├── SEP0001_GENERATOR_GUIDE.md
+|  ├── SEP12_KYC_SECURITY_AUDIT.md
+|  ├── sql
+|  ├── src
+|  ├── test-db-conn.js
+|  ├── test-features-standalone.js
+|  ├── test-features.js
+|  ├── test-path-payment.js
+|  ├── test-supabase.js
+|  ├── tests
+|  ├── TRANSACTION_SIGNER_SECURITY_AUDIT.md
+|  ├── verify_output.txt
+|  ├── vitest.config.js
+|  ├── WEBHOOK_SIGNATURE_GUIDE.md
+|  └── __mocks__
+├── CONTRIBUTION_SUMMARY.md
+├── fix.md
+├── frontend
+|  ├── content
+|  ├── instrumentation.ts
+|  ├── messages
+|  ├── next-env.d.ts
+|  ├── next.config.js
+|  ├── package-lock.json
+|  ├── package.json
+|  ├── PAY_WITH_WALLET.md
+|  ├── playwright.config.ts
+|  ├── pnpm-lock.yaml
+|  ├── postcss.config.js
+|  ├── public
+|  ├── sentry.client.config.ts
+|  ├── sentry.server.config.ts
+|  ├── SENTRY_SETUP.md
+|  ├── src
+|  ├── tailwind.config.js
+|  ├── test-mdx.js
+|  ├── test-results
+|  ├── tests
+|  ├── tsconfig.json
+|  ├── tsconfig.tsbuildinfo
+|  └── vitest.config.ts
+├── IMPLEMENTATION_SUMMARY.md
+├── ISSUES_761_762_763_764_IMPLEMENTATION.md
+├── ISSUES_781_782_783_784_IMPLEMENTATION.md
+├── node_modules
+|  ├── @babel
+|  ├── @fastify
+|  ├── @img
+|  ├── @jridgewell
+|  ├── @next
+|  ├── @opentelemetry
+|  ├── @prisma
+|  ├── @rollup
+|  ├── @sentry
+|  ├── @sentry-internal
+|  ├── @swc
+|  ├── @types
+|  ├── @webassemblyjs
+|  ├── @xtuc
+|  ├── acorn
+|  ├── acorn-import-attributes
+|  ├── acorn-import-phases
+|  ├── agent-base
+|  ├── ajv
+|  ├── ajv-formats
+|  ├── ajv-keywords
+|  ├── balanced-match
+|  ├── baseline-browser-mapping
+|  ├── brace-expansion
+|  ├── browserslist
+|  ├── buffer-from
+|  ├── caniuse-lite
+|  ├── chrome-trace-event
+|  ├── cjs-module-lexer
+|  ├── client-only
+|  ├── commander
+|  ├── commondir
+|  ├── convert-source-map
+|  ├── debug
+|  ├── detect-libc
+|  ├── dotenv
+|  ├── electron-to-chromium
+|  ├── enhanced-resolve
+|  ├── es-module-lexer
+|  ├── escalade
+|  ├── eslint-scope
+|  ├── esrecurse
+|  ├── estraverse
+|  ├── estree-walker
+|  ├── events
+|  ├── fast-deep-equal
+|  ├── fast-uri
+|  ├── fdir
+|  ├── find-up
+|  ├── forwarded-parse
+|  ├── gensync
+|  ├── glob
+|  ├── glob-to-regexp
+|  ├── graceful-fs
+|  ├── has-flag
+|  ├── https-proxy-agent
+|  ├── import-in-the-middle
+|  ├── is-reference
+|  ├── isexe
+|  ├── jest-worker
+|  ├── js-tokens
+|  ├── jsesc
+|  ├── json-parse-even-better-errors
+|  ├── json-schema-traverse
+|  ├── json5
+|  ├── loader-runner
+|  ├── locate-path
+|  ├── lru-cache
+|  ├── magic-string
+|  ├── merge-stream
+|  ├── mime-db
+|  ├── mime-types
+|  ├── minimatch
+|  ├── minipass
+|  ├── module-details-from-path
+|  ├── ms
+|  ├── nanoid
+|  ├── neo-async
+|  ├── next
+|  ├── node-fetch
+|  ├── node-releases
+|  ├── p-limit
+|  ├── p-locate
+|  ├── path-exists
+|  ├── path-scurry
+|  ├── pg-int8
+|  ├── pg-protocol
+|  ├── pg-types
+|  ├── picocolors
+|  ├── picomatch
+|  ├── postcss
+|  ├── postgres-array
+|  ├── postgres-bytea
+|  ├── postgres-date
+|  ├── postgres-interval
+|  ├── progress
+|  ├── proxy-from-env
+|  ├── react
+|  ├── react-dom
+|  ├── require-from-string
+|  ├── require-in-the-middle
+|  ├── rollup
+|  ├── scheduler
+|  ├── schema-utils
+|  ├── semver
+|  ├── sharp
+|  ├── source-map
+|  ├── source-map-js
+|  ├── source-map-support
+|  ├── stacktrace-parser
+|  ├── styled-jsx
+|  ├── supports-color
+|  ├── tapable
+|  ├── terser
+|  ├── terser-webpack-plugin
+|  ├── tr46
+|  ├── tslib
+|  ├── type-fest
+|  ├── undici-types
+|  ├── update-browserslist-db
+|  ├── uuid
+|  ├── watchpack
+|  ├── webidl-conversions
+|  ├── webpack
+|  ├── webpack-sources
+|  ├── whatwg-url
+|  ├── which
+|  ├── xtend
+|  ├── yallist
+|  └── yocto-queue
+├── ONBOARDING_FLOW_HOVER_STATES.md
+├── output.txt
+├── package-lock.json
+├── package.json
+├── prompt.md
+├── PULL_REQUEST_DESCRIPTION.md
+├── QUICK_START_VERIFICATION.md
+├── README.md
+├── README_CONTRIBUTION.md
+├── scripts
+|  └── test-sign.js
+├── TRANSACTION_HISTORY_HOVER_STATES.md
+├── TRUSTLINE_MANAGER_IMPLEMENTATION.md
+├── TRUSTLINE_MANAGER_TASKS_IMPLEMENTATION.md
+└── VERIFICATION_CHECKLIST.md
+
+directory: 150 file: 64
+

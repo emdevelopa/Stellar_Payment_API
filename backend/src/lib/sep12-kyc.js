@@ -1,369 +1,367 @@
-import { getRedisClient } from "./redis.js";
-import { supabase } from "./supabase.js";
+/**
+ * SEP-12 KYC integration.
+ *
+ * Stores and retrieves customer KYC records keyed by Stellar account (+ memo),
+ * gated by a cryptographic signature from the account holder (issue #590).
+ * Queries are single-round-trip, parameterised, and index-aligned (#591) and
+ * every database interaction goes through a structured error-recovery wrapper
+ * (#592). See SEP12_KYC_SECURITY_AUDIT.md for the threat model (#593).
+ */
 
-const KYC_CACHE_TTL = 3600; // 1 hour
-const KYC_STATUS_CACHE_TTL = 300; // 5 minutes
-const KYC_VERIFICATION_LOCK_TTL = 60; // 1 minute
+import { createHash } from "node:crypto";
+import * as StellarSdk from "stellar-sdk";
+import { z } from "zod";
+import { queryWithRetry, isRetryablePoolError } from "./db.js";
+import { logger } from "./logger.js";
 
-function getKycCacheKey(accountId) {
-  return `kyc:${accountId}`;
+/** Max age (seconds) accepted for a request signature — replay protection. */
+export const SIGNATURE_MAX_AGE_SECONDS = 300;
+
+/** Max accepted memo length; bounds stored key size. */
+const MAX_MEMO_LENGTH = 64;
+
+/** KYC lifecycle statuses (SEP-12 §Status). */
+export const KYC_STATUSES = ["ACCEPTED", "PROCESSING", "NEEDS_INFO", "REJECTED"];
+
+/**
+ * Accepted KYC fields. `.strict()` rejects unknown keys so callers cannot
+ * smuggle arbitrary JSON into the store (security hardening, #593).
+ */
+const fieldsSchema = z
+  .object({
+    first_name: z.string().min(1).max(100).optional(),
+    last_name: z.string().min(1).max(100).optional(),
+    email_address: z.string().email().max(254).optional(),
+    birth_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "birth_date must be YYYY-MM-DD")
+      .optional(),
+    address: z.string().max(500).optional(),
+    id_number: z.string().min(1).max(100).optional(),
+  })
+  .strict();
+
+/**
+ * Structured error type so the route layer can map failures to the right HTTP
+ * status and signal retryability to clients (#592).
+ */
+export class KycError extends Error {
+  constructor(code, message, httpStatus = 400, { retryable = false, cause } = {}) {
+    super(message);
+    this.name = "KycError";
+    this.code = code;
+    this.httpStatus = httpStatus;
+    this.retryable = retryable;
+    if (cause) this.cause = cause;
+  }
 }
 
-function getKycStatusCacheKey(accountId) {
-  return `kyc:status:${accountId}`;
-}
+// ---------------------------------------------------------------------------
+// Signature verification (#590)
+// ---------------------------------------------------------------------------
 
-function getKycVerificationLockKey(accountId) {
-  return `kyc:lock:${accountId}`;
+/** Deterministic JSON with sorted keys so client and server hash identically. */
+function canonicalJson(obj) {
+  const sorted = {};
+  for (const key of Object.keys(obj || {}).sort()) {
+    sorted[key] = obj[key];
+  }
+  return JSON.stringify(sorted);
 }
 
 /**
- * Retrieve KYC data from cache or database
- * @param {string} accountId - Stellar account ID or merchant ID
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<object|null>} KYC data or null if not found
+ * The canonical message a client signs to authorise a KYC write. Binds the
+ * account, memo, a unix `timestamp` (replay window), and a hash of the field
+ * payload so a captured signature cannot be replayed against different data.
+ * An optional `operation` (e.g. "get", "delete") is appended so a signature
+ * issued for one operation cannot be replayed for another.
  */
-export async function getKycData(accountId, redisClient = null) {
-  if (!accountId) {
-    throw new Error("Account ID is required");
-  }
-
-  const client = redisClient || getRedisClient();
-  const cacheKey = getKycCacheKey(accountId);
-
-  try {
-    // Try to get from cache
-    const cached = await client.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch (err) {
-    console.error("Redis GET error:", err.message);
-  }
-
-  try {
-    // Fall back to database
-    const { data, error } = await supabase
-      .from("kyc_data")
-      .select("*")
-      .eq("account_id", accountId)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    if (data) {
-      // Cache the result
-      try {
-        await client.set(cacheKey, JSON.stringify(data), {
-          EX: KYC_CACHE_TTL,
-        });
-      } catch (err) {
-        console.error("Redis SET error:", err.message);
-      }
-    }
-
-    return data || null;
-  } catch (err) {
-    console.error("Database error:", err.message);
-    return null;
-  }
+export function buildSignaturePayload({ account, memo = "", timestamp, fields, operation }) {
+  const fieldsHash = createHash("sha256").update(canonicalJson(fields)).digest("hex");
+  const base = `${account}:${memo}:${timestamp}:${fieldsHash}`;
+  return operation ? `${base}:${operation}` : base;
 }
 
 /**
- * Retrieve KYC verification status from cache or database
- * @param {string} accountId - Stellar account ID or merchant ID
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<object|null>} KYC status or null if not found
+ * Verify a customer's signature over {@link buildSignaturePayload}.
+ * Returns `{ valid: true }` or `{ valid: false, reason }` — never throws.
  */
-export async function getKycStatus(accountId, redisClient = null) {
-  if (!accountId) {
-    throw new Error("Account ID is required");
+export function verifyCustomerSignature(
+  { account, memo = "", timestamp, fields, signature, operation },
+  { maxAgeSeconds = SIGNATURE_MAX_AGE_SECONDS, now = Date.now() } = {},
+) {
+  if (!account || typeof signature !== "string" || signature.length === 0 || !timestamp) {
+    return { valid: false, reason: "missing_signature_fields" };
   }
 
-  const client = redisClient || getRedisClient();
-  const cacheKey = getKycStatusCacheKey(accountId);
-
-  try {
-    // Try to get from cache
-    const cached = await client.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch (err) {
-    console.error("Redis GET error:", err.message);
+  const ts = Number(timestamp);
+  const ageSeconds = Math.abs(Math.floor(now / 1000) - ts);
+  if (!Number.isFinite(ts) || ageSeconds > maxAgeSeconds) {
+    return { valid: false, reason: "stale_or_invalid_timestamp" };
   }
 
+  let keypair;
   try {
-    // Fall back to database
-    const { data, error } = await supabase
-      .from("kyc_verification")
-      .select("*")
-      .eq("account_id", accountId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    keypair = StellarSdk.Keypair.fromPublicKey(account);
+  } catch {
+    return { valid: false, reason: "invalid_account" };
+  }
 
-    if (error) {
-      throw error;
+  let signatureBuffer;
+  try {
+    signatureBuffer = Buffer.from(signature, "base64");
+  } catch {
+    return { valid: false, reason: "invalid_signature_encoding" };
+  }
+  if (signatureBuffer.length === 0) {
+    return { valid: false, reason: "invalid_signature_encoding" };
+  }
+
+  const payload = buildSignaturePayload({ account, memo, timestamp: ts, fields, operation });
+  const hash = createHash("sha256").update(payload).digest();
+
+  let ok = false;
+  try {
+    ok = keypair.verify(hash, signatureBuffer);
+  } catch {
+    ok = false;
+  }
+  return ok ? { valid: true } : { valid: false, reason: "signature_mismatch" };
+}
+
+// ---------------------------------------------------------------------------
+// Error recovery wrapper (#592)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a DB operation, translating low-level failures into {@link KycError}.
+ * `queryWithRetry` already retries transient pool errors; once retries are
+ * exhausted we surface a retryable 503 so the client can back off, and map
+ * everything else to a non-leaky 500. Field values are never logged (#593).
+ */
+const SLOW_QUERY_THRESHOLD_MS = 500;
+
+async function withRecovery(fn, label) {
+  const start = Date.now();
+  try {
+    const result = await fn();
+    const elapsed = Date.now() - start;
+    if (elapsed > SLOW_QUERY_THRESHOLD_MS) {
+      logger.warn({ label, elapsed }, "sep12 kyc slow query");
     }
-
-    if (data) {
-      // Cache the result
-      try {
-        await client.set(cacheKey, JSON.stringify(data), {
-          EX: KYC_STATUS_CACHE_TTL,
-        });
-      } catch (err) {
-        console.error("Redis SET error:", err.message);
-      }
-    }
-
-    return data || null;
+    return result;
   } catch (err) {
-    console.error("Database error:", err.message);
-    return null;
+    const elapsed = Date.now() - start;
+    if (err instanceof KycError) throw err;
+    if (isRetryablePoolError(err)) {
+      logger.warn({ label, code: err.code, elapsed }, "sep12 kyc store temporarily unavailable");
+      throw new KycError(
+        "SERVICE_UNAVAILABLE",
+        "KYC store temporarily unavailable, please retry",
+        503,
+        { retryable: true, cause: err },
+      );
+    }
+    logger.error({ label, code: err.code, elapsed }, "sep12 kyc store error");
+    throw new KycError("DB_ERROR", "KYC store error", 500, { cause: err });
   }
 }
 
-/**
- * Store or update KYC data with cache invalidation
- * @param {string} accountId - Stellar account ID or merchant ID
- * @param {object} kycData - KYC data to store
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<object|null>} Stored KYC data or null on error
- */
-export async function storeKycData(accountId, kycData, redisClient = null) {
-  if (!accountId || !kycData) {
-    throw new Error("Account ID and KYC data are required");
-  }
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-  const client = redisClient || getRedisClient();
-
+function assertValidAccount(account) {
   try {
-    const { data, error } = await supabase
-      .from("kyc_data")
-      .upsert({
-        account_id: accountId,
-        ...kycData,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "account_id" })
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    // Invalidate cache
-    try {
-      await client.del(getKycCacheKey(accountId));
-    } catch (err) {
-      console.error("Redis DEL error:", err.message);
-    }
-
-    // Set fresh cache
-    try {
-      await client.set(getKycCacheKey(accountId), JSON.stringify(data), {
-        EX: KYC_CACHE_TTL,
-      });
-    } catch (err) {
-      console.error("Redis SET error:", err.message);
-    }
-
-    return data;
-  } catch (err) {
-    console.error("Database error:", err.message);
-    return null;
+    StellarSdk.Keypair.fromPublicKey(account);
+  } catch {
+    throw new KycError("INVALID_ACCOUNT", "A valid Stellar account is required", 400);
   }
 }
 
-/**
- * Store KYC verification result with cache invalidation
- * @param {string} accountId - Stellar account ID or merchant ID
- * @param {object} verificationData - Verification result data
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<object|null>} Stored verification data or null on error
- */
-export async function storeKycVerification(accountId, verificationData, redisClient = null) {
-  if (!accountId || !verificationData) {
-    throw new Error("Account ID and verification data are required");
+/** Coerce a missing memo to "" and reject non-string/oversized values. */
+function normalizeMemo(memo) {
+  if (memo === undefined || memo === null) return "";
+  if (typeof memo !== "string" || memo.length > MAX_MEMO_LENGTH) {
+    throw new KycError("INVALID_MEMO", "memo must be a string of at most 64 characters", 400);
   }
-
-  const client = redisClient || getRedisClient();
-
-  try {
-    const { data, error } = await supabase
-      .from("kyc_verification")
-      .insert({
-        account_id: accountId,
-        ...verificationData,
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    // Invalidate status cache
-    try {
-      await client.del(getKycStatusCacheKey(accountId));
-    } catch (err) {
-      console.error("Redis DEL error:", err.message);
-    }
-
-    // Set fresh cache
-    try {
-      await client.set(getKycStatusCacheKey(accountId), JSON.stringify(data), {
-        EX: KYC_STATUS_CACHE_TTL,
-      });
-    } catch (err) {
-      console.error("Redis SET error:", err.message);
-    }
-
-    return data;
-  } catch (err) {
-    console.error("Database error:", err.message);
-    return null;
-  }
+  return memo;
 }
 
+/** Derive a KYC status from the supplied fields. */
+function deriveStatus(fields) {
+  const hasCore = fields.first_name && fields.last_name && fields.email_address;
+  return hasCore ? "ACCEPTED" : "NEEDS_INFO";
+}
+
+function mapRow(row) {
+  return {
+    id: row.id,
+    account: row.stellar_account,
+    memo: row.memo,
+    fields: row.fields ?? {},
+    status: row.status,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Operations
+// ---------------------------------------------------------------------------
+
 /**
- * Acquire a verification lock to prevent concurrent verifications
- * @param {string} accountId - Stellar account ID or merchant ID
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<boolean>} True if lock acquired, false otherwise
+ * Create or update a customer's KYC record (SEP-12 `PUT /customer`).
+ *
+ * Steps: validate account → verify signature (#590) → validate fields → upsert
+ * in a single parameterised round trip (#591) under error recovery (#592).
+ *
+ * `deps` allows injecting `query` / `verifySignature` for testing.
  */
-export async function acquireKycVerificationLock(accountId, redisClient = null) {
-  if (!accountId) {
-    throw new Error("Account ID is required");
+export async function putCustomer(rawInput, deps = {}) {
+  const input = { ...(rawInput ?? {}), memo: normalizeMemo(rawInput?.memo) };
+  const query = deps.query || queryWithRetry;
+  const verifySignature = deps.verifySignature || verifyCustomerSignature;
+  const now = deps.now;
+
+  assertValidAccount(input.account);
+
+  const signatureResult = verifySignature(input, now ? { now } : undefined);
+  if (!signatureResult.valid) {
+    throw new KycError(
+      "SIGNATURE_INVALID",
+      `Signature verification failed: ${signatureResult.reason}`,
+      401,
+    );
   }
 
-  const client = redisClient || getRedisClient();
-  const lockKey = getKycVerificationLockKey(accountId);
-
-  try {
-    const result = await client.set(lockKey, "1", {
-      NX: true,
-      EX: KYC_VERIFICATION_LOCK_TTL,
+  const parsed = fieldsSchema.safeParse(input.fields ?? {});
+  if (!parsed.success) {
+    throw new KycError("VALIDATION_ERROR", "Invalid KYC fields", 400, {
+      cause: parsed.error,
     });
-    return !!result;
-  } catch (err) {
-    console.error("Redis SET error:", err.message);
-    return false;
   }
+  const fields = parsed.data;
+  const memo = input.memo;
+  const status = deriveStatus(fields);
+
+  // Single-round-trip parameterised upsert (#591, #593). The ON CONFLICT
+  // target matches the sep12_kyc_account_memo_uidx unique index. The WHERE
+  // guard only lets a strictly newer signed request overwrite a record, so
+  // concurrent or replayed older writes cannot clobber newer data.
+  const sql = `
+    INSERT INTO sep12_kyc_customers (stellar_account, memo, fields, status, signed_at, updated_at)
+    VALUES ($1, $2, $3::jsonb, $4, $5, now())
+    ON CONFLICT (stellar_account, memo)
+    DO UPDATE SET fields = EXCLUDED.fields, status = EXCLUDED.status,
+                  signed_at = EXCLUDED.signed_at, updated_at = now()
+    WHERE sep12_kyc_customers.signed_at < EXCLUDED.signed_at
+    RETURNING id, status`;
+
+  const signedAt = Math.floor(Number(input.timestamp));
+  const result = await withRecovery(
+    () =>
+      query(sql, [input.account, memo, JSON.stringify(fields), status, signedAt], {
+        label: "sep12_put",
+      }),
+    "sep12_put",
+  );
+
+  if (result.rows.length === 0) {
+    throw new KycError(
+      "STALE_REQUEST",
+      "A newer KYC update already exists for this customer",
+      409,
+    );
+  }
+  return { id: result.rows[0].id, status: result.rows[0].status };
 }
 
 /**
- * Release a verification lock
- * @param {string} accountId - Stellar account ID or merchant ID
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<boolean>} True if lock released, false otherwise
+ * Fetch a customer's KYC record (SEP-12 `GET /customer`). Requires a valid
+ * signature from the account holder. Uses the unique
+ * (stellar_account, memo) index and selects only the needed columns (#591).
  */
-export async function releaseKycVerificationLock(accountId, redisClient = null) {
-  if (!accountId) {
-    throw new Error("Account ID is required");
+export async function getCustomer(
+  { account, memo, timestamp, signature } = {},
+  deps = {},
+) {
+  const query = deps.query || queryWithRetry;
+  const verifySignature = deps.verifySignature || verifyCustomerSignature;
+  const now = deps.now;
+
+  assertValidAccount(account);
+  memo = normalizeMemo(memo);
+
+  // KYC records contain PII, so reads require proof of account ownership.
+  const signatureResult = verifySignature(
+    { account, memo, timestamp, signature, fields: {}, operation: "get" },
+    now ? { now } : undefined,
+  );
+  if (!signatureResult.valid) {
+    throw new KycError(
+      "SIGNATURE_INVALID",
+      `Signature verification failed: ${signatureResult.reason}`,
+      401,
+    );
   }
 
-  const client = redisClient || getRedisClient();
-  const lockKey = getKycVerificationLockKey(accountId);
+  const sql = `
+    SELECT id, stellar_account, memo, fields, status, created_at, updated_at
+    FROM sep12_kyc_customers
+    WHERE stellar_account = $1 AND memo = $2
+    LIMIT 1`;
 
-  try {
-    const result = await client.del(lockKey);
-    return result > 0;
-  } catch (err) {
-    console.error("Redis DEL error:", err.message);
-    return false;
+  const result = await withRecovery(
+    () => query(sql, [account, memo], { label: "sep12_get" }),
+    "sep12_get",
+  );
+
+  if (result.rows.length === 0) {
+    throw new KycError("NOT_FOUND", "Customer not found", 404);
   }
+  return mapRow(result.rows[0]);
 }
 
 /**
- * Invalidate all KYC-related caches for an account
- * @param {string} accountId - Stellar account ID or merchant ID
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<void>}
+ * Delete a customer's KYC record (SEP-12 `DELETE /customer`).
+ * Requires a valid signature from the account holder (#739).
  */
-export async function invalidateKycCaches(accountId, redisClient = null) {
-  if (!accountId) {
-    throw new Error("Account ID is required");
+export async function deleteCustomer(
+  { account, memo, timestamp, signature } = {},
+  deps = {},
+) {
+  const query = deps.query || queryWithRetry;
+  const verifySignature = deps.verifySignature || verifyCustomerSignature;
+  const now = deps.now;
+
+  assertValidAccount(account);
+  memo = normalizeMemo(memo);
+
+  const signatureResult = verifySignature(
+    { account, memo, timestamp, signature, fields: {}, operation: "delete" },
+    now ? { now } : undefined,
+  );
+  if (!signatureResult.valid) {
+    throw new KycError(
+      "SIGNATURE_INVALID",
+      `Signature verification failed: ${signatureResult.reason}`,
+      401,
+    );
   }
 
-  const client = redisClient || getRedisClient();
+  const sql = `
+    DELETE FROM sep12_kyc_customers
+    WHERE stellar_account = $1 AND memo = $2
+    RETURNING id`;
 
-  try {
-    await Promise.all([
-      client.del(getKycCacheKey(accountId)),
-      client.del(getKycStatusCacheKey(accountId)),
-    ]);
-  } catch (err) {
-    console.error("Redis DEL error:", err.message);
+  const result = await withRecovery(
+    () => query(sql, [account, memo], { label: "sep12_delete" }),
+    "sep12_delete",
+  );
+
+  if (result.rows.length === 0) {
+    throw new KycError("NOT_FOUND", "Customer not found", 404);
   }
-}
-
-/**
- * Get cached KYC statistics
- * @param {object} redisClient - Redis client instance
- * @returns {Promise<object>} KYC statistics
- */
-export async function getKycStatistics(redisClient = null) {
-  const client = redisClient || getRedisClient();
-  const cacheKey = "kyc:statistics";
-
-  try {
-    // Try to get from cache
-    const cached = await client.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch (err) {
-    console.error("Redis GET error:", err.message);
-  }
-
-  try {
-    // Get statistics from database
-    const { data: totalCount } = await supabase
-      .from("kyc_data")
-      .select("id", { count: "exact", head: true });
-
-    const { data: verifiedCount } = await supabase
-      .from("kyc_verification")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "verified");
-
-    const { data: pendingCount } = await supabase
-      .from("kyc_verification")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending");
-
-    const stats = {
-      total_accounts: totalCount?.length || 0,
-      verified_accounts: verifiedCount?.length || 0,
-      pending_accounts: pendingCount?.length || 0,
-      verification_rate: totalCount?.length > 0
-        ? ((verifiedCount?.length || 0) / totalCount.length) * 100
-        : 0,
-    };
-
-    // Cache the result
-    try {
-      await client.set(cacheKey, JSON.stringify(stats), {
-        EX: 300, // 5 minutes
-      });
-    } catch (err) {
-      console.error("Redis SET error:", err.message);
-    }
-
-    return stats;
-  } catch (err) {
-    console.error("Database error:", err.message);
-    return {
-      total_accounts: 0,
-      verified_accounts: 0,
-      pending_accounts: 0,
-      verification_rate: 0,
-    };
-  }
+  return { id: result.rows[0].id, deleted: true };
 }

@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { HEX_COLOR_REGEX } from "./branding.js";
-import { validateMemo } from "./stellar.js";
+import {
+  isValidAssetCode,
+  isValidStellarAccountId,
+  validateMemo,
+} from "./stellar.js";
+import { resolveAssetIssuer } from "../constants/assetConstants.js";
+ 
 
 const VALID_MEMO_TYPES = ["text", "id", "hash", "return"];
 export const MINIMUM_XLM_PAYMENT_AMOUNT = 0.01;
@@ -56,6 +62,7 @@ const paymentBaseSchema = z.object({
     .trim()
     .min(1, "recipient is required"),
   description: optionalTrimmedString(),
+  message: optionalTrimmedString().refine((val) => !val || val.length <= 28, "Message must be at most 28 characters"),
   memo: optionalTrimmedString(),
   memo_type: optionalTrimmedString().transform((value) =>
     value ? value.toLowerCase() : undefined,
@@ -94,11 +101,25 @@ function applyPaymentValidationRules(body, ctx) {
     });
   }
 
-  if (body.asset !== "XLM" && !body.asset_issuer) {
+  const resolvedAssetIssuer = resolveAssetIssuer(body.asset, body.asset_issuer);
+
+  if (body.asset !== "XLM" && !resolvedAssetIssuer) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["asset_issuer"],
       message: "asset_issuer is required for non-native assets",
+    });
+  }
+
+  if (
+    body.asset !== "XLM" &&
+    resolvedAssetIssuer &&
+    !isValidStellarPublicKey(resolvedAssetIssuer)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["asset_issuer"],
+      message: "asset_issuer must be a valid Stellar public key",
     });
   }
 
@@ -139,9 +160,18 @@ function applyPaymentValidationRules(body, ctx) {
   }
 }
 
+function applyResolvedAssetIssuer(body) {
+  const resolvedAssetIssuer = resolveAssetIssuer(body.asset, body.asset_issuer);
+
+  return {
+    ...body,
+    asset_issuer: resolvedAssetIssuer || undefined,
+  };
+}
+
 export const paymentZodSchema = paymentBaseSchema.superRefine(
   applyPaymentValidationRules,
-);
+).transform(applyResolvedAssetIssuer);
 
 export const registerMerchantZodSchema = z.object({
   email: z
@@ -216,7 +246,8 @@ export const paymentSessionZodSchema = paymentBaseSchema
   .extend({
     branding_overrides: sessionBrandingSchema,
   })
-  .superRefine(applyPaymentValidationRules);
+  .superRefine(applyPaymentValidationRules)
+  .transform(applyResolvedAssetIssuer);
 
 export const v2PaymentSessionSchema = paymentSessionZodSchema;
 
@@ -377,11 +408,42 @@ export const refundConfirmSchema = z.object({
 export const pathPaymentQuoteQuerySchema = z.object({
   source_asset: z.string({
     required_error: "source_asset query parameter is required",
-  }),
-  source_asset_issuer: z.string().optional(),
+  })
+    .trim()
+    .min(1, "source_asset query parameter is required")
+    .transform((value) => value.toUpperCase())
+    .refine((value) => isValidAssetCode(value), "source_asset must be a valid Stellar asset code"),
+  source_asset_issuer: optionalTrimmedString().refine(
+    (value) => !value || isValidStellarAccountId(value),
+    "source_asset_issuer must be a valid Stellar public key",
+  ),
   source_account: z.string({
     required_error: "source_account query parameter is required",
-  }),
+  })
+    .trim()
+    .min(1, "source_account query parameter is required")
+    .refine(
+      (value) => isValidStellarAccountId(value),
+      "source_account must be a valid Stellar public key",
+    ),
+}).superRefine((value, ctx) => {
+  const isNative = value.source_asset === "XLM";
+
+  if (!isNative && !value.source_asset_issuer) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["source_asset_issuer"],
+      message: "source_asset_issuer is required for non-native source assets",
+    });
+  }
+
+  if (isNative && value.source_asset_issuer) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["source_asset_issuer"],
+      message: "source_asset_issuer must not be provided for native XLM",
+    });
+  }
 });
 
 // ─── Metrics Schemas ───────────────────────────────────────────────────────

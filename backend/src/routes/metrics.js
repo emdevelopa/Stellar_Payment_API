@@ -1,117 +1,151 @@
 import express from "express";
 import { requireApiKeyAuth } from "../lib/auth.js";
-import { withMerchantContext } from "../lib/db-rls.js";
 import { validateRequest } from "../lib/validation.js";
 import { metricsVolumeQuerySchema } from "../lib/request-schemas.js";
+import { metricService } from "../services/metricService.js";
+import { createDashboardMetricsRateLimit } from "../lib/rate-limit.js";
+import { connectRedisClient } from "../lib/redis.js";
+import {
+  dashboardMetricsCacheKey,
+  readThroughDashboardCache,
+} from "../lib/dashboard-metrics-cache.js";
+import {
+  dashboardMetricsRequestsTotal,
+  dashboardMetricsRequestDuration,
+  dashboardMetricsErrorsTotal,
+} from "../lib/metrics.js";
 
-const router = express.Router();
-
-/**
- * @swagger
- * /api/metrics/summary:
- *   get:
- *     summary: Get monthly revenue summary grouped by asset
- *     tags: [Metrics]
- *     security:
- *       - ApiKeyAuth: []
- */
-router.get("/metrics/summary", requireApiKeyAuth(), async (req, res, next) => {
-  try {
-    const pool = req.app.locals.pool;
-    const result = await metricService.getMonthlySummary(pool, req.merchant.id);
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
+const defaultDashboardMetricsRateLimit = createDashboardMetricsRateLimit();
 
 /**
- * @swagger
- * /api/metrics/revenue:
- *   get:
- *     summary: Get aggregate revenue by asset
- *     tags: [Metrics]
- *     security:
- *       - ApiKeyAuth: []
+ * Wrap a dashboard endpoint handler with granular request/latency/error
+ * tracking (labeled by `endpoint`, not merchant_id - see the cardinality
+ * note on the metrics themselves) and centralize the try/catch that was
+ * previously duplicated across all three routes.
  */
-router.get("/metrics/revenue", requireApiKeyAuth(), async (req, res, next) => {
-  try {
-    const pool = req.app.locals.pool;
-    const result = await metricService.getRevenueByAsset(pool, req.merchant.id);
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
+function withDashboardMetrics(endpoint, handler) {
+  return async (req, res, next) => {
+    const start = process.hrtime.bigint();
+    const recordDuration = () => {
+      const seconds = Number(process.hrtime.bigint() - start) / 1e9;
+      dashboardMetricsRequestDuration.observe({ endpoint }, seconds);
+    };
+
+    try {
+      await handler(req, res);
+      recordDuration();
+      dashboardMetricsRequestsTotal.inc({
+        endpoint,
+        status_code: String(res.statusCode),
+      });
+    } catch (err) {
+      recordDuration();
+      dashboardMetricsErrorsTotal.inc({ endpoint, error_type: "internal" });
+      dashboardMetricsRequestsTotal.inc({ endpoint, status_code: "500" });
+      next(err);
+    }
+  };
+}
 
 /**
- * @swagger
- * /api/metrics/volume:
- *   get:
- *     summary: Get per-asset daily volume for a time range
- *     tags: [Metrics]
- *     security:
- *       - ApiKeyAuth: []
+ * Admin Dashboard Service routes (revenue summary, revenue by asset, volume
+ * over time). All routes require a signed, rate-limited API key request:
+ *  - requireApiKeyAuth({ requireSignature: true }) enforces HMAC request
+ *    signing via the existing x-api-signature/x-api-timestamp headers
+ *    (issue #928).
+ *  - dashboardMetricsRateLimit caps how often a merchant can poll these
+ *    aggregate queries (issue #927).
+ *  - withDashboardMetrics records per-endpoint request counts, latency, and
+ *    error counts to Prometheus for operational visibility (issue #1093).
+ *  - readThroughDashboardCache serves a short-TTL Redis-cached response when
+ *    available, falling back to the DB (and re-caching) on a miss or when
+ *    Redis is unreachable (issue #1090).
  */
-router.get("/metrics/volume", requireApiKeyAuth(), validateRequest({ query: metricsVolumeQuerySchema }), async (req, res, next) => {
-  try {
-    const pool = req.app.locals.pool;
-    const merchantId = req.merchant.id;
-    const VALID_RANGES = { "7D": 7, "30D": 30, "1Y": 365 };
-    const range = req.query.range;
-    const days = VALID_RANGES[range];
+function createMetricsRouter({
+  dashboardMetricsRateLimit = defaultDashboardMetricsRateLimit,
+} = {}) {
+  const router = express.Router();
 
-    const query = `
-      SELECT
-        date_trunc('day', created_at) AS date,
-        asset,
-        SUM(amount) AS volume,
-        COUNT(*) AS count
-      FROM payments
-      WHERE merchant_id = $1
-        AND status = 'completed'
-        AND created_at >= NOW() - INTERVAL '${days} days'
-      GROUP BY 1, 2
-      ORDER BY 1 ASC, 2 ASC
-    `;
+  /**
+   * @swagger
+   * /api/metrics/summary:
+   *   get:
+   *     summary: Get monthly revenue summary grouped by asset
+   *     tags: [Metrics]
+   *     security:
+   *       - ApiKeyAuth: []
+   *     responses:
+   *       429:
+   *         description: Rate limit exceeded
+   */
+  router.get(
+    "/metrics/summary",
+    requireApiKeyAuth({ requireSignature: true }),
+    dashboardMetricsRateLimit,
+    withDashboardMetrics("summary", async (req, res) => {
+      const redis = await connectRedisClient();
+      const key = dashboardMetricsCacheKey("summary", req.merchant.id);
+      const result = await readThroughDashboardCache(redis, "summary", key, () =>
+        metricService.getMonthlySummary(req.merchant.id),
+      );
+      res.json(result);
+    }),
+  );
 
-    const { rows } = await pool.query(query, [merchantId]);
-    const assetSet = new Set(rows.map((row) => row.asset));
-    const assets = Array.from(assetSet);
+  /**
+   * @swagger
+   * /api/metrics/revenue:
+   *   get:
+   *     summary: Get aggregate revenue by asset
+   *     tags: [Metrics]
+   *     security:
+   *       - ApiKeyAuth: []
+   *     responses:
+   *       429:
+   *         description: Rate limit exceeded
+   */
+  router.get(
+    "/metrics/revenue",
+    requireApiKeyAuth({ requireSignature: true }),
+    dashboardMetricsRateLimit,
+    withDashboardMetrics("revenue", async (req, res) => {
+      const redis = await connectRedisClient();
+      const key = dashboardMetricsCacheKey("revenue", req.merchant.id);
+      const result = await readThroughDashboardCache(redis, "revenue", key, () =>
+        metricService.getRevenueByAsset(req.merchant.id),
+      );
+      res.json(result);
+    }),
+  );
 
-    const byDate = {};
-    for (const row of rows) {
-      const dateStr = row.date.toISOString().split("T")[0];
-      if (!byDate[dateStr]) {
-        byDate[dateStr] = { date: dateStr, count: 0 };
-      }
+  /**
+   * @swagger
+   * /api/metrics/volume:
+   *   get:
+   *     summary: Get per-asset daily volume for a time range
+   *     tags: [Metrics]
+   *     security:
+   *       - ApiKeyAuth: []
+   *     responses:
+   *       429:
+   *         description: Rate limit exceeded
+   */
+  router.get(
+    "/metrics/volume",
+    requireApiKeyAuth({ requireSignature: true }),
+    dashboardMetricsRateLimit,
+    validateRequest({ query: metricsVolumeQuerySchema }),
+    withDashboardMetrics("volume", async (req, res) => {
+      const redis = await connectRedisClient();
+      const key = dashboardMetricsCacheKey("volume", req.merchant.id, req.query.range);
+      const result = await readThroughDashboardCache(redis, "volume", key, () =>
+        metricService.getVolumeOverTime(req.merchant.id, req.query.range),
+      );
+      res.json(result);
+    }),
+  );
 
-      byDate[dateStr][row.asset] = parseFloat(row.volume) || 0;
-      byDate[dateStr].count += parseInt(row.count, 10) || 0;
-    }
+  return router;
+}
 
-    const now = new Date();
-    const result = [];
-    for (let i = days - 1; i >= 0; i -= 1) {
-      const day = new Date(now);
-      day.setDate(day.getDate() - i);
-      const dateStr = day.toISOString().split("T")[0];
-      const entry = byDate[dateStr] || { date: dateStr, count: 0 };
-
-      for (const asset of assets) {
-        if (entry[asset] === undefined) entry[asset] = 0;
-      }
-
-      result.push(entry);
-    }
-
-    res.json({ range, assets, data: result });
-  } catch (err) {
-    if (err.message.includes("Invalid range")) {
-      return res.status(400).json({ error: err.message });
-    }
-    next(err);
-  }
-});
-
-export default router;
+export default createMetricsRouter;

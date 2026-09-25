@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, useRef, useReducer, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import confetti from "canvas-confetti";
@@ -9,12 +9,18 @@ import { toast } from "sonner";
 import IntegrationCodeSnippets from "./IntegrationCodeSnippets";
 import Link from "next/link";
 import { InfoTooltip } from "./InfoTooltip";
+import CheckoutQrModal from "./CheckoutQrModal";
 import {
   useHydrateMerchantStore,
   useMerchantApiKey,
   useMerchantHydrated,
   useMerchantTrustedAddresses,
 } from "@/lib/merchant-store";
+import {
+  createPaymentFlowReducer,
+  initialCreatePaymentFlowState,
+  type CreatedPayment,
+} from "@/lib/create-payment-flow";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -34,12 +40,6 @@ const DEFAULT_BRANDING = {
 function normalizeHexInput(value: string) {
   const trimmed = value.trim();
   return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
-}
-
-interface CreatedPayment {
-  payment_id: string;
-  payment_link: string;
-  status: string;
 }
 
 // ─── Animation variants ───────────────────────────────────────────────────────
@@ -174,124 +174,121 @@ interface SuccessCardProps {
 }
 
 function SuccessCard({ created, onReset, t }: SuccessCardProps) {
-  const [canShare, setCanShare] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
-  // Fire confetti once on mount
   useEffect(() => {
     fireConfetti();
-    setCanShare(
-      typeof navigator !== "undefined" && typeof navigator.share === "function",
-    );
   }, []);
 
-  const handleShare = async () => {
-    if (!canShare) return;
-
+  const handleCopyAndOpenQr = async () => {
     try {
-      await navigator.share({
-        title: t("shareTitle"),
-        text: t("shareText"),
-        url: created.payment_link,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        return;
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(created.payment_link);
+      } else {
+        throw new Error("Clipboard unavailable");
       }
-
-      toast.error(t("shareFailed"));
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = created.payment_link;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
     }
+
+    setShowQrModal(true);
   };
 
   return (
-    <motion.div
-      key="success"
-      variants={successVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      className="flex flex-col gap-6"
-    >
-      {/* Main card */}
+    <>
       <motion.div
-        variants={childVariants}
-        className="relative overflow-hidden rounded-2xl border border-accent/25 bg-accent/5 p-6 backdrop-blur"
+        key="success"
+        variants={successVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="flex flex-col gap-6"
       >
-        {/* Subtle radial glow in the corner */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-accent/10 blur-3xl"
-        />
-
-        {/* Check + heading */}
-        <div className="flex flex-col items-center text-center">
-          <AnimatedCheck />
-          <motion.p
-            variants={childVariants}
-            className="font-mono text-xs uppercase tracking-[0.2em] text-accent"
-          >
-            {t("readyEyebrow")}
-          </motion.p>
-          <motion.h2
-            variants={childVariants}
-            className="mt-1 text-xl font-semibold text-white"
-          >
-            {t("readyTitle")}
-          </motion.h2>
-          <motion.p
-            variants={childVariants}
-            className="mt-1 text-sm text-slate-400"
-          >
-            {t("readyDescription")}
-          </motion.p>
-        </div>
-
-        {/* Payment link row */}
+        {/* Main card */}
         <motion.div
           variants={childVariants}
-          className="mt-6 flex flex-col gap-2"
+          className="relative overflow-hidden rounded-2xl border border-accent/25 bg-accent/5 p-6 backdrop-blur"
         >
-          <label className="text-xs font-medium text-slate-300">
-            {t("paymentLink")}
-          </label>
-          <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4 transition-colors hover:border-accent/25">
-            <code className="flex-1 truncate font-mono text-sm text-accent">
-              {created.payment_link}
-            </code>
-            <CopyButton text={created.payment_link} />
-          </div>
-        </motion.div>
+          {/* Subtle radial glow in the corner */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-accent/10 blur-3xl"
+          />
 
-        {/* Meta grid */}
-        <motion.div
-          variants={childVariants}
-          className="mt-4 grid grid-cols-2 gap-3"
-        >
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p className="mb-1 text-xs uppercase tracking-wider text-slate-500">
-              {t("paymentId")}
-            </p>
-            <p className="truncate font-mono text-xs text-slate-300">
-              {created.payment_id}
-            </p>
+          {/* Check + heading */}
+          <div className="flex flex-col items-center text-center">
+            <AnimatedCheck />
+            <motion.p
+              variants={childVariants}
+              className="font-mono text-xs uppercase tracking-[0.2em] text-accent"
+            >
+              {t("readyEyebrow")}
+            </motion.p>
+            <motion.h2
+              variants={childVariants}
+              className="mt-1 text-xl font-semibold text-white"
+            >
+              {t("readyTitle")}
+            </motion.h2>
+            <motion.p
+              variants={childVariants}
+              className="mt-1 text-sm text-slate-400"
+            >
+              {t("readyDescription")}
+            </motion.p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p className="mb-1 text-xs uppercase tracking-wider text-slate-500">
-              {t("status")}
-            </p>
-            <p className="font-mono text-xs capitalize text-slate-300">
-              {created.status}
-            </p>
-          </div>
-        </motion.div>
 
-        <motion.div
-          variants={childVariants}
-          className="mt-4 flex flex-wrap gap-2"
-        >
-          {canShare && (
+          {/* Payment link row */}
+          <motion.div
+            variants={childVariants}
+            className="mt-6 flex flex-col gap-2"
+          >
+            <label className="text-xs font-medium text-slate-300">
+              {t("paymentLink")}
+            </label>
+            <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-black/40 p-1 pl-4 transition-colors hover:border-accent/25">
+              <code className="flex-1 truncate font-mono text-sm text-accent">
+                {created.payment_link}
+              </code>
+              <CopyButton text={created.payment_link} />
+            </div>
+          </motion.div>
+
+          {/* Meta grid */}
+          <motion.div
+            variants={childVariants}
+            className="mt-4 grid grid-cols-2 gap-3"
+          >
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="mb-1 text-xs uppercase tracking-wider text-slate-500">
+                {t("paymentId")}
+              </p>
+              <p className="truncate font-mono text-xs text-slate-300">
+                {created.payment_id}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="mb-1 text-xs uppercase tracking-wider text-slate-500">
+                {t("status")}
+              </p>
+              <p className="font-mono text-xs capitalize text-slate-300">
+                {created.status}
+              </p>
+            </div>
+          </motion.div>
+
+          <motion.div
+            variants={childVariants}
+            className="mt-4 flex flex-wrap gap-2"
+          >
             <button
               type="button"
-              onClick={() => void handleShare()}
+              onClick={() => void handleCopyAndOpenQr()}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/15"
             >
               <svg
@@ -302,37 +299,44 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
                 strokeWidth={1.8}
               >
                 <path
-                  d="M7 12v7a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-7"
+                  d="M12 3v12m0 0 4-4m-4 4-4-4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
                 <path
-                  d="M12 16V4"
+                  d="M5 21h14a2 2 0 0 0 2-2v-3"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
                 <path
-                  d="m8.5 7.5 3.5-3.5 3.5 3.5"
+                  d="M5 21a2 2 0 0 1-2-2v-3"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </svg>
               {t("shareLink")}
             </button>
-          )}
+          </motion.div>
         </motion.div>
+
+        {/* Reset link */}
+        <motion.button
+          variants={childVariants}
+          type="button"
+          onClick={onReset}
+          className="text-center text-sm font-medium text-slate-400 underline underline-offset-4 transition-colors hover:text-white"
+        >
+          {t("createAnother")}
+        </motion.button>
       </motion.div>
 
-      {/* Reset link */}
-      <motion.button
-        variants={childVariants}
-        type="button"
-        onClick={onReset}
-        className="text-center text-sm font-medium text-slate-400 underline underline-offset-4 transition-colors hover:text-white"
-      >
-        {t("createAnother")}
-      </motion.button>
-    </motion.div>
+      <CheckoutQrModal
+        isOpen={showQrModal}
+        onClose={() => setShowQrModal(false)}
+        qrValue={created.payment_link}
+        paymentId={created.payment_id}
+      />
+    </>
   );
 }
 
@@ -341,34 +345,36 @@ function SuccessCard({ created, onReset, t }: SuccessCardProps) {
 export default function CreatePaymentForm() {
   const t = useTranslations("createPaymentForm");
   const [view, setView] = useState<"form" | "code">("form");
-  const [amount, setAmount] = useLocalStorage("payment_amount", "");
-  const [asset, setAsset] = useLocalStorage<"XLM" | "USDC">(
+  const [amount, setAmount, removeAmount] = useLocalStorage("payment_amount", "");
+  const [asset, setAsset, removeAsset] = useLocalStorage<"XLM" | "USDC">(
     "payment_asset",
     "XLM",
   );
-  const [recipient, setRecipient] = useLocalStorage("payment_recipient", "");
-  const [description, setDescription] = useLocalStorage(
+  const [recipient, setRecipient, removeRecipient] = useLocalStorage("payment_recipient", "");
+  const [description, setDescription, removeDescription] = useLocalStorage(
     "payment_description",
     "",
   );
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [recipientError, setRecipientError] = useState<string | null>(null);
   const [webhookUrlError, setWebhookUrlError] = useState<string | null>(null);
-  const [created, setCreated] = useState<CreatedPayment | null>(null);
+  const [paymentFlow, dispatchPaymentFlow] = useReducer(
+    createPaymentFlowReducer,
+    initialCreatePaymentFlowState,
+  );
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const trustedAddresses = useMerchantTrustedAddresses();
-  const [useSessionBranding, setUseSessionBranding] = useLocalStorage(
+  const [useSessionBranding, setUseSessionBranding, removeUseSessionBranding] = useLocalStorage(
     "payment_use_branding",
     false,
   );
-  const [branding, setBranding] = useLocalStorage(
+  const [branding, setBranding, removeBranding] = useLocalStorage(
     "payment_branding",
     DEFAULT_BRANDING,
   );
-  const [selectedTrustedAddress, setSelectedTrustedAddress] = useLocalStorage(
+  const [selectedTrustedAddress, setSelectedTrustedAddress, removeSelectedTrustedAddress] = useLocalStorage(
     "payment_trusted_address",
     "",
   );
@@ -421,6 +427,8 @@ export default function CreatePaymentForm() {
     !validateWebhookUrl(description) &&
     amount.trim().length > 0 &&
     recipient.trim().length > 0;
+  const isSubmitting = paymentFlow.stage === "submitting";
+  const isSuccessView = paymentFlow.stage === "success" && !!paymentFlow.created;
 
   // ── Rate-limit countdown ──────────────────────────────────
   const [retryAfter, setRetryAfter] = useState(0);
@@ -465,7 +473,6 @@ export default function CreatePaymentForm() {
 
     const numAmount = parseFloat(amount);
 
-    setLoading(true);
     try {
       const body: Record<string, unknown> = {
         amount: numAmount,
@@ -478,12 +485,13 @@ export default function CreatePaymentForm() {
         for (const [key, color] of Object.entries(branding)) {
           if (!HEX_COLOR_REGEX.test(color as string)) {
             setError(t("invalidHexColor", { field: key }));
-            setLoading(false);
             return;
           }
         }
         body.branding_overrides = branding;
       }
+
+      dispatchPaymentFlow({ type: "submit" });
 
       const res = await fetch(`${API_URL}/api/create-payment`, {
         method: "POST",
@@ -497,33 +505,25 @@ export default function CreatePaymentForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? t("failedCreate"));
 
-      setCreated(data);
+      dispatchPaymentFlow({ type: "success", created: data });
       toast.success(t("createdToast"));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t("failedCreate");
+      dispatchPaymentFlow({ type: "failure" });
       setError(message);
       toast.error(message);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleReset = () => {
-    setCreated(null);
-    setAmount("");
-    setRecipient("");
-    setDescription("");
-    setAsset("XLM");
-    setUseSessionBranding(false);
-    setBranding(DEFAULT_BRANDING);
-    setSelectedTrustedAddress("");
-    localStorage.removeItem("payment_amount");
-    localStorage.removeItem("payment_asset");
-    localStorage.removeItem("payment_recipient");
-    localStorage.removeItem("payment_description");
-    localStorage.removeItem("payment_use_branding");
-    localStorage.removeItem("payment_branding");
-    localStorage.removeItem("payment_trusted_address");
+    dispatchPaymentFlow({ type: "reset" });
+    removeAmount();
+    removeRecipient();
+    removeDescription();
+    removeAsset();
+    removeUseSessionBranding();
+    removeBranding();
+    removeSelectedTrustedAddress();
     setError(null);
     setAmountError(null);
     setRecipientError(null);
@@ -572,10 +572,10 @@ export default function CreatePaymentForm() {
      * the form finishes exiting before the success card enters.
      */
     <AnimatePresence mode="wait">
-      {created ? (
+      {isSuccessView && paymentFlow.created ? (
         <SuccessCard
           key="success"
-          created={created}
+          created={paymentFlow.created}
           onReset={handleReset}
           t={t}
         />
@@ -932,10 +932,10 @@ export default function CreatePaymentForm() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading || !isFormValid}
+            disabled={isSubmitting || !isFormValid}
             className="group relative flex h-12 items-center justify-center rounded-xl bg-mint px-6 font-bold text-black transition-all hover:bg-glow disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? (
+            {isSubmitting ? (
               <span className="flex items-center gap-2">
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
                   <circle

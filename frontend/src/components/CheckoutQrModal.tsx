@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useTranslations } from "next-intl";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { QRCodeCanvas } from "qrcode.react";
 import { Modal } from "@/components/ui/Modal";
 
@@ -44,10 +44,10 @@ export default function CheckoutQrModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t("qrModalTitle")}>
       <div className="flex flex-col gap-5">
-        <p className="text-sm text-slate-400">{t("qrModalDescription")}</p>
+        <p className="text-sm text-[#6B6B6B]">{t("qrModalDescription")}</p>
         <div
           ref={qrWrapperRef}
-          className="flex items-center justify-center rounded-2xl border border-white/10 bg-white p-5 transition-all hover:border-mint/30 hover:shadow-lg hover:shadow-mint/10"
+          className="flex items-center justify-center rounded-2xl border border-[#E8E8E8] bg-white p-5 transition-all hover:border-[var(--pluto-400)] hover:shadow-lg hover:shadow-[var(--pluto-400)]/10"
         >
           <QRCodeCanvas
             value={qrValue}
@@ -60,7 +60,7 @@ export default function CheckoutQrModal({
         <button
           type="button"
           onClick={handleDownload}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-mint/30 bg-mint/10 px-4 font-semibold text-mint transition-all hover:bg-mint/20 hover:border-mint/50 hover:shadow-md hover:shadow-mint/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint focus-visible:ring-offset-2 focus-visible:ring-offset-[#16171a]"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--pluto-200)] bg-[var(--pluto-50)] px-4 font-bold uppercase tracking-widest text-xs text-[var(--pluto-700)] transition-all hover:bg-[var(--pluto-100)] hover:border-[var(--pluto-400)] hover:shadow-md hover:shadow-[var(--pluto-500)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
         >
           <svg
             className="h-4 w-4"

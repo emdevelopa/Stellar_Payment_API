@@ -230,6 +230,7 @@ vi.mock("../../src/lib/supabase.js", () => {
  * Stellar mock — controls whether findMatchingPayment returns a match.
  */
 const mockFindMatchingPayment = vi.fn().mockResolvedValue(null);
+const mockVerifyTransactionSignature = vi.fn().mockResolvedValue({ valid: true });
 const mockGetNetworkFeeStats = vi.fn().mockResolvedValue({
   network: "testnet",
   horizonUrl: "https://horizon-testnet.stellar.org",
@@ -244,12 +245,17 @@ const mockGetNetworkFeeStats = vi.fn().mockResolvedValue({
 
 vi.mock("../../src/lib/stellar.js", () => ({
   findMatchingPayment: (...args) => mockFindMatchingPayment(...args),
+  verifyTransactionSignature: (...args) => mockVerifyTransactionSignature(...args),
   getNetworkFeeStats: (...args) => mockGetNetworkFeeStats(...args),
   isHorizonReachable: vi.fn(async () => true),
+  isValidAssetCode: vi.fn(() => true),
+  isValidStellarAccountId: vi.fn(() => true),
+  isValidStellarPublicKey: vi.fn(() => true),
   resolveAsset: vi.fn(),
   createRefundTransaction: vi.fn(),
   findStrictReceivePaths: vi.fn(),
   validateMemo: () => ({ valid: true }),
+  withHorizonRetry: vi.fn(),
   getStellarConfig: () => ({ network: "testnet", horizonUrl: "https://horizon-testnet.stellar.org" }),
   findAnyRecentPayment: vi.fn().mockResolvedValue([]),
 }));
@@ -375,6 +381,7 @@ describe("Payment Lifecycle — Integration", () => {
     redisMemory.clear();
     vi.clearAllMocks();
     mockFindMatchingPayment.mockResolvedValue(null);
+    mockVerifyTransactionSignature.mockResolvedValue({ valid: true });
     mockGetNetworkFeeStats.mockResolvedValue({
       network: "testnet",
       horizonUrl: "https://horizon-testnet.stellar.org",

@@ -1,4 +1,5 @@
 import cors from "cors";
+import helmet from "helmet";
 import express from "express";
 import { Server as SocketIOServer } from "socket.io";
 import swaggerUi from "swagger-ui-express";
@@ -10,14 +11,18 @@ import { createSwaggerSpec } from "./swagger.js";
 
 import createPaymentsRouter from "./routes/payments.js";
 import createMerchantsRouter from "./routes/merchants.js";
-import metricsRouter from "./routes/metrics.js";
+import createMetricsRouter from "./routes/metrics.js";
 import webhooksRouter from "./routes/webhooks.js";
 import prometheusRouter from "./routes/prometheus.js";
 import sep0001Router from "./routes/sep0001.js";
+import createSep12Router from "./routes/sep12.js";
+import trustlinesRouter from "./routes/trustlines.js";
 import paymentDetailsRouter from "./routes/paymentDetails.js";
 import x402Router from "./routes/x402.js";
 import authRouter from "./routes/auth.js";
 import sep12KycRouter from "./routes/sep12-kyc.js";
+import createAuthRouter from "./routes/auth.js";
+import auditRouter from "./routes/audit.js";
 
 import { requireApiKeyAuth } from "./lib/auth.js";
 import { isHorizonReachable } from "./lib/stellar.js";
@@ -31,8 +36,17 @@ import {
   createRedisRateLimitStore,
   createVerifyPaymentRateLimit,
   createMerchantRegistrationRateLimit,
+  createSep10ChallengeRateLimit,
+  createSep10ChallengeIpRateLimit,
+  createSep10VerifyRateLimit,
+  createDashboardMetricsRateLimit,
 } from "./lib/rate-limit.js";
+import {
+  createTransactionSignerMiddlewares,
+  handleVerifySignature,
+} from "./lib/transaction-signer.js";
 import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
+import oracleRouter from "./routes/oracle.js";
 
 export async function createApp({ redisClient }) {
   const app = express();
@@ -140,7 +154,20 @@ export async function createApp({ redisClient }) {
     })
   );
 
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }));
+
   app.use(express.json({ limit: "1mb" }));
+
+  // Explicit JSON parsing error handler
+  app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+      return res.status(400).json({ error: "Invalid JSON payload" });
+    }
+    next(err);
+  });
   // Structured JSON logging via pino-http (replaces morgan)
   app.use(httpLogger);
   // Expose the root logger on app.locals so routes can use req.log or app.locals.logger
@@ -237,6 +264,24 @@ export async function createApp({ redisClient }) {
     store: redisAvailable ? createRedisRateLimitStore({ client: redisClient }) : undefined,
   });
 
+  const sep10RateLimitStore = redisAvailable
+    ? createRedisRateLimitStore({ client: redisClient, prefix: "rl:sep10:" })
+    : undefined;
+
+  const authRouter = createAuthRouter({
+    sep10ChallengeRateLimit: createSep10ChallengeRateLimit({ store: sep10RateLimitStore }),
+    sep10ChallengeIpRateLimit: createSep10ChallengeIpRateLimit({ store: sep10RateLimitStore }),
+    sep10VerifyRateLimit: createSep10VerifyRateLimit({ store: sep10RateLimitStore }),
+  });
+
+  const dashboardMetricsRateLimit = createDashboardMetricsRateLimit({
+    store: redisAvailable
+      ? createRedisRateLimitStore({ client: redisClient, prefix: "rl:dashboard:" })
+      : undefined,
+  });
+
+  const metricsRouter = createMetricsRouter({ dashboardMetricsRateLimit });
+
   // x402 pay-per-request on payment creation endpoints (custom middleware flow)
   const x402Provider = process.env.X402_PROVIDER_PUBLIC_KEY;
   const x402Enabled = Boolean(x402Provider && process.env.X402_JWT_SECRET);
@@ -275,17 +320,41 @@ export async function createApp({ redisClient }) {
   app.use("/api", authRouter);
   app.use("/api", metricsRouter);
   app.use("/api", webhooksRouter);
+  app.use("/api", auditRouter);
   app.use("/api/payments", paymentDetailsRouter); // NEW — GET /api/payments/:id
   app.use("/api", sep12KycRouter); // SEP-12 KYC Integration
 
+  // Transaction Signer — authenticated, rate-limited signature verification endpoint (#912)
+  // requireApiKeyAuth() is mandatory here: the endpoint triggers Horizon API calls and
+  // must not be reachable by unauthenticated parties. Rate limiters run after auth so
+  // that only authenticated actors consume budget.
+  const transactionSignerMiddlewares = createTransactionSignerMiddlewares({
+    redisClient: redisAvailable ? redisClient : undefined,
+  });
+  app.post(
+    "/api/verify-signature",
+    requireApiKeyAuth(),
+    ...transactionSignerMiddlewares,
+    handleVerifySignature,
+  );
+
   // SEP-0001 stellar.toml endpoint (public, no auth required)
   app.use("/", sep0001Router);
+
+  // SEP-12 KYC endpoints (signature-gated; auth enforced per-request)
+  app.use("/", createSep12Router({
+    redisStore: redisAvailable ? createRedisRateLimitStore({ client: redisClient, prefix: "rl:sep12:" }) : undefined,
+  }));
+  app.use("/api/trustlines", trustlinesRouter);
 
   // Prometheus Metrics endpoint
   app.use("/", prometheusRouter);
 
   // x402 pay-per-request verification (public — agents call this)
   app.use("/api", x402Router);
+
+  // Smart Contract Oracle Integrator endpoints
+  app.use("/", oracleRouter);
 
   // Sentry error handler — must come after all routes, before custom error handler
   setupSentryErrorHandler(app);

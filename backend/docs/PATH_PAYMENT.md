@@ -100,6 +100,7 @@ server with mocked boundaries.
 | Sustained quote polling | 10s × 10 conns | zero errors/timeouts |
 | Latency regression guard | 10s × 10 conns | p99 < 500 ms |
 | Rate-limit budget | 250 fixed requests × 1 conn | ≥1 429, zero timeouts |
+| Rotating-asset quote storm | 10s × 5 conns, 2 asset pairs | zero timeouts |
 | Connection burst | 10s × 20 conns | zero timeouts |
 
 ```bash

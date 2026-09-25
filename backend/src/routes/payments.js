@@ -45,6 +45,10 @@ import {
   validatePerAssetLimits,
   validateAllowedIssuers,
 } from "../lib/payment-session-rules.js";
+import {
+  getExchangeRateCache,
+  generateRateCacheKey,
+} from "../lib/exchange-rate-cache.js";
 import { getSupabaseClient } from "../lib/supabase-client.js";
 import {
   paymentProcessorSessionsTotal,
@@ -1249,6 +1253,26 @@ function createPaymentsRouter({
           });
         }
 
+        // Serve fresh quotes from the robust cache before hitting Horizon;
+        // stale-but-tolerable entries are revalidated below (issue #1045).
+        const quoteCache = getExchangeRateCache();
+        const quoteCacheKey = generateRateCacheKey(
+          sourceAsset,
+          data.asset,
+          String(data.amount),
+          sourceAssetIssuer,
+          data.asset_issuer,
+        );
+        const cachedQuote = quoteCache.get(quoteCacheKey);
+        if (cachedQuote.hit && !cachedQuote.stale) {
+          exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
+          exchangeRateQuoteDuration.observe(
+            { ...assetLabels, result: "success" },
+            (Date.now() - startTime) / 1000,
+          );
+          return res.json(cachedQuote.data);
+        }
+
         const quote = await findStrictReceivePaths({
           sourceAccount,
           destAssetCode: data.asset,
@@ -1277,7 +1301,7 @@ function createPaymentsRouter({
           (Date.now() - startTime) / 1000,
         );
 
-        res.json({
+        const quotePayload = {
           source_asset: quote.source_asset_code,
           source_asset_issuer: quote.source_asset_issuer,
           source_amount: quote.source_amount,
@@ -1287,7 +1311,11 @@ function createPaymentsRouter({
           destination_amount: String(data.amount),
           path: quote.path,
           slippage: SLIPPAGE,
-        });
+        };
+
+        quoteCache.set(quoteCacheKey, quotePayload);
+
+        res.json(quotePayload);
       } catch (err) {
         exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
         exchangeRateQuoteDuration.observe(

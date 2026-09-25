@@ -54,6 +54,10 @@ vi.mock('stellar-sdk', () => ({
   Transaction: mockStellarTransaction,
 }));
 vi.mock('express-rate-limit', () => ({ default: mockRateLimit, ipKeyGenerator: mockIpKeyGenerator }));
+const mockLogger = vi.hoisted(() => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+vi.mock('./logger.js', () => mockLogger);
 
 // Now import the modules
 import {
@@ -1029,6 +1033,27 @@ describe('Trustline Manager - Integration Tests', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('Database connection failed');
   });
+
+  test('initialization logs through the structured logger instead of console', async () => {
+    const { logger } = await import('./logger.js');
+    vi.clearAllMocks();
+
+    queryWithRetry.mockResolvedValue({ rows: [] });
+    const ok = await manager.initialize();
+    expect(ok.success).toBe(true);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ indexResults: expect.any(Array) }),
+      'Trustline Manager initialized with database optimizations',
+    );
+
+    queryWithRetry.mockRejectedValue(new Error('Database connection failed'));
+    const failed = await manager.initialize();
+    expect(failed.success).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ context: 'trustline-manager.initialize' }),
+      'Failed to initialize Trustline Manager',
+    );
+  });
 });
 
 describe('Trustline Manager - Singleton Instance', () => {
@@ -1463,5 +1488,56 @@ describe('TrustlineRateLimiter – Key Generation Edge Cases', () => {
     const hashPart = key.replace('trustline:ops:api:', '');
     expect(hashPart).toHaveLength(16);
     expect(hashPart).toMatch(/^[a-f0-9]+$/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Granular Metrics Integration (issue #1043)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TrustlineManager – granular metrics integration', () => {
+  let trustlineManagerRegister;
+
+  beforeEach(async () => {
+    const metrics = await import('./trustline-manager-metrics.js');
+    trustlineManagerRegister = metrics.trustlineManagerRegister;
+    metrics.resetTrustlineManagerMetrics();
+    TrustlineErrorRecovery.resetCircuitBreaker();
+    vi.clearAllMocks();
+  });
+
+  test('records invalid signature verification outcome', async () => {
+    mockVerifyTransactionSignature.mockResolvedValue({
+      valid: false,
+      reason: 'Invalid signature',
+      isMultiSig: false,
+      signatureCount: 0,
+      thresholdMet: false,
+    });
+
+    const verifier = new TrustlineSignatureVerifier();
+    const result = await verifier.verifyTrustlineSignature('bad_tx_hash');
+
+    expect(result.valid).toBe(false);
+    const text = await trustlineManagerRegister.metrics();
+    expect(text).toContain('trustline_signature_verifications_total{outcome="invalid"} 1');
+  });
+
+  test('publishes circuit breaker state after failures', async () => {
+    const failingOp = vi.fn().mockRejectedValue(new Error('network error'));
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        TrustlineErrorRecovery.executeWithRecovery(failingOp, 'metrics-cb-ctx', {
+          maxAttempts: 1,
+        }),
+      ).rejects.toThrow();
+    }
+
+    const text = await trustlineManagerRegister.metrics();
+    expect(text).toContain('trustline_circuit_breaker_open{context="metrics-cb-ctx"} 1');
+    expect(text).toContain(
+      'trustline_error_recovery_total{context="metrics-cb-ctx",outcome="failure"} 5',
+    );
   });
 });

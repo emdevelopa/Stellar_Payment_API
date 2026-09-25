@@ -170,6 +170,27 @@ describe("SEP-0010 Authentication", () => {
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
+  it("lookupMerchantByStellarAddress scopes to active merchants and fetches at most 2 rows (#586)", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "m-1" }, error: null });
+    const limit = vi.fn().mockReturnValue({ maybeSingle });
+    const is = vi.fn().mockReturnValue({ limit });
+    const eq = vi.fn().mockReturnValue({ is });
+    const select = vi.fn().mockReturnValue({ eq });
+    const supabaseClient = { from: vi.fn().mockReturnValue({ select }) };
+    const account = clientKeypair.publicKey();
+
+    await lookupMerchantByStellarAddress(account, supabaseClient);
+
+    expect(supabaseClient.from).toHaveBeenCalledWith("merchants");
+    // Only the columns covered by idx_merchants_sep10_active_recipient.
+    expect(select).toHaveBeenCalledWith("id, email, business_name, notification_email");
+    expect(eq).toHaveBeenCalledWith("recipient", account);
+    expect(is).toHaveBeenCalledWith("deleted_at", null);
+    // Two rows suffice to detect an ambiguous address (PGRST116).
+    expect(limit).toHaveBeenCalledWith(2);
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+  });
+
   it("lookupMerchantByStellarAddress returns merchant data on success", async () => {
     const merchant = { id: "m-1", email: "a@example.com" };
     const supabaseClient = {
@@ -177,7 +198,9 @@ describe("SEP-0010 Authentication", () => {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             is: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: merchant, error: null }),
+              limit: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: merchant, error: null }),
+              }),
             }),
           }),
         }),
@@ -293,7 +316,9 @@ describe("SEP-0010 Authentication", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               is: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue(undefined),
+                limit: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue(undefined),
+                }),
               }),
             }),
           }),
@@ -311,7 +336,9 @@ describe("SEP-0010 Authentication", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               is: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ error: null }),
+                limit: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ error: null }),
+                }),
               }),
             }),
           }),
@@ -329,9 +356,11 @@ describe("SEP-0010 Authentication", () => {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               is: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: null,
-                  error: { code: "PGRST116", message: "multiple (or no) rows returned" },
+                limit: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: { code: "PGRST116", message: "multiple (or no) rows returned" },
+                  }),
                 }),
               }),
             }),

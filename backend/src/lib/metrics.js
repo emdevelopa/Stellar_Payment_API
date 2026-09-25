@@ -973,13 +973,13 @@ register.registerMetric(auditLogIntegrityVerificationsTotal);
 export { register };
 
 // ── Audit Queue Metrics (Issue #1330) ───────────────────────────────────────
-export const auditLogQueueDepth = new promClient.Gauge({
+export const auditLogQueueDepth = new client.Gauge({
   name: "audit_log_queue_depth",
   help: "Number of audit writes waiting in queue",
   labelNames: ["label"],
 });
 
-export const auditLogQueueWaitDuration = new promClient.Histogram({
+export const auditLogQueueWaitDuration = new client.Histogram({
   name: "audit_log_queue_wait_duration_seconds",
   help: "Time audit writes spend waiting in queue",
   labelNames: ["label"],

@@ -500,6 +500,10 @@ export async function lookupMerchantByStellarAddress(clientAccount, supabaseClie
       .select("id, email, business_name, notification_email")
       .eq("recipient", clientAccount)
       .is("deleted_at", null)
+      // Two rows are enough to tell "exactly one" from "ambiguous", so stop
+      // there instead of reading every merchant sharing the address (#586).
+      // Served by idx_merchants_sep10_active_recipient as an index-only scan.
+      .limit(2)
       .maybeSingle();
 
     if (!response) {

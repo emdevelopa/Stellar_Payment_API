@@ -43,9 +43,12 @@ export function _resetAuditCircuitForTests() {
  * @param {string|null} opts.ipAddress   - Remote IP from req.ip
  * @param {string|null} opts.userAgent   - User-Agent header value
  * @param {'success'|'failure'} opts.status - Outcome of the login attempt
+ * @param {string} [opts.reason] - Failure detail for security monitoring, e.g. a
+ *   SEP-10 verify error code (NONCE_REPLAY, CHALLENGE_EXPIRED, ...) or
+ *   "invalid_credentials" for password login. Omitted on success.
  * @returns {Promise<void>}
  */
-export async function logLoginAttempt({ merchantId, ipAddress, userAgent, status }) {
+export async function logLoginAttempt({ merchantId, ipAddress, userAgent, status, reason }) {
   const action = "login";
 
   // Guard against unexpected action values reaching the DB (issue #772)
@@ -68,6 +71,7 @@ export async function logLoginAttempt({ merchantId, ipAddress, userAgent, status
     merchant_id: merchantId ?? null,
     action,
     status: sanitizeAuditValue(status),
+    reason: sanitizeAuditValue(reason ?? null),
     ip_address: sanitizeAuditValue(ipAddress),
     user_agent: sanitizeAuditValue(userAgent),
     event_type: "login_attempt",
@@ -77,8 +81,8 @@ export async function logLoginAttempt({ merchantId, ipAddress, userAgent, status
   const signature = signAuditPayload(payload);
 
   const result = await auditWriter.write(
-    `INSERT INTO audit_logs (merchant_id, action, status, ip_address, user_agent, payload_hash, signature)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    `INSERT INTO audit_logs (merchant_id, action, status, ip_address, user_agent, payload_hash, signature, reason)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       payload.merchant_id,
       payload.action,
@@ -87,6 +91,7 @@ export async function logLoginAttempt({ merchantId, ipAddress, userAgent, status
       payload.user_agent,
       payloadHash,
       signature,
+      payload.reason,
     ],
     payload,
   );

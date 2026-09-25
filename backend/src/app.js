@@ -17,6 +17,7 @@ import sep0001Router from "./routes/sep0001.js";
 import paymentDetailsRouter from "./routes/paymentDetails.js";
 import x402Router from "./routes/x402.js";
 import authRouter from "./routes/auth.js";
+import sep12KycRouter from "./routes/sep12-kyc.js";
 
 import { requireApiKeyAuth } from "./lib/auth.js";
 import { isHorizonReachable } from "./lib/stellar.js";
@@ -275,6 +276,7 @@ export async function createApp({ redisClient }) {
   app.use("/api", metricsRouter);
   app.use("/api", webhooksRouter);
   app.use("/api/payments", paymentDetailsRouter); // NEW — GET /api/payments/:id
+  app.use("/api", sep12KycRouter); // SEP-12 KYC Integration
 
   // SEP-0001 stellar.toml endpoint (public, no auth required)
   app.use("/", sep0001Router);

@@ -5,6 +5,7 @@ import {
   pgPoolWaitingRequests,
   pgPoolUtilizationPercent,
 } from './metrics.js';
+import { logger } from './logger.js';
 
 const { Pool } = pg;
 const DEFAULT_RETRY_ATTEMPTS = Number.parseInt(
@@ -54,7 +55,7 @@ class CircuitBreaker {
       if (Date.now() - this.lastFailureTime >= this.resetTimeout) {
         this.state = 'HALF_OPEN';
         this.successCount = 0;
-        console.info('Circuit breaker transitioning to HALF_OPEN state');
+        logger.info('Circuit breaker transitioning to HALF_OPEN state');
       } else {
         throw new Error('Circuit breaker is OPEN - database temporarily unavailable');
       }
@@ -76,7 +77,7 @@ class CircuitBreaker {
       this.successCount++;
       if (this.successCount >= 2) {
         this.state = 'CLOSED';
-        console.info('Circuit breaker CLOSED - database connection restored');
+        logger.info('Circuit breaker CLOSED - database connection restored');
       }
     }
   }
@@ -86,7 +87,7 @@ class CircuitBreaker {
     this.lastFailureTime = Date.now();
     if (this.failureCount >= this.failureThreshold) {
       this.state = 'OPEN';
-      console.error(`Circuit breaker OPEN after ${this.failureCount} failures`);
+      logger.error({ failureCount: this.failureCount }, 'Circuit breaker OPEN');
     }
   }
 
@@ -129,7 +130,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('pg pool unexpected error:', err.message);
+  logger.error({ err: err.message }, 'pg pool unexpected error');
 });
 
 function sleep(ms) {
@@ -139,17 +140,19 @@ function sleep(ms) {
 // ── Enhanced Error Logging (Issue #761) ──────────────────────────────────────
 
 function logPoolError(err, context = {}) {
-  console.error('Database pool error:', {
-    timestamp: new Date().toISOString(),
-    message: err.message,
-    code: err.code,
-    severity: err.severity,
-    detail: err.detail,
-    hint: err.hint,
-    ...context,
-    poolStats: getPoolStats(),
-    circuitBreakerState: circuitBreaker.getState(),
-  });
+  logger.error(
+    {
+      err: err.message,
+      code: err.code,
+      severity: err.severity,
+      detail: err.detail,
+      hint: err.hint,
+      ...context,
+      poolStats: getPoolStats(),
+      circuitBreakerState: circuitBreaker.getState(),
+    },
+    'Database pool error',
+  );
 }
 
 export function isRetryablePoolError(err) {
@@ -193,8 +196,9 @@ export async function queryWithRetry(
         }
 
         const delayMs = getBackoffDelay(attempt, retryDelayMs);
-        console.warn(
-          `pg pool ${label} failed (attempt ${attempt + 1}/${retryAttempts + 1}): ${err.message}. Retrying in ${delayMs}ms.`,
+        logger.warn(
+          { label, attempt: attempt + 1, maxAttempts: retryAttempts + 1, delayMs, err: err.message },
+          'pg pool query failed, retrying',
         );
         await sleep(delayMs);
       }
@@ -241,12 +245,14 @@ function updatePoolMetrics() {
 export function startPoolMonitoring(intervalMs = 60_000) {
   const interval = setInterval(() => {
     const stats = getPoolStats();
-    console.log('Pool stats:', {
-      timestamp: new Date().toISOString(),
-      ...stats,
-      utilizationPercent: ((stats.totalConnections - stats.idleConnections) / stats.maxConnections * 100).toFixed(2),
-    });
-    
+    logger.info(
+      {
+        ...stats,
+        utilizationPercent: ((stats.totalConnections - stats.idleConnections) / stats.maxConnections * 100).toFixed(2),
+      },
+      'Pool stats',
+    );
+
     // Update Prometheus metrics
     updatePoolMetrics();
   }, intervalMs);
@@ -315,19 +321,19 @@ export async function warmPool() {
   const targetConnections = Math.floor(pool.options.max * 0.5);
   const promises = [];
 
-  console.log(`Warming pool with ${targetConnections} connections...`);
+  logger.info({ targetConnections }, 'Warming pool');
 
   for (let i = 0; i < targetConnections; i++) {
     promises.push(
       pool.query('SELECT 1').catch((err) => {
-        console.warn(`Pool warming connection ${i + 1} failed: ${err.message}`);
+        logger.warn({ connection: i + 1, err: err.message }, 'Pool warming connection failed');
       })
     );
   }
 
   await Promise.allSettled(promises);
   const stats = getPoolStats();
-  console.log(`Pool warmed: ${stats.totalConnections} connections ready`);
+  logger.info({ readyConnections: stats.totalConnections }, 'Pool warmed');
 }
 
 export { pool, circuitBreaker };

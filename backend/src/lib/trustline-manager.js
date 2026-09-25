@@ -22,6 +22,16 @@ import {
   RATE_LIMIT_REDIS_PREFIX,
 } from "./rate-limit.js";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { logger } from "./logger.js";
+import {
+  recordTrustlineCacheHit as recordTrustlineSignatureCacheHit,
+  recordTrustlineDeadLetterEntry,
+  recordTrustlineRateLimitRejection,
+  recordTrustlineRecoveryOutcome,
+  recordTrustlineSignatureVerification,
+  setTrustlineCircuitBreakerState,
+  setTrustlineDeadLetterQueueDepth,
+} from "./trustline-manager-metrics.js";
 
 // Rate limiting constants for trustline operations
 export const TRUSTLINE_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -98,6 +108,7 @@ export class TrustlineSignatureVerifier {
    * Verify trustline operation signature with enhanced security
    */
   async verifyTrustlineSignature(txHash, options = {}) {
+    const verificationStart = Date.now();
     try {
       if (!txHash || typeof txHash !== "string") {
         throw new Error(
@@ -117,6 +128,7 @@ export class TrustlineSignatureVerifier {
       if (!skipCache) {
         const cached = this.verificationCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+          recordTrustlineSignatureCacheHit();
           return cached.result;
         }
         if (cached) this.verificationCache.delete(cacheKey);
@@ -126,6 +138,10 @@ export class TrustlineSignatureVerifier {
       const basicVerification = await verifyTransactionSignature(txHash);
 
       if (!basicVerification.valid) {
+        recordTrustlineSignatureVerification(
+          "invalid",
+          (Date.now() - verificationStart) / 1000,
+        );
         return {
           ...basicVerification,
           valid: false,
@@ -153,6 +169,11 @@ export class TrustlineSignatureVerifier {
         limit: trustlineVerification.limit,
       };
 
+      recordTrustlineSignatureVerification(
+        result.valid ? "valid" : "invalid",
+        (Date.now() - verificationStart) / 1000,
+      );
+
       // Cache the result
       if (!skipCache) {
         this._pruneCache();
@@ -164,6 +185,10 @@ export class TrustlineSignatureVerifier {
 
       return result;
     } catch (error) {
+      recordTrustlineSignatureVerification(
+        "error",
+        (Date.now() - verificationStart) / 1000,
+      );
       return {
         valid: false,
         reason: `Trustline signature verification error: ${error.message}`,
@@ -459,6 +484,7 @@ export class TrustlineRateLimiter {
       handler: (req, res, _next, options) => {
         const key = this.getTrustlineOperationKey(req);
         this.recordViolation(key);
+        recordTrustlineRateLimitRejection("burst");
         res.status(options.statusCode).json(options.message);
       },
       store,
@@ -491,6 +517,7 @@ export class TrustlineRateLimiter {
       handler: (req, res, _next, options) => {
         const key = this.getTrustlineOperationKey(req);
         this.recordViolation(key);
+        recordTrustlineRateLimitRejection("operations");
         res.status(options.statusCode).json(options.message);
       },
       requestWasSuccessful: (_req, res) => res.statusCode < 400,
@@ -528,6 +555,7 @@ export class TrustlineRateLimiter {
       handler: (req, res, _next, options) => {
         const key = this.getTrustlineVerificationKey(req);
         this.recordViolation(key);
+        recordTrustlineRateLimitRejection("verifications");
         res.status(options.statusCode).json(options.message);
       },
       requestWasSuccessful: (_req, res) => res.statusCode < 400,
@@ -624,6 +652,9 @@ export class TrustlineErrorRecovery {
       s.state = "open";
     }
 
+    setTrustlineCircuitBreakerState(context, s.state === "open", s.failures);
+    recordTrustlineRecoveryOutcome(context, false);
+
     // Update recovery metrics (Task #880 - Enhanced monitoring)
     this._updateRecoveryMetrics(context, false);
   }
@@ -641,6 +672,9 @@ export class TrustlineErrorRecovery {
       if (s.failures > 0) s.metrics.totalRecoveries++;
       s.failures = 0;
     }
+
+    setTrustlineCircuitBreakerState(context, s.state === "open", s.failures);
+    recordTrustlineRecoveryOutcome(context, true);
 
     // Update recovery metrics (Task #880 - Enhanced monitoring)
     this._updateRecoveryMetrics(context, true);
@@ -733,6 +767,10 @@ export class TrustlineErrorRecovery {
     };
 
     deadLetterQueue.push(enhancedEntry);
+    recordTrustlineDeadLetterEntry(
+      deadLetterQueue.length,
+      enhancedEntry.errorType,
+    );
   }
 
   /**
@@ -788,7 +826,9 @@ export class TrustlineErrorRecovery {
 
   /** Drain (clear) the dead-letter queue and return its contents. */
   static drainDeadLetterQueue() {
-    return deadLetterQueue.splice(0, deadLetterQueue.length);
+    const drained = deadLetterQueue.splice(0, deadLetterQueue.length);
+    setTrustlineDeadLetterQueueDepth(0);
+    return drained;
   }
 
   // ─── Timeout Wrapper ─────────────────────────────────────────────────────────
@@ -1104,9 +1144,14 @@ export class TrustlineErrorRecovery {
   static resetCircuitBreaker(context = null) {
     if (context) {
       circuitBreakerRegistry.delete(context);
+      setTrustlineCircuitBreakerState(context, false, 0);
     } else {
       // Legacy behaviour: reset all breakers
+      const contexts = [...circuitBreakerRegistry.keys()];
       circuitBreakerRegistry.clear();
+      for (const ctx of contexts) {
+        setTrustlineCircuitBreakerState(ctx, false, 0);
+      }
     }
   }
 
@@ -1538,13 +1583,16 @@ export class TrustlineManager {
   async initialize() {
     try {
       const indexResults = await this.queryOptimizer.createOptimizedIndexes();
-      console.log(
-        "Trustline Manager initialized with database optimizations:",
-        indexResults,
+      logger.info(
+        { indexResults },
+        "Trustline Manager initialized with database optimizations",
       );
       return { success: true, indexResults };
     } catch (error) {
-      console.error("Failed to initialize Trustline Manager:", error);
+      logger.error(
+        { err: error, context: "trustline-manager.initialize" },
+        "Failed to initialize Trustline Manager",
+      );
       return { success: false, error: error.message };
     }
   }

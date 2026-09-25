@@ -1291,6 +1291,16 @@ function createPaymentsRouter({
           (Date.now() - quoteStart) / 1000,
         );
 
+        // Cached quotes never reach Horizon, so count them here to keep
+        // exchange_rate_* success semantics from #1045 (issue #1047).
+        if (quote.cached) {
+          exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
+          exchangeRateQuoteDuration.observe(
+            { ...assetLabels, result: "success" },
+            (Date.now() - startTime) / 1000,
+          );
+        }
+
         exchangeRateSlippageApplied.inc({ slippage_pct: String(quote.slippage) });
         pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "success" });
         pathPaymentQuotePathHops.observe(quote.path.length);

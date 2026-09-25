@@ -58,6 +58,17 @@ vi.mock('stellar-sdk', () => ({
 }));
 vi.mock('express-rate-limit', () => ({ default: mockRateLimit, ipKeyGenerator: mockIpKeyGenerator }));
 vi.mock('./logger.js', () => ({ logger: mockLogger }));
+vi.mock('./metrics.js', () => ({
+    assetIssuerVerificationsTotal: { inc: vi.fn() },
+    assetIssuerVerificationDuration: { observe: vi.fn() },
+    assetIssuerCacheOperationsTotal: { inc: vi.fn() },
+    assetIssuerCacheSize: { set: vi.fn() },
+    assetIssuerQueryDuration: { observe: vi.fn() },
+    assetIssuerErrorRecoveryTotal: { inc: vi.fn() },
+    assetIssuerCircuitBreakerState: { set: vi.fn() },
+    assetIssuerOpenCircuitBreakers: { set: vi.fn() },
+    assetIssuerDeadLetterQueueSize: { set: vi.fn() },
+}));
 vi.mock('./rate-limit.js', () => ({
     createRedisRateLimitStore: vi.fn(),
     RATE_LIMIT_REDIS_PREFIX: 'rl:',
@@ -74,6 +85,16 @@ import {
 } from './asset-issuer.js';
 import { queryWithRetry } from './db.js';
 import { withHorizonRetry } from './stellar.js';
+import {
+    assetIssuerVerificationsTotal,
+    assetIssuerCacheOperationsTotal,
+    assetIssuerQueryDuration,
+    assetIssuerErrorRecoveryTotal,
+    assetIssuerCircuitBreakerState,
+    assetIssuerOpenCircuitBreakers,
+    assetIssuerDeadLetterQueueSize,
+    assetIssuerCacheSize,
+} from './metrics.js';
 
 // ============================================================================
 // Issue #890: Enhanced Error Recovery
@@ -1292,6 +1313,209 @@ describe('AssetIssuerQueryOptimizer query cache (Issue #1050)', () => {
             const stats = AssetIssuerQueryOptimizer.getQueryCacheStats();
             expect(stats.hits).toBeGreaterThan(0);
             expect(stats.misses).toBeGreaterThan(0);
+        });
+    });
+});
+
+// ============================================================================
+// Issue #1053: Granular metrics tracking
+// ============================================================================
+describe('Asset Issuer metrics (Issue #1053)', () => {
+    beforeEach(() => {
+        AssetIssuerErrorRecovery.resetCircuitBreaker();
+        AssetIssuerErrorRecovery.drainDeadLetterQueue();
+        AssetIssuerQueryOptimizer.invalidateQueryCache();
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        AssetIssuerQueryOptimizer.invalidateQueryCache();
+    });
+
+    describe('query cache metrics', () => {
+        test('counts a cache hit and a cache miss separately', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+
+            expect(assetIssuerCacheOperationsTotal.inc).toHaveBeenCalledWith({ operation: 'miss' });
+            expect(assetIssuerCacheOperationsTotal.inc).toHaveBeenCalledWith({ operation: 'hit' });
+        });
+
+        test('counts an eviction and keeps the size gauge in step', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            for (let i = 0; i < 520; i++) {
+                await AssetIssuerQueryOptimizer.getIssuerStats(`GB${i}`);
+            }
+
+            expect(assetIssuerCacheOperationsTotal.inc).toHaveBeenCalledWith({ operation: 'eviction' });
+            expect(assetIssuerCacheSize.set).toHaveBeenLastCalledWith(500);
+        });
+
+        test('counts an invalidation when a verification write drops an entry', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.logAssetIssuerVerification({
+                merchantId: 'M1',
+                txHash: 'abc123',
+                assetIssuer: 'GBXX',
+                verification: { valid: true, operationType: 'payment' },
+            });
+
+            expect(assetIssuerCacheOperationsTotal.inc).toHaveBeenCalledWith({ operation: 'invalidation' });
+        });
+    });
+
+    describe('query duration metrics', () => {
+        test('observes issuer stats reads labelled by query name', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+
+            expect(assetIssuerQueryDuration.observe).toHaveBeenCalledWith(
+                { query: 'issuer_stats' },
+                expect.any(Number),
+            );
+        });
+
+        test('observes health metrics reads labelled by query name', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
+
+            expect(assetIssuerQueryDuration.observe).toHaveBeenCalledWith(
+                { query: 'health_metrics' },
+                expect.any(Number),
+            );
+        });
+
+        test('observes a failed read before rethrowing', async () => {
+            const error = new Error('bad request');
+            error.status = 400;
+            mockQueryWithRetry.mockRejectedValue(error);
+
+            await expect(AssetIssuerQueryOptimizer.getIssuerStats('GBXX')).rejects.toThrow();
+
+            expect(assetIssuerQueryDuration.observe).toHaveBeenCalledWith(
+                { query: 'issuer_stats' },
+                expect.any(Number),
+            );
+        });
+    });
+
+    describe('verification metrics', () => {
+        test('counts a valid verification by result and operation type', async () => {
+            mockVerifyTransactionSignature.mockResolvedValue({
+                valid: true, reason: 'ok', isMultiSig: false, signatureCount: 1, thresholdMet: true,
+            });
+            mockWithHorizonRetry.mockResolvedValue({ envelope_xdr: 'AAAA', source_account: 'GBXX' });
+            const { Transaction } = await import('stellar-sdk');
+            Transaction.mockImplementation(() => ({
+                operations: [{ type: 'payment', asset: { isNative: () => false, getCode: () => 'USDC', getIssuer: () => 'GBXX' }, amount: '1' }],
+            }));
+
+            const verifier = new AssetIssuerSignatureVerifier();
+            await verifier.verifyOperation('txMetricsValid');
+
+            expect(assetIssuerVerificationsTotal.inc).toHaveBeenCalledWith({ result: 'valid', operation: 'payment' });
+        });
+
+        test('counts an invalid verification', async () => {
+            mockVerifyTransactionSignature.mockResolvedValue({ valid: false, reason: 'bad' });
+
+            const verifier = new AssetIssuerSignatureVerifier();
+            await verifier.verifyOperation('txMetricsInvalid');
+
+            expect(assetIssuerVerificationsTotal.inc).toHaveBeenCalledWith({ result: 'invalid', operation: 'any' });
+        });
+    });
+
+    describe('error recovery metrics', () => {
+        test('counts a non-retryable rejection by error type', async () => {
+            const error = new Error('bad request');
+            error.status = 400;
+
+            await expect(
+                AssetIssuerErrorRecovery.executeWithRecovery(
+                    () => Promise.reject(error),
+                    'metrics_rejected',
+                )
+            ).rejects.toThrow();
+
+            expect(assetIssuerErrorRecoveryTotal.inc).toHaveBeenCalledWith({
+                error_type: 'client_error',
+                outcome: 'rejected',
+            });
+        });
+
+        test('counts retries being exhausted', async () => {
+            await expect(
+                AssetIssuerErrorRecovery.executeWithRecovery(
+                    () => Promise.reject(new Error('network error')),
+                    'metrics_exhausted',
+                )
+            ).rejects.toThrow();
+
+            expect(assetIssuerErrorRecoveryTotal.inc).toHaveBeenCalledWith({
+                error_type: 'network',
+                outcome: 'exhausted',
+            });
+        }, 30000);
+
+        test('counts a recovery when an operation succeeds after earlier failures', async () => {
+            const op = vi.fn()
+                .mockRejectedValueOnce(new Error('network error'))
+                .mockResolvedValue('ok');
+
+            await AssetIssuerErrorRecovery.executeWithRecovery(op, 'metrics_recovered');
+
+            expect(assetIssuerErrorRecoveryTotal.inc).toHaveBeenCalledWith({
+                error_type: 'network',
+                outcome: 'recovered',
+            });
+        }, 30000);
+    });
+
+    describe('circuit breaker and dead letter gauges', () => {
+        test('reports zero open breakers when all contexts are healthy', () => {
+            AssetIssuerErrorRecovery.getCircuitBreakerMetrics();
+
+            expect(assetIssuerOpenCircuitBreakers.set).toHaveBeenLastCalledWith(0);
+            expect(assetIssuerCircuitBreakerState.set).toHaveBeenLastCalledWith(0);
+        });
+
+        test('reports an open breaker once a context trips', async () => {
+            const error = new Error('bad request');
+            error.status = 400;
+
+            for (let i = 0; i < 5; i++) {
+                await expect(
+                    AssetIssuerErrorRecovery.executeWithRecovery(() => Promise.reject(error), 'metrics_cb')
+                ).rejects.toThrow();
+            }
+
+            AssetIssuerErrorRecovery.getCircuitBreakerMetrics();
+
+            expect(assetIssuerOpenCircuitBreakers.set).toHaveBeenLastCalledWith(1);
+            expect(assetIssuerCircuitBreakerState.set).toHaveBeenLastCalledWith(1);
+        });
+
+        test('tracks the dead letter queue size as entries are added and drained', async () => {
+            const error = new Error('bad request');
+            error.status = 400;
+
+            await expect(
+                AssetIssuerErrorRecovery.executeWithRecovery(() => Promise.reject(error), 'metrics_dlq')
+            ).rejects.toThrow();
+
+            expect(assetIssuerDeadLetterQueueSize.set).toHaveBeenLastCalledWith(1);
+
+            AssetIssuerErrorRecovery.drainDeadLetterQueue();
+
+            expect(assetIssuerDeadLetterQueueSize.set).toHaveBeenLastCalledWith(0);
         });
     });
 });

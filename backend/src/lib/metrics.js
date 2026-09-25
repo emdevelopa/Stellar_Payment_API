@@ -337,6 +337,70 @@ export const dbPoolerRateLimitUtilizationPercent = new client.Gauge({
 });
 
 /**
+ * Asset Issuer Granular Operational Metrics (Issue #1053)
+ *
+ * Per-transaction and per-issuer detail is deliberately NOT exported as
+ * label values: asset issuers and transaction hashes are unbounded, so
+ * labelling by them would grow the series cardinality without limit and let a
+ * caller mint metrics just by varying an identifier. Operations are labelled
+ * by outcome and operation *type* (a small, closed set) instead, and
+ * per-issuer detail stays available in the existing
+ * `AssetIssuerErrorRecovery.getCircuitBreakerMetrics()` snapshot.
+ */
+
+export const assetIssuerVerificationsTotal = new client.Counter({
+  name: "asset_issuer_verifications_total",
+  help: "Total number of asset issuer transaction verifications",
+  labelNames: ["result", "operation"], // result: valid|invalid, operation: payment|changeTrust|...
+});
+
+export const assetIssuerVerificationDuration = new client.Histogram({
+  name: "asset_issuer_verification_duration_seconds",
+  help: "Time spent verifying an asset issuer transaction, including cache lookups",
+  labelNames: ["result"], // valid|invalid
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20],
+});
+
+export const assetIssuerCacheOperationsTotal = new client.Counter({
+  name: "asset_issuer_cache_operations_total",
+  help: "Total number of asset issuer query cache operations",
+  labelNames: ["operation"], // hit|miss|eviction|expiration|invalidation
+});
+
+export const assetIssuerCacheSize = new client.Gauge({
+  name: "asset_issuer_cache_size",
+  help: "Current number of entries held in the asset issuer query cache",
+});
+
+export const assetIssuerQueryDuration = new client.Histogram({
+  name: "asset_issuer_query_duration_seconds",
+  help: "Time spent running an asset issuer database query, including cached reads",
+  labelNames: ["query"], // issuer_stats|health_metrics|verification_log
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+});
+
+export const assetIssuerErrorRecoveryTotal = new client.Counter({
+  name: "asset_issuer_error_recovery_total",
+  help: "Total number of asset issuer error-recovery outcomes",
+  labelNames: ["error_type", "outcome"], // error_type: network|timeout|..., outcome: recovered|exhausted|rejected
+});
+
+export const assetIssuerCircuitBreakerState = new client.Gauge({
+  name: "asset_issuer_circuit_breaker_state",
+  help: "Aggregate state of asset issuer circuit breakers (0 = none open, 1 = at least one open)",
+});
+
+export const assetIssuerOpenCircuitBreakers = new client.Gauge({
+  name: "asset_issuer_open_circuit_breakers",
+  help: "Current number of asset issuer circuit breaker contexts that are open or half-open",
+});
+
+export const assetIssuerDeadLetterQueueSize = new client.Gauge({
+  help: "Current number of asset issuer operations waiting in the dead-letter queue",
+  name: "asset_issuer_dead_letter_queue_size",
+});
+
+/**
  * Exchange Rate Service Metrics
  */
 
@@ -892,6 +956,15 @@ register.registerMetric(dbPoolerCircuitBreakerState);
 register.registerMetric(dbPoolerFallbackModeActive);
 register.registerMetric(dbPoolerActiveMerchantWindows);
 register.registerMetric(dbPoolerRateLimitUtilizationPercent);
+register.registerMetric(assetIssuerVerificationsTotal);
+register.registerMetric(assetIssuerVerificationDuration);
+register.registerMetric(assetIssuerCacheOperationsTotal);
+register.registerMetric(assetIssuerCacheSize);
+register.registerMetric(assetIssuerQueryDuration);
+register.registerMetric(assetIssuerErrorRecoveryTotal);
+register.registerMetric(assetIssuerCircuitBreakerState);
+register.registerMetric(assetIssuerOpenCircuitBreakers);
+register.registerMetric(assetIssuerDeadLetterQueueSize);
 register.registerMetric(exchangeRateQuoteRequests);
 register.registerMetric(exchangeRateQuoteDuration);
 register.registerMetric(exchangeRateHorizonCalls);

@@ -64,6 +64,18 @@ vi.mock("stellar-sdk", () => ({
 
 vi.mock("../src/lib/logger.js", () => ({ logger: mockLogger }));
 
+vi.mock("../src/lib/metrics.js", () => ({
+  assetIssuerVerificationsTotal: { inc: vi.fn() },
+  assetIssuerVerificationDuration: { observe: vi.fn() },
+  assetIssuerCacheOperationsTotal: { inc: vi.fn() },
+  assetIssuerCacheSize: { set: vi.fn() },
+  assetIssuerQueryDuration: { observe: vi.fn() },
+  assetIssuerErrorRecoveryTotal: { inc: vi.fn() },
+  assetIssuerCircuitBreakerState: { set: vi.fn() },
+  assetIssuerOpenCircuitBreakers: { set: vi.fn() },
+  assetIssuerDeadLetterQueueSize: { set: vi.fn() },
+}));
+
 vi.mock("../src/lib/rate-limit.js", () => ({
   createRedisRateLimitStore: vi.fn(() => ({})),
   RATE_LIMIT_REDIS_PREFIX: "rl:",

@@ -9,6 +9,9 @@
  *
  * This module wraps the base db.js pool with additional layers
  * of optimization, protection, and integrity verification.
+ *
+ * Issue #1057: the open-circuit path degrades straight to the raw pool
+ * instead of re-entering optimizedQuery.
  */
 
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
@@ -483,8 +486,23 @@ export async function optimizedQuery(
   if (_isDbPoolerCircuitBreakerOpen(now)) {
     logger.warn("Database pooler circuit breaker is open, enabling fallback mode");
     _enableFallbackMode();
-    // Retry with fallback mode
-    return optimizedQuery(text, values, { label, retryAttempts, retryDelayMs, merchantId, useCache, signature });
+
+    // Issue #1057: this used to re-enter `optimizedQuery` recursively. If
+    // fallback mode expired between the enable and the re-entry, the retry
+    // hit the open circuit again and recursed once more — unbounded stack
+    // growth for as long as the database stayed down. Fall back directly to
+    // the raw pool instead, which is exactly what fallback mode does.
+    try {
+      const result = await pool.query(text, values);
+      dbPoolerQueryTotal.inc({ label, status: "fallback_success" });
+      observeDuration("fallback_success");
+      return result;
+    } catch (fallbackErr) {
+      dbPoolerQueryTotal.inc({ label, status: "fallback_error" });
+      observeDuration("fallback_error");
+      logger.error({ err: fallbackErr, label }, "Fallback mode query execution failed");
+      throw fallbackErr;
+    }
   }
 
   // ── Step 1: Rate limiting check (Issue #758) ─────────────────────────────

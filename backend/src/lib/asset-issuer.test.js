@@ -271,10 +271,96 @@ describe('AssetIssuerErrorRecovery (Issue #890)', () => {
             expect(dlq[dlq.length - 1].context).toBe('dlq_test');
         });
 
+        test('should log when an operation is dead-lettered', async () => {
+            AssetIssuerErrorRecovery.drainDeadLetterQueue();
+            const error = new Error('bad request');
+            error.status = 400;
+            const mockOperation = vi.fn().mockRejectedValue(error);
+
+            await expect(
+                AssetIssuerErrorRecovery.executeWithRecovery(mockOperation, 'dlq_logging_test')
+            ).rejects.toThrow();
+
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({ context: 'dlq_logging_test' }),
+                'Asset issuer operation added to dead-letter queue'
+            );
+        });
+
+        test('should evict the oldest entry and log once the queue is full', async () => {
+            AssetIssuerErrorRecovery.drainDeadLetterQueue();
+
+            const failing = (context) => {
+                const error = new Error('bad request');
+                error.status = 400;
+                return expect(
+                    AssetIssuerErrorRecovery.executeWithRecovery(vi.fn().mockRejectedValue(error), context)
+                ).rejects.toThrow();
+            };
+
+            for (let i = 0; i < 100; i += 1) {
+                await failing(`dlq_fill_${i}`);
+            }
+
+            const dlq = AssetIssuerErrorRecovery.getDeadLetterQueue();
+            expect(dlq.length).toBe(100);
+            expect(dlq[0].context).toBe('dlq_fill_0');
+
+            await failing('dlq_overflow');
+
+            const afterOverflow = AssetIssuerErrorRecovery.getDeadLetterQueue();
+            expect(afterOverflow.length).toBe(100);
+            expect(afterOverflow[0].context).toBe('dlq_fill_1');
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({ context: 'dlq_fill_0' }),
+                'Asset issuer dead-letter queue full, evicted oldest entry'
+            );
+
+            AssetIssuerErrorRecovery.drainDeadLetterQueue();
+        }, 60000);
+
         test('should drain dead letter queue', () => {
             const drained = AssetIssuerErrorRecovery.drainDeadLetterQueue();
             expect(Array.isArray(drained)).toBe(true);
             expect(AssetIssuerErrorRecovery.getDeadLetterQueue().length).toBe(0);
+        });
+    });
+
+    describe('recovery health snapshot (Issue #1052)', () => {
+        test('should report a bounded, fixed-shape snapshot', () => {
+            AssetIssuerErrorRecovery.drainDeadLetterQueue();
+            const health = AssetIssuerErrorRecovery.getRecoveryHealth();
+
+            expect(health).toEqual({
+                trackedContexts: expect.any(Number),
+                openCircuits: expect.any(Number),
+                halfOpenCircuits: expect.any(Number),
+                deadLetterQueueSize: expect.any(Number),
+                deadLetterQueueCapacity: expect.any(Number),
+                totalFailures: expect.any(Number),
+                totalRecoveries: expect.any(Number),
+            });
+        });
+
+        test('should count open circuits and dead-lettered work', async () => {
+            AssetIssuerErrorRecovery.drainDeadLetterQueue();
+            const error = new Error('bad request');
+            error.status = 400;
+
+            for (let i = 0; i < 5; i += 1) {
+                await expect(
+                    AssetIssuerErrorRecovery.executeWithRecovery(
+                        vi.fn().mockRejectedValue(error),
+                        'health_open_context'
+                    )
+                ).rejects.toThrow();
+            }
+
+            const health = AssetIssuerErrorRecovery.getRecoveryHealth();
+            expect(health.openCircuits).toBe(1);
+            expect(health.halfOpenCircuits).toBe(0);
+            expect(health.deadLetterQueueSize).toBe(5);
+            expect(health.totalFailures).toBeGreaterThanOrEqual(5);
         });
     });
 
@@ -295,6 +381,16 @@ describe('AssetIssuerErrorRecovery (Issue #890)', () => {
             expect(result).toBe(true);
         });
 
+        test('should reuse a single Horizon client across verifications (Issue #1052)', async () => {
+            mockWithHorizonRetry.mockResolvedValue({ id: 'GBXX' });
+
+            await AssetIssuerErrorRecovery.verifyIssuerOnChain('GBXX');
+            const constructionsAfterFirst = mockStellarServer.mock.calls.length;
+
+            await AssetIssuerErrorRecovery.verifyIssuerOnChain('GBXX');
+            expect(mockStellarServer.mock.calls.length).toBe(constructionsAfterFirst);
+        });
+
         test('should return false if issuer not found (404)', async () => {
             const error = new Error('not found');
             error.status = 404;
@@ -308,6 +404,67 @@ describe('AssetIssuerErrorRecovery (Issue #890)', () => {
         test('should return circuit breaker metrics snapshot', () => {
             const metrics = AssetIssuerErrorRecovery.getCircuitBreakerMetrics();
             expect(typeof metrics).toBe('object');
+        });
+    });
+
+    describe('open circuit handling (Issue #1052)', () => {
+        test('should log the rejection and a failing fallback handler', async () => {
+            const error = new Error('bad request');
+            error.status = 400;
+
+            for (let i = 0; i < 5; i += 1) {
+                await expect(
+                    AssetIssuerErrorRecovery.executeWithRecovery(
+                        vi.fn().mockRejectedValue(error),
+                        'open_circuit_context'
+                    )
+                ).rejects.toThrow();
+            }
+
+            const fallback = vi.fn().mockRejectedValue(new Error('fallback exploded'));
+
+            await expect(
+                AssetIssuerErrorRecovery.executeWithRecovery(
+                    vi.fn().mockResolvedValue('never reached'),
+                    'open_circuit_context',
+                    { fallback }
+                )
+            ).rejects.toThrow('Circuit breaker is open');
+
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                { context: 'open_circuit_context' },
+                'Asset issuer circuit breaker open, rejecting operation'
+            );
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                expect.objectContaining({ context: 'open_circuit_context' }),
+                'Asset issuer fallback handler failed while circuit breaker open'
+            );
+        });
+
+        test('should return the fallback result when the handler succeeds', async () => {
+            const error = new Error('bad request');
+            error.status = 400;
+
+            for (let i = 0; i < 5; i += 1) {
+                await expect(
+                    AssetIssuerErrorRecovery.executeWithRecovery(
+                        vi.fn().mockRejectedValue(error),
+                        'open_circuit_fallback_ok'
+                    )
+                ).rejects.toThrow();
+            }
+
+            const fallback = vi.fn().mockResolvedValue('degraded-response');
+
+            await expect(
+                AssetIssuerErrorRecovery.executeWithRecovery(
+                    vi.fn().mockResolvedValue('never reached'),
+                    'open_circuit_fallback_ok',
+                    { fallback }
+                )
+            ).resolves.toBe('degraded-response');
+
+            expect(mockLogger.error).not.toHaveBeenCalled();
         });
     });
 });
@@ -361,6 +518,26 @@ describe('AssetIssuerRateLimiter (Issue #887)', () => {
             const key = AssetIssuerRateLimiter.getBurstKey(req);
             expect(key).toBe('asset:issuer:burst:merchant:M1');
         });
+
+        test('should key both tiers off the same resolved actor (Issue #1052)', () => {
+            const reqs = [
+                { merchant: { id: 'M1' } },
+                { headers: { 'x-api-key': 'sk_test_1234567890abcdef' }, ip: '1.2.3.4' },
+                { ip: '9.9.9.9' },
+            ];
+
+            for (const req of reqs) {
+                const standard = AssetIssuerRateLimiter.getKey(req);
+                const burst = AssetIssuerRateLimiter.getBurstKey(req);
+                expect(burst).toBe(standard.replace('asset:issuer:', 'asset:issuer:burst:'));
+            }
+        });
+
+        test('should report the actor type for logging', () => {
+            expect(AssetIssuerRateLimiter._resolveActor({ merchant: { id: 'M1' } }).actorType).toBe('merchant');
+            expect(AssetIssuerRateLimiter._resolveActor({ headers: { 'x-api-key': 'sk_test_1' } }).actorType).toBe('api_key');
+            expect(AssetIssuerRateLimiter._resolveActor({ ip: '1.2.3.4' }).actorType).toBe('ip');
+        });
     });
 
     describe('createRateLimiter', () => {
@@ -398,6 +575,15 @@ describe('AssetIssuerRateLimiter (Issue #887)', () => {
             const callArg = mockRateLimit.mock.calls[0][0];
             expect(callArg.windowMs).toBe(10 * 1000);
             expect(callArg.max).toBe(10);
+        });
+
+        test('should apply the same tier exemption as the standard limiter (Issue #1052)', () => {
+            AssetIssuerRateLimiter.createBurstRateLimiter();
+            const callArg = mockRateLimit.mock.calls[0][0];
+
+            expect(callArg.skip({ merchant: { metadata: { tier: 'enterprise' } } })).toBe(true);
+            expect(callArg.skip({ merchant: { metadata: { tier: 'premium' } } })).toBe(true);
+            expect(callArg.skip({ merchant: { id: 'M1' } })).toBe(false);
         });
     });
 
@@ -631,6 +817,18 @@ describe('AssetIssuerSignatureVerifier (Issue #888)', () => {
     });
 
     describe('verifyAssetIssuerOperation', () => {
+        test('should log and report failure when Horizon rejects (Issue #1052)', async () => {
+            mockWithHorizonRetry.mockRejectedValue(new Error('horizon unavailable'));
+
+            const result = await verifier.verifyAssetIssuerOperation('txHash123');
+            expect(result.valid).toBe(false);
+            expect(result.reason).toContain('horizon unavailable');
+            expect(mockLogger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({ txHash: 'txHash123' }),
+                'Asset issuer operation verification failed'
+            );
+        });
+
         test('should detect no operations in transaction', async () => {
             mockWithHorizonRetry.mockResolvedValue({
                 envelope_xdr: 'AAAA...',

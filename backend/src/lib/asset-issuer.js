@@ -6,6 +6,9 @@
  * - Issue #887: Rate limiting for asset issuer operations
  * - Issue #888: Cryptographic signature verification for asset operations
  * - Issue #889: Optimized SQL queries for asset and issuer data
+ * - Issue #1052: Refactored legacy code — shared Horizon client, de-duplicated
+ *   rate-limit actor resolution, dead-letter/fallback logging, bounded
+ *   `getRecoveryHealth()` snapshot
  */
 
 import { createHash } from "node:crypto";
@@ -53,6 +56,28 @@ const circuitBreakerRegistry = new Map();
  * In-memory dead-letter queue for operations that exhausted retries.
  */
 const deadLetterQueue = [];
+
+/**
+ * Lazily-initialized shared Horizon server.
+ *
+ * Previously every verification built its own `new StellarSdk.Horizon.Server(...)`,
+ * which meant a fresh client (and its internal agent/socket setup) per call and
+ * no reuse of connections under load.
+ */
+let _horizonServer = null;
+
+function getHorizonServer() {
+    if (!_horizonServer) {
+        const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
+        _horizonServer = new StellarSdk.Horizon.Server(
+            process.env.STELLAR_HORIZON_URL ||
+            (NETWORK === "public"
+                ? "https://horizon.stellar.org"
+                : "https://horizon-testnet.stellar.org")
+        );
+    }
+    return _horizonServer;
+}
 
 /**
  * Issue #890: Enhanced error recovery for asset issuer operations
@@ -152,12 +177,20 @@ export class AssetIssuerErrorRecovery {
 
     static _pushToDeadLetterQueue(entry) {
         if (deadLetterQueue.length >= DLQ_MAX_SIZE) {
-            deadLetterQueue.shift();
+            const evicted = deadLetterQueue.shift();
+            logger.warn(
+                { context: evicted?.context, dlqSize: deadLetterQueue.length },
+                'Asset issuer dead-letter queue full, evicted oldest entry'
+            );
         }
         deadLetterQueue.push({
             ...entry,
             enqueuedAt: new Date().toISOString(),
         });
+        logger.warn(
+            { context: entry.context, errorType: entry.errorType, attempts: entry.attempts },
+            'Asset issuer operation added to dead-letter queue'
+        );
     }
 
     static getDeadLetterQueue() {
@@ -198,10 +231,13 @@ export class AssetIssuerErrorRecovery {
             cbError.isCircuitBreakerOpen = true;
             cbError.status = 503;
 
+            logger.warn({ context }, 'Asset issuer circuit breaker open, rejecting operation');
             if (fallback) {
                 try {
                     return await fallback(cbError);
-                } catch (_) { }
+                } catch (fallbackError) {
+                    logger.error({ err: fallbackError, context }, 'Asset issuer fallback handler failed while circuit breaker open');
+                }
             }
             throw cbError;
         }
@@ -239,7 +275,9 @@ export class AssetIssuerErrorRecovery {
                     if (fallback) {
                         try {
                             return await fallback(enhanced);
-                        } catch (_) { }
+                        } catch (fallbackError) {
+                            logger.error({ err: fallbackError, context }, 'Asset issuer fallback handler failed');
+                        }
                     }
                     throw enhanced;
                 }
@@ -267,7 +305,9 @@ export class AssetIssuerErrorRecovery {
         if (fallback) {
             try {
                 return await fallback(finalEnhanced);
-            } catch (_) { }
+            } catch (fallbackError) {
+                logger.error({ err: fallbackError, context }, 'Asset issuer fallback handler failed');
+            }
         }
         throw finalEnhanced;
     }
@@ -434,6 +474,39 @@ export class AssetIssuerErrorRecovery {
         return snapshot;
     }
 
+    /**
+     * Issue #1052: single operational snapshot of the recovery subsystem.
+     *
+     * The per-context `getCircuitBreakerMetrics()` map is unbounded in shape
+     * (one entry per context string) and the dead-letter queue is private, so
+     * health endpoints had no cheap, bounded way to report how many contexts
+     * are degraded or how much work is sitting unprocessed. This aggregates
+     * both into fixed-shape counters.
+     */
+    static getRecoveryHealth() {
+        let open = 0;
+        let halfOpen = 0;
+        let totalFailures = 0;
+        let totalRecoveries = 0;
+
+        for (const state of circuitBreakerRegistry.values()) {
+            if (state.state === 'open') open += 1;
+            if (state.state === 'half-open') halfOpen += 1;
+            totalFailures += state.metrics.totalFailures;
+            totalRecoveries += state.metrics.totalRecoveries;
+        }
+
+        return {
+            trackedContexts: circuitBreakerRegistry.size,
+            openCircuits: open,
+            halfOpenCircuits: halfOpen,
+            deadLetterQueueSize: deadLetterQueue.length,
+            deadLetterQueueCapacity: DLQ_MAX_SIZE,
+            totalFailures,
+            totalRecoveries,
+        };
+    }
+
     static recordFailure() {
         this._recordFailure('default', new Error('Manual failure record'));
     }
@@ -443,13 +516,7 @@ export class AssetIssuerErrorRecovery {
     static async verifyIssuerOnChain(issuer) {
         return this.executeWithRecovery(
             async () => {
-                const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
-                const server = new StellarSdk.Horizon.Server(
-                    process.env.STELLAR_HORIZON_URL ||
-                    (NETWORK === "public"
-                        ? "https://horizon.stellar.org"
-                        : "https://horizon-testnet.stellar.org")
-                );
+                const server = getHorizonServer();
 
                 try {
                     await withHorizonRetry(
@@ -483,7 +550,14 @@ export class AssetIssuerErrorRecovery {
  */
 export class AssetIssuerRateLimiter {
 
-    static getKey(req) {
+    /**
+     * Issue #1052: the actor resolution (merchant → hashed API key → IP, with
+     * a tier skip) was duplicated verbatim in `getKey`/`getBurstKey`, so the
+     * two tiers could silently drift apart — e.g. a fix to the key hashing
+     * applied to only one of them, leaving standard and burst buckets keyed
+     * differently for the same caller.
+     */
+    static _resolveActor(req) {
         const merchantId = req?.merchant?.id;
         const apiKey = req?.headers?.["x-api-key"];
         const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
@@ -496,35 +570,27 @@ export class AssetIssuerRateLimiter {
             ? createHash("sha256").update(apiKey).digest("hex")
             : null;
 
-        const actor = merchantId
-            ? `merchant:${merchantId}`
-            : hashedApiKey
-                ? `api:${hashedApiKey}`
-                : `ip:${ipKey}`;
+        return {
+            actor: merchantId
+                ? `merchant:${merchantId}`
+                : hashedApiKey
+                    ? `api:${hashedApiKey}`
+                    : `ip:${ipKey}`,
+            actorType: merchantId ? 'merchant' : hashedApiKey ? 'api_key' : 'ip',
+        };
+    }
 
-        return `asset:issuer:${actor}`;
+    static _isExemptTier(req) {
+        const merchantTier = req?.merchant?.metadata?.tier;
+        return merchantTier === 'enterprise' || merchantTier === 'premium';
+    }
+
+    static getKey(req) {
+        return `asset:issuer:${this._resolveActor(req).actor}`;
     }
 
     static getBurstKey(req) {
-        const merchantId = req?.merchant?.id;
-        const apiKey = req?.headers?.["x-api-key"];
-        const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
-
-        // Issue #1314: the key was previously truncated to 16 hex chars
-        // (64 bits), which is enough for an attacker to search for a
-        // colliding prefix and share — or exhaust — a victim API key's
-        // rate-limit bucket. Use the full SHA-256 digest.
-        const hashedApiKey = apiKey
-            ? createHash("sha256").update(apiKey).digest("hex")
-            : null;
-
-        const actor = merchantId
-            ? `merchant:${merchantId}`
-            : hashedApiKey
-                ? `api:${hashedApiKey}`
-                : `ip:${ipKey}`;
-
-        return `asset:issuer:burst:${actor}`;
+        return `asset:issuer:burst:${this._resolveActor(req).actor}`;
     }
 
     static createRateLimiter({ store } = {}) {
@@ -540,10 +606,9 @@ export class AssetIssuerRateLimiter {
             keyGenerator: this.getKey,
             requestWasSuccessful: (_req, res) => res.statusCode < 400,
             handler: (req, res, _next, options) => {
-                const actorType = req?.merchant?.id ? 'merchant' : req?.headers?.["x-api-key"] ? 'api_key' : 'ip';
                 logger.warn({
                     endpoint: 'asset_issuer',
-                    actorType,
+                    actorType: AssetIssuerRateLimiter._resolveActor(req).actorType,
                     ip: req.ip,
                     merchantId: req.merchant?.id,
                     limit: options.max,
@@ -553,10 +618,7 @@ export class AssetIssuerRateLimiter {
             },
             store,
             passOnStoreError: true,
-            skip: (req) => {
-                const merchantTier = req?.merchant?.metadata?.tier;
-                return merchantTier === 'enterprise' || merchantTier === 'premium';
-            }
+            skip: (req) => AssetIssuerRateLimiter._isExemptTier(req)
         });
     }
 
@@ -573,10 +635,9 @@ export class AssetIssuerRateLimiter {
             keyGenerator: this.getBurstKey,
             requestWasSuccessful: (_req, res) => res.statusCode < 400,
             handler: (req, res, _next, options) => {
-                const actorType = req?.merchant?.id ? 'merchant' : req?.headers?.["x-api-key"] ? 'api_key' : 'ip';
                 logger.warn({
                     endpoint: 'asset_issuer_burst',
-                    actorType,
+                    actorType: AssetIssuerRateLimiter._resolveActor(req).actorType,
                     ip: req.ip,
                     merchantId: req.merchant?.id,
                     limit: options.max,
@@ -586,10 +647,7 @@ export class AssetIssuerRateLimiter {
             },
             store,
             passOnStoreError: true,
-            skip: (req) => {
-                const merchantTier = req?.merchant?.metadata?.tier;
-                return merchantTier === 'enterprise' || merchantTier === 'premium';
-            }
+            skip: (req) => AssetIssuerRateLimiter._isExemptTier(req)
         });
     }
 }
@@ -716,12 +774,7 @@ export class AssetIssuerSignatureVerifier {
 
     async verifyAssetIssuerOperation(txHash, expectedOperation, expectedAssetCode, expectedAssetIssuer) {
         const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
-        const server = new StellarSdk.Horizon.Server(
-            process.env.STELLAR_HORIZON_URL ||
-            (NETWORK === "public"
-                ? "https://horizon.stellar.org"
-                : "https://horizon-testnet.stellar.org")
-        );
+        const server = getHorizonServer();
 
         try {
             const tx = await withHorizonRetry(
@@ -848,6 +901,7 @@ export class AssetIssuerSignatureVerifier {
             };
 
         } catch (error) {
+            logger.warn({ err: error, txHash }, 'Asset issuer operation verification failed');
             return {
                 valid: false,
                 reason: `Failed to verify asset issuer operation: ${error.message}`,
@@ -1107,8 +1161,6 @@ export class AssetIssuerQueryOptimizer {
     }
 
     static async createOptimizedIndexes() {
-        const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
-
         const indexes = [
             `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_asset_issuer_status
              ON payments(asset_issuer, status, created_at DESC)

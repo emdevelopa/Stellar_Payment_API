@@ -386,44 +386,10 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
       return { valid: false, error: "Challenge expired", code: "CHALLENGE_EXPIRED" };
     }
 
-    const txHash = transaction.hash();
-    const signatures = Array.isArray(transaction.signatures) ? transaction.signatures : [];
-
-    const signedBy = (keypair, sig) => {
-      try {
-        return keypair.verify(txHash, sig.signature());
-      } catch {
-        return false;
-      }
-    };
-
-    const serverSigned = signatures.some((sig) => signedBy(serverKeypair, sig));
-
-    if (!serverSigned) {
-      return { valid: false, error: "Server signature missing", code: "SERVER_SIGNATURE_MISSING" };
-    }
-
     const clientKeypair = StellarSdk.Keypair.fromPublicKey(clientAccountId);
-    const clientSigned = signatures.some((sig) => signedBy(clientKeypair, sig));
-
-    if (!clientSigned) {
-      return {
-        valid: false,
-        error: "Client signature missing or invalid",
-        code: "CLIENT_SIGNATURE_INVALID",
-      };
-    }
-
-    // SEP-10: no signatures other than the server's and the client's (#1294).
-    const unrecognized = signatures.some(
-      (sig) => !signedBy(serverKeypair, sig) && !signedBy(clientKeypair, sig),
-    );
-    if (unrecognized) {
-      return {
-        valid: false,
-        error: "Challenge carries unrecognized signatures",
-        code: "UNRECOGNIZED_SIGNATURE",
-      };
+    const signatureCheck = verifyChallengeSignatures(transaction, serverKeypair, clientKeypair);
+    if (!signatureCheck.valid) {
+      return signatureCheck;
     }
 
     // Claim the nonce only after every check has passed (#1295). Claiming it
@@ -439,6 +405,82 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
     logger.warn({ err: err?.message }, "sep10 challenge verification failed unexpectedly");
     return { valid: false, error: "Authentication failed", code: "AUTHENTICATION_FAILED" };
   }
+}
+
+/**
+ * SEP-10 allows exactly two signatures on a verified challenge: the server's
+ * and the client's (#585). Anything more is rejected before any Ed25519 work.
+ */
+export const SEP10_MAX_CHALLENGE_SIGNATURES = 2;
+
+/**
+ * Cryptographically verify a challenge's signatures (#585).
+ *
+ * Each decorated signature is classified exactly once. Its 4-byte hint must
+ * match the candidate signer's `signatureHint()` before the (comparatively
+ * expensive) Ed25519 verification runs against the transaction hash, so a
+ * junk signature never costs a verify and each real one costs one. The count
+ * cap bounds the worst case: without it, a forged challenge carrying the
+ * network maximum of 20 signatures forced ~60 verifications per request.
+ *
+ * @returns {{ valid: true } | { valid: false, error: string, code: string }}
+ */
+export function verifyChallengeSignatures(transaction, serverKeypair, clientKeypair) {
+  const signatures = Array.isArray(transaction.signatures) ? transaction.signatures : [];
+
+  if (signatures.length > SEP10_MAX_CHALLENGE_SIGNATURES) {
+    return {
+      valid: false,
+      error: "Challenge carries unrecognized signatures",
+      code: "UNRECOGNIZED_SIGNATURE",
+    };
+  }
+
+  const txHash = transaction.hash();
+  const serverHint = serverKeypair.signatureHint();
+  const clientHint = clientKeypair.signatureHint();
+
+  const signedBy = (keypair, hint, decorated) => {
+    try {
+      return decorated.hint().equals(hint) && keypair.verify(txHash, decorated.signature());
+    } catch {
+      return false;
+    }
+  };
+
+  let serverSigned = false;
+  let clientSigned = false;
+  let unrecognized = false;
+  for (const decorated of signatures) {
+    if (!serverSigned && signedBy(serverKeypair, serverHint, decorated)) {
+      serverSigned = true;
+    } else if (!clientSigned && signedBy(clientKeypair, clientHint, decorated)) {
+      clientSigned = true;
+    } else {
+      // A third-party key, a forged/tampered signature, or a duplicate.
+      unrecognized = true;
+    }
+  }
+
+  if (!serverSigned) {
+    return { valid: false, error: "Server signature missing", code: "SERVER_SIGNATURE_MISSING" };
+  }
+  if (!clientSigned) {
+    return {
+      valid: false,
+      error: "Client signature missing or invalid",
+      code: "CLIENT_SIGNATURE_INVALID",
+    };
+  }
+  // SEP-10: no signatures other than the server's and the client's (#1294).
+  if (unrecognized) {
+    return {
+      valid: false,
+      error: "Challenge carries unrecognized signatures",
+      code: "UNRECOGNIZED_SIGNATURE",
+    };
+  }
+  return { valid: true };
 }
 
 /**

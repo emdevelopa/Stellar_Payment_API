@@ -238,6 +238,8 @@ export class ErrorRecovery {
         'Error recovery: circuit breaker HALF_OPEN — allowing trial requests',
       );
     }, this.resetTimeoutMs);
+    // Do not keep the process alive (or retain this instance) just for the reset timer
+    this.resetTimer.unref?.();
   }
 }
 

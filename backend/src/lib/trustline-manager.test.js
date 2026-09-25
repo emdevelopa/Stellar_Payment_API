@@ -639,6 +639,40 @@ describe('Trustline Manager - Task #746: Enhanced Error Recovery', () => {
     });
   });
 
+  describe('TrustlineErrorRecovery – probe concurrency and null errors', () => {
+    test('should allow only one concurrent half-open probe', async () => {
+      const ctx = 'half-open-concurrent-ctx';
+      const state = TrustlineErrorRecovery._getState(ctx);
+      state.state = 'half-open';
+
+      let release;
+      const slowOp = vi.fn(() => new Promise((resolve) => { release = resolve; }));
+      const probe = TrustlineErrorRecovery.executeWithRecovery(slowOp, ctx);
+
+      await expect(
+        TrustlineErrorRecovery.executeWithRecovery(vi.fn(), ctx),
+      ).rejects.toThrow(/Circuit breaker is open/);
+
+      release('ok');
+      await expect(probe).resolves.toBe('ok');
+      expect(state.state).toBe('closed');
+      expect(state.probeInFlight).toBe(false);
+    });
+
+    test('should only count recoveries after prior failures', async () => {
+      const ctx = 'recovery-count-ctx';
+      await TrustlineErrorRecovery.executeWithRecovery(async () => 'ok', ctx);
+      expect(TrustlineErrorRecovery._getState(ctx).metrics.totalRecoveries).toBe(0);
+    });
+
+    test('should classify and enhance null errors without throwing', () => {
+      const errorClass = TrustlineErrorRecovery.classifyError(null);
+      expect(errorClass.type).toBe('unknown');
+      const enhanced = TrustlineErrorRecovery.enhanceError(null, 'ctx', 1, errorClass);
+      expect(enhanced.status).toBe(500);
+    });
+  });
+
   describe('TrustlineErrorRecovery – operation timeout', () => {
     test('withTimeout rejects after the specified delay', async () => {
       const neverResolves = new Promise(() => {});

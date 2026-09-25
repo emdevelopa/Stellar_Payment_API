@@ -524,6 +524,26 @@ describe('AssetIssuerSignatureVerifier (Issue #888)', () => {
             expect(mockVerifyTransactionSignature).toHaveBeenCalledTimes(2);
         });
 
+        // Issue #1313: null options used to throw while destructuring.
+        test('accepts null options without throwing', async () => {
+            mockVerifyTransactionSignature.mockResolvedValue({ valid: false, reason: 'bad' });
+
+            const result = await verifier.verifyOperation('txHashNull', null);
+
+            expect(result.valid).toBe(false);
+        });
+
+        // Issue #1312: the verification cache must stay bounded.
+        test('evicts the oldest cache entry once the cache is full', async () => {
+            mockVerifyTransactionSignature.mockResolvedValue({ valid: false, reason: 'bad' });
+
+            for (let i = 0; i < 1001; i++) {
+                await verifier.verifyOperation(`tx-${i}`);
+            }
+
+            expect(verifier.verificationCache.size).toBe(1000);
+        });
+
         // Issue #1315: concurrent verifications of the same transaction
         // used to race past the empty cache and each perform their own
         // Horizon round trip. Concurrent calls for the same key should now
@@ -886,6 +906,15 @@ describe('AssetIssuerQueryOptimizer (Issue #889)', () => {
                 assetIssuer: 'GBXX',
             });
             expect(result.rows[0].id).toBe('log1');
+        });
+
+        // Issue #1313: a missing verification result used to surface as a
+        // null pointer exception.
+        test('rejects with a descriptive error when verification is missing', async () => {
+            await expect(
+                AssetIssuerQueryOptimizer.logAssetIssuerVerification({ merchantId: 'M1', txHash: 'abc123' })
+            ).rejects.toThrow('requires a verification result');
+            expect(mockQueryWithRetry).not.toHaveBeenCalled();
         });
     });
 

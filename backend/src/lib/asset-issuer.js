@@ -40,6 +40,9 @@ const CIRCUIT_BREAKER_TIMEOUT_MS = 30 * 1000;
 const CIRCUIT_BREAKER_HALF_OPEN_PROBE_MS = 5 * 1000;
 const OPERATION_TIMEOUT_MS = 15 * 1000;
 const DLQ_MAX_SIZE = 100;
+// Issue #1312: bounds for in-memory registries that were previously unbounded.
+const CIRCUIT_BREAKER_MAX_CONTEXTS = 1000;
+const VERIFICATION_CACHE_MAX_ENTRIES = 1000;
 
 /**
  * Per-context circuit breaker states for failure domain isolation.
@@ -69,6 +72,19 @@ export class AssetIssuerErrorRecovery {
 
     static _getState(context = 'default') {
         if (!circuitBreakerRegistry.has(context)) {
+            // Issue #1312: contexts embed per-transaction/issuer/merchant
+            // identifiers, so the registry grew without bound. Evict the
+            // oldest closed (healthy) context first, then the oldest overall.
+            if (circuitBreakerRegistry.size >= CIRCUIT_BREAKER_MAX_CONTEXTS) {
+                let evictKey = circuitBreakerRegistry.keys().next().value;
+                for (const [key, entry] of circuitBreakerRegistry) {
+                    if (entry.state === 'closed') {
+                        evictKey = key;
+                        break;
+                    }
+                }
+                circuitBreakerRegistry.delete(evictKey);
+            }
             circuitBreakerRegistry.set(context, {
                 failures: 0,
                 lastFailureTime: null,
@@ -607,7 +623,7 @@ export class AssetIssuerSignatureVerifier {
             expectedAssetCode = null,
             expectedAssetIssuer = null,
             skipCache = false,
-        } = typeof options === 'string' ? { expectedOperation: options } : options;
+        } = typeof options === 'string' ? { expectedOperation: options } : (options ?? {});
 
         const cacheKey = `${txHash}:${expectedOperation || 'any'}:${expectedAssetCode || 'any'}:${expectedAssetIssuer || 'any'}`;
 
@@ -615,6 +631,10 @@ export class AssetIssuerSignatureVerifier {
             const cached = this.verificationCache.get(cacheKey);
             if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
                 return cached.result;
+            }
+            if (cached) {
+                // Issue #1312: drop expired entries instead of retaining them forever.
+                this.verificationCache.delete(cacheKey);
             }
 
             const pending = this.pendingVerifications.get(cacheKey);
@@ -679,6 +699,9 @@ export class AssetIssuerSignatureVerifier {
                 };
 
                 if (!skipCache) {
+                    if (this.verificationCache.size >= VERIFICATION_CACHE_MAX_ENTRIES) {
+                        this.verificationCache.delete(this.verificationCache.keys().next().value);
+                    }
                     this.verificationCache.set(cacheKey, {
                         result,
                         timestamp: Date.now()
@@ -1042,7 +1065,12 @@ export class AssetIssuerQueryOptimizer {
         );
     }
 
-    static async logAssetIssuerVerification({ merchantId, txHash, verification, assetCode, assetIssuer }) {
+    static async logAssetIssuerVerification({ merchantId, txHash, verification, assetCode, assetIssuer } = {}) {
+        // Issue #1313: `verification` was dereferenced unconditionally, so a
+        // missing verification result threw a null pointer exception.
+        if (!verification) {
+            throw new TypeError('logAssetIssuerVerification requires a verification result');
+        }
         const query = `
       INSERT INTO asset_issuer_verifications (
         merchant_id,
@@ -1136,7 +1164,7 @@ export class AssetIssuerManager {
             expectedAssetCode = null,
             expectedAssetIssuer = null,
             skipCache = false,
-        } = options;
+        } = options ?? {};
 
         return this.errorRecovery.executeWithRecovery(
             () => this.signatureVerifier.verifyOperation(txHash, {

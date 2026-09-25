@@ -52,6 +52,8 @@ const RATE_LIMIT_MAX_MERCHANT_QUERIES = Number.parseInt(
   process.env.DB_POOLER_RATE_LIMIT_MAX_MERCHANT_QUERIES || "50",
   10,
 );
+// Issue #1317: hard upper bound on tracked merchant windows.
+const MAX_MERCHANT_WINDOWS = 10000;
 
 // ── Query Rate Limiting (Issue #758) ───────────────────────────────────────────
 
@@ -110,8 +112,8 @@ class QueryRateLimiter {
     }
 
     // Periodic cleanup of stale windows to prevent memory exhaustion
-    if (this.merchantWindows.size > 10000) {
-      this._cleanupStaleWindows(now);
+    if (this.merchantWindows.size > MAX_MERCHANT_WINDOWS) {
+      this._cleanupStaleWindows(now, merchantId);
     }
 
     return window;
@@ -121,10 +123,21 @@ class QueryRateLimiter {
    * Cleanup stale merchant windows to prevent memory exhaustion attacks.
    * Removes windows that haven't been accessed within 2x the rate limit window.
    */
-  _cleanupStaleWindows(now) {
+  _cleanupStaleWindows(now, keepId = null) {
     const staleThreshold = this.windowMs * 2;
     for (const [id, window] of this.merchantWindows.entries()) {
       if (now - window.windowStart > staleThreshold) {
+        this.merchantWindows.delete(id);
+      }
+    }
+    // Issue #1317: stale-window cleanup alone never bounds the map when many
+    // distinct merchant IDs are seen within the retention period, so evict
+    // the oldest entries (Map insertion order) until back under the cap.
+    for (const id of this.merchantWindows.keys()) {
+      if (this.merchantWindows.size <= MAX_MERCHANT_WINDOWS) {
+        break;
+      }
+      if (id !== keepId) {
         this.merchantWindows.delete(id);
       }
     }
@@ -430,6 +443,26 @@ export async function optimizedQuery(
     dbPoolerQueryDuration.observe({ label, status }, seconds);
   };
 
+  // Issue #1319: verify the signature before any execution path, including
+  // fallback mode, which previously ran the query without verification and
+  // let a tampered query through.
+  if (signature) {
+    const isValid = verifyQuerySignature(text, values, signature);
+    dbPoolerSignatureVerified.inc({ result: isValid ? "valid" : "invalid" });
+
+    if (!isValid) {
+      observeDuration("signature_invalid");
+      const error = new Error("Query signature verification failed - possible tampering detected");
+      error.status = 400;
+      error.code = "DB_POOLER_SIGNATURE_INVALID";
+      logger.warn({ label }, "Query signature verification failed");
+      throw error;
+    }
+  } else if (SIGNING_SECRET) {
+    // Signature is expected but not provided
+    dbPoolerSignatureVerified.inc({ result: "skipped" });
+  }
+
   // Error recovery #895: Check if fallback mode is active
   if (_isFallbackModeActive(now)) {
     logger.debug({ label }, "Using fallback mode for query execution");
@@ -473,25 +506,7 @@ export async function optimizedQuery(
   }
   queryRateLimiter.recordQuery(merchantId);
 
-  // ── Step 2: Signature verification (Issue #759) ──────────────────────────
-  if (signature) {
-    const isValid = verifyQuerySignature(text, values, signature);
-    dbPoolerSignatureVerified.inc({ result: isValid ? "valid" : "invalid" });
-
-    if (!isValid) {
-      observeDuration("signature_invalid");
-      const error = new Error("Query signature verification failed - possible tampering detected");
-      error.status = 400;
-      error.code = "DB_POOLER_SIGNATURE_INVALID";
-      logger.warn({ label }, "Query signature verification failed");
-      throw error;
-    }
-  } else if (SIGNING_SECRET) {
-    // Signature is expected but not provided
-    dbPoolerSignatureVerified.inc({ result: "skipped" });
-  }
-
-  // ── Step 3: Execute with caching (Issue #760) ────────────────────────────
+  // ── Step 2: Execute with caching (Issue #760) ────────────────────────────
   try {
     const result = await cachedQuery(
       text,
@@ -548,6 +563,12 @@ export async function optimizedWrite(text, values = [], options = {}) {
 
     return result;
   } catch (err) {
+    // Issue #1319: rate-limit, signature and validation rejections are
+    // deliberate; retrying them through the raw pool would bypass those
+    // protections entirely.
+    if (typeof err?.code === "string" && err.code.startsWith("DB_POOLER_")) {
+      throw err;
+    }
     // Error recovery #895: Attempt fallback mode on write failures
     if (!_isFallbackModeActive()) {
       logger.warn({ err, label: options.label }, "Write query failed, attempting fallback mode");

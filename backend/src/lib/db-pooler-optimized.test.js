@@ -471,6 +471,18 @@ describe("Database Pooler - Rate Limiter stale window cleanup (Issue #892)", () 
     vi.useRealTimers();
   });
 
+  it("caps merchant windows even when none are stale (Issue #1317)", () => {
+    const now = Date.now();
+    for (let i = 0; i < 10001; i++) {
+      queryRateLimiter.merchantWindows.set(`fresh-${i}`, { windowStart: now, count: 1 });
+    }
+
+    queryRateLimiter.checkLimit("fresh-10000");
+
+    expect(queryRateLimiter.merchantWindows.size).toBeLessThanOrEqual(10000);
+    expect(queryRateLimiter.merchantWindows.has("fresh-10000")).toBe(true);
+  });
+
   it("getStats reflects merchant window count after cleanup", () => {
     queryRateLimiter.merchantWindows.set("m-1", { windowStart: Date.now(), count: 1 });
     queryRateLimiter.merchantWindows.set("m-2", { windowStart: Date.now(), count: 2 });
@@ -756,5 +768,26 @@ describe("Database Pooler - Granular metrics tracking (Issue #1058)", () => {
     }
 
     expect(dbPoolerFallbackModeActive.set).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("Database Pooler - Write fallback security (Issue #1319)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queryRateLimiter.globalCount = 0;
+    queryRateLimiter.globalWindowStart = Date.now();
+    queryRateLimiter.merchantWindows.clear();
+    clearQueryCache();
+    _resetDbPoolerCircuitBreakerForTests();
+  });
+
+  it("does not fall back to the raw pool when a write is rate limited", async () => {
+    queryRateLimiter.globalCount = queryRateLimiter.maxQueries;
+
+    await expect(
+      optimizedWrite("INSERT INTO payments (id) VALUES ($1)", ["p-1"]),
+    ).rejects.toMatchObject({ code: "DB_POOLER_RATE_LIMITED" });
+
+    expect(mockPoolQuery).not.toHaveBeenCalled();
   });
 });

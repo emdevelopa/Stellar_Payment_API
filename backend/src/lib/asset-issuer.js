@@ -472,8 +472,12 @@ export class AssetIssuerRateLimiter {
         const apiKey = req?.headers?.["x-api-key"];
         const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
 
+        // Issue #1314: the key was previously truncated to 16 hex chars
+        // (64 bits), which is enough for an attacker to search for a
+        // colliding prefix and share — or exhaust — a victim API key's
+        // rate-limit bucket. Use the full SHA-256 digest.
         const hashedApiKey = apiKey
-            ? createHash("sha256").update(apiKey).digest("hex").substring(0, 16)
+            ? createHash("sha256").update(apiKey).digest("hex")
             : null;
 
         const actor = merchantId
@@ -490,8 +494,12 @@ export class AssetIssuerRateLimiter {
         const apiKey = req?.headers?.["x-api-key"];
         const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
 
+        // Issue #1314: the key was previously truncated to 16 hex chars
+        // (64 bits), which is enough for an attacker to search for a
+        // colliding prefix and share — or exhaust — a victim API key's
+        // rate-limit bucket. Use the full SHA-256 digest.
         const hashedApiKey = apiKey
-            ? createHash("sha256").update(apiKey).digest("hex").substring(0, 16)
+            ? createHash("sha256").update(apiKey).digest("hex")
             : null;
 
         const actor = merchantId
@@ -584,6 +592,13 @@ export class AssetIssuerSignatureVerifier {
     constructor() {
         this.verificationCache = new Map();
         this.cacheTimeout = 5 * 60 * 1000;
+        // Issue #1315: in-flight de-duplication. Without this, concurrent
+        // callers verifying the same transaction (e.g. a webhook retry
+        // racing the original request) would all miss the still-empty
+        // cache, each kick off its own Horizon round trip, and each write
+        // its own cache entry — wasted work and a window where the cache
+        // could briefly hold a stale/inconsistent result.
+        this.pendingVerifications = new Map();
     }
 
     async verifyOperation(txHash, options = {}) {
@@ -594,16 +609,42 @@ export class AssetIssuerSignatureVerifier {
             skipCache = false,
         } = typeof options === 'string' ? { expectedOperation: options } : options;
 
+        const cacheKey = `${txHash}:${expectedOperation || 'any'}:${expectedAssetCode || 'any'}:${expectedAssetIssuer || 'any'}`;
+
+        if (!skipCache) {
+            const cached = this.verificationCache.get(cacheKey);
+            if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+                return cached.result;
+            }
+
+            const pending = this.pendingVerifications.get(cacheKey);
+            if (pending) {
+                return pending;
+            }
+        }
+
+        const verificationPromise = this._runVerification(txHash, {
+            expectedOperation,
+            expectedAssetCode,
+            expectedAssetIssuer,
+            skipCache,
+            cacheKey,
+        });
+
+        if (!skipCache) {
+            this.pendingVerifications.set(cacheKey, verificationPromise);
+        }
+
+        try {
+            return await verificationPromise;
+        } finally {
+            this.pendingVerifications.delete(cacheKey);
+        }
+    }
+
+    async _runVerification(txHash, { expectedOperation, expectedAssetCode, expectedAssetIssuer, skipCache, cacheKey }) {
         return AssetIssuerErrorRecovery.executeWithRecovery(
             async () => {
-                const cacheKey = `${txHash}:${expectedOperation || 'any'}:${expectedAssetCode || 'any'}:${expectedAssetIssuer || 'any'}`;
-                if (!skipCache) {
-                    const cached = this.verificationCache.get(cacheKey);
-                    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-                        return cached.result;
-                    }
-                }
-
                 // Step 1: Basic signature verification
                 const basicVerification = await verifyTransactionSignature(txHash);
 
@@ -975,6 +1016,7 @@ export class AssetIssuerQueryOptimizer {
           jsonb_array_length(COALESCE(m.allowed_issuers, '[]'::jsonb)) as issuer_count
         FROM merchants m
         WHERE m.id = $1
+          AND m.deleted_at IS NULL
       )
       SELECT
         a.*,

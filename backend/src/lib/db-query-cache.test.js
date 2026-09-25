@@ -46,6 +46,21 @@ describe("Query Cache (Issue #760)", () => {
       const k2 = generateCacheKey("SELECT * FROM t");
       expect(k1).toBe(k2);
     });
+
+    // Issue #1318: null/undefined query text used to throw a bare
+    // "Cannot read properties of undefined" TypeError from inside
+    // String.prototype.replace instead of a descriptive validation error.
+    it("throws a descriptive error instead of a null pointer exception for null text", () => {
+      expect(() => generateCacheKey(null)).toThrow(/non-empty query string/);
+    });
+
+    it("throws a descriptive error instead of a null pointer exception for undefined text", () => {
+      expect(() => generateCacheKey(undefined)).toThrow(/non-empty query string/);
+    });
+
+    it("throws for an empty string", () => {
+      expect(() => generateCacheKey("")).toThrow(/non-empty query string/);
+    });
   });
 
   describe("QueryCache", () => {
@@ -147,6 +162,13 @@ describe("Query Cache (Issue #760)", () => {
       await cachedQuery("SELECT 1", [], {}, queryFn, { useCache: false });
 
       expect(queryFn).toHaveBeenCalledTimes(2);
+    });
+
+    // Issue #1318
+    it("throws a descriptive error instead of a null pointer exception for null text", async () => {
+      const queryFn = vi.fn();
+      await expect(cachedQuery(null, [], {}, queryFn)).rejects.toThrow(/non-empty query string/);
+      expect(queryFn).not.toHaveBeenCalled();
     });
   });
 

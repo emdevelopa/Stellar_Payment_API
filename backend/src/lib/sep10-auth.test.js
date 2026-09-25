@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import * as StellarSdk from "stellar-sdk";
 import {
   generateChallenge,
@@ -12,6 +12,10 @@ import {
   generateSessionToken,
   consumeChallengeNonce,
   releaseChallengeNonce,
+  pruneExpiredNonces,
+  NONCE_SWEEP_INTERVAL_MS,
+  CHALLENGE_EXPIRES_IN,
+  _getNonceCacheStatsForTests,
   MAX_CHALLENGE_XDR_BYTES,
   _resetNonceCacheForTests,
 } from "./sep10-auth.js";
@@ -403,6 +407,112 @@ describe("SEP-0010 Authentication", () => {
     it("releaseChallengeNonce ignores non-string input", () => {
       expect(() => releaseChallengeNonce(undefined)).not.toThrow();
       expect(() => releaseChallengeNonce(null)).not.toThrow();
+    });
+  });
+
+  describe("nonce cache memory bounds (#1292)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      delete process.env.SEP10_NONCE_CACHE_MAX;
+    });
+
+    function verifyFresh() {
+      const tx = StellarSdk.TransactionBuilder.fromXDR(
+        generateChallenge(clientKeypair.publicKey(), HOME_DOMAIN),
+        StellarSdk.Networks.TESTNET,
+      );
+      tx.sign(clientKeypair);
+      const xdr = tx.toXDR();
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).valid).toBe(true);
+      return xdr;
+    }
+
+    it("the periodic sweep drops nonces once their challenge has expired", () => {
+      verifyFresh();
+      verifyFresh();
+      expect(_getNonceCacheStatsForTests()).toEqual({ size: 2, sweeping: true });
+
+      vi.advanceTimersByTime((CHALLENGE_EXPIRES_IN + 1) * 1000 + NONCE_SWEEP_INTERVAL_MS);
+
+      expect(_getNonceCacheStatsForTests()).toEqual({ size: 0, sweeping: false });
+    });
+
+    it("the sweep keeps nonces of still-valid challenges, so replay stays blocked", () => {
+      const xdr = verifyFresh();
+
+      vi.advanceTimersByTime(NONCE_SWEEP_INTERVAL_MS * 3);
+
+      expect(_getNonceCacheStatsForTests().size).toBe(1);
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).code).toBe(
+        "NONCE_REPLAY",
+      );
+    });
+
+    it("a replayed challenge is still rejected after its nonce is swept", () => {
+      const xdr = verifyFresh();
+
+      vi.advanceTimersByTime((CHALLENGE_EXPIRES_IN + 1) * 1000 + NONCE_SWEEP_INTERVAL_MS);
+      expect(_getNonceCacheStatsForTests().size).toBe(0);
+
+      expect(verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN).code).toBe(
+        "CHALLENGE_EXPIRED",
+      );
+    });
+
+    it("never grows past the configured cap", () => {
+      process.env.SEP10_NONCE_CACHE_MAX = "5";
+      const expiresAt = Math.floor(Date.now() / 1000) + CHALLENGE_EXPIRES_IN;
+
+      for (let i = 0; i < 50; i += 1) {
+        expect(consumeChallengeNonce(`nonce-${i}`.padEnd(32, "x"), expiresAt)).toBe(true);
+      }
+
+      expect(_getNonceCacheStatsForTests().size).toBe(5);
+      // Most recent nonces are retained.
+      expect(consumeChallengeNonce("nonce-49".padEnd(32, "x"), expiresAt)).toBe(false);
+    });
+
+    it("evicts expired entries before live ones when the cap is reached", () => {
+      process.env.SEP10_NONCE_CACHE_MAX = "3";
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      consumeChallengeNonce("live".padEnd(32, "x"), nowSec + CHALLENGE_EXPIRES_IN);
+      consumeChallengeNonce("stale-1".padEnd(32, "x"), nowSec + 1);
+      consumeChallengeNonce("stale-2".padEnd(32, "x"), nowSec + 1);
+
+      vi.setSystemTime(Date.now() + 5_000);
+      consumeChallengeNonce("new".padEnd(32, "x"), nowSec + CHALLENGE_EXPIRES_IN);
+
+      expect(_getNonceCacheStatsForTests().size).toBe(2);
+      expect(consumeChallengeNonce("live".padEnd(32, "x"))).toBe(false);
+    });
+
+    it("pruneExpiredNonces reports how many entries were removed", () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      consumeChallengeNonce("a".repeat(32), nowSec + 1);
+      consumeChallengeNonce("b".repeat(32), nowSec + CHALLENGE_EXPIRES_IN);
+
+      expect(pruneExpiredNonces(Date.now() + 10_000)).toBe(1);
+      expect(_getNonceCacheStatsForTests().size).toBe(1);
+    });
+
+    it("stops the sweep timer when the cache empties", () => {
+      consumeChallengeNonce("a".repeat(32));
+      expect(_getNonceCacheStatsForTests().sweeping).toBe(true);
+
+      releaseChallengeNonce("a".repeat(32));
+      expect(_getNonceCacheStatsForTests()).toEqual({ size: 0, sweeping: false });
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("ignores an invalid SEP10_NONCE_CACHE_MAX", () => {
+      process.env.SEP10_NONCE_CACHE_MAX = "not-a-number";
+      for (let i = 0; i < 20; i += 1) consumeChallengeNonce(`n-${i}`.padEnd(32, "x"));
+      expect(_getNonceCacheStatsForTests().size).toBe(20);
     });
   });
 });

@@ -15,12 +15,20 @@ export const CHALLENGE_EXPIRES_IN = 300;
 export const MAX_CHALLENGE_XDR_BYTES = 8192;
 export const MIN_CHALLENGE_NONCE_LENGTH = 16;
 
-const NONCE_CLEANUP_INTERVAL = 600_000;
-const MAX_NONCE_CACHE = 10_000;
+export const NONCE_SWEEP_INTERVAL_MS = 60_000;
+const DEFAULT_MAX_NONCE_CACHE = 10_000;
 const STORE_RETRY_DELAYS_MS = [100, 300];
 
-const _usedNonces = new Set();
+// nonce -> epoch ms after which the challenge can no longer verify (#1292).
+// Entries only need to outlive their challenge's maxTime; after that the
+// time-bound check rejects the challenge on its own.
+const _usedNonces = new Map();
 let _nonceCleanupTimer = null;
+
+function getMaxNonceCache() {
+  const configured = parseInt(process.env.SEP10_NONCE_CACHE_MAX ?? "", 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_NONCE_CACHE;
+}
 
 /**
  * Structured error for SEP-10 route/store failures (#587).
@@ -56,26 +64,79 @@ function getJwtSecret() {
   return secret;
 }
 
+function stopNonceCleanup() {
+  if (!_nonceCleanupTimer) return;
+  clearInterval(_nonceCleanupTimer);
+  _nonceCleanupTimer = null;
+}
+
+/**
+ * Drop nonces whose challenges have expired (#1292).
+ * @returns {number} how many entries were removed
+ */
+export function pruneExpiredNonces(nowMs = Date.now()) {
+  let removed = 0;
+  for (const [nonce, expiresAtMs] of _usedNonces) {
+    if (expiresAtMs <= nowMs) {
+      _usedNonces.delete(nonce);
+      removed += 1;
+    }
+  }
+  if (_usedNonces.size === 0) stopNonceCleanup();
+  return removed;
+}
+
 function startNonceCleanup() {
   if (_nonceCleanupTimer) return;
-  _nonceCleanupTimer = setInterval(() => {
-    if (_usedNonces.size > MAX_NONCE_CACHE) {
-      _usedNonces.clear();
-    }
-  }, NONCE_CLEANUP_INTERVAL);
+  _nonceCleanupTimer = setInterval(() => pruneExpiredNonces(), NONCE_SWEEP_INTERVAL_MS);
   if (_nonceCleanupTimer.unref) _nonceCleanupTimer.unref();
+}
+
+/**
+ * Keep the cache under its hard cap. Expired entries go first; if the cache
+ * is still full of live nonces, the oldest are evicted (Map preserves
+ * insertion order) rather than wiping the whole cache, which previously
+ * discarded every live nonce at once and reopened replay for all of them.
+ */
+function enforceNonceCacheLimit() {
+  const max = getMaxNonceCache();
+  if (_usedNonces.size < max) return;
+
+  pruneExpiredNonces();
+
+  let evicted = 0;
+  for (const nonce of _usedNonces.keys()) {
+    if (_usedNonces.size < max) break;
+    _usedNonces.delete(nonce);
+    evicted += 1;
+  }
+
+  if (evicted > 0) {
+    logger.warn({ evicted, max }, "sep10 nonce cache full; evicted oldest live nonces");
+  }
 }
 
 /**
  * Atomically claim a challenge nonce (#1295).
  * The check and the insert run in the same synchronous tick, so two concurrent
  * verify requests for the same challenge can never both succeed.
+ * @param {string} nonce
+ * @param {number} [expiresAtSec] challenge maxTime; the entry is kept until then
  * @returns {boolean} true if the nonce was claimed, false if already used.
  */
-export function consumeChallengeNonce(nonce) {
-  if (_usedNonces.has(nonce)) return false;
-  _usedNonces.add(nonce);
-  if (_usedNonces.size === 1) startNonceCleanup();
+export function consumeChallengeNonce(nonce, expiresAtSec) {
+  const nowMs = Date.now();
+  const existing = _usedNonces.get(nonce);
+  if (existing !== undefined && existing > nowMs) return false;
+
+  enforceNonceCacheLimit();
+
+  const expiresAtMs =
+    Number.isFinite(expiresAtSec) && expiresAtSec > 0
+      ? (expiresAtSec + 1) * 1000
+      : nowMs + CHALLENGE_EXPIRES_IN * 1000;
+  _usedNonces.set(nonce, expiresAtMs);
+  startNonceCleanup();
   return true;
 }
 
@@ -86,14 +147,16 @@ export function consumeChallengeNonce(nonce) {
 export function releaseChallengeNonce(nonce) {
   if (typeof nonce !== "string") return;
   _usedNonces.delete(nonce);
+  if (_usedNonces.size === 0) stopNonceCleanup();
 }
 
 export function _resetNonceCacheForTests() {
   _usedNonces.clear();
-  if (_nonceCleanupTimer) {
-    clearInterval(_nonceCleanupTimer);
-    _nonceCleanupTimer = null;
-  }
+  stopNonceCleanup();
+}
+
+export function _getNonceCacheStatsForTests() {
+  return { size: _usedNonces.size, sweeping: _nonceCleanupTimer !== null };
 }
 
 function getServerSigningKey() {
@@ -341,7 +404,7 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
     // Claim the nonce only after every check has passed (#1295). Claiming it
     // earlier let an unsigned or tampered copy of an intercepted challenge
     // "burn" the nonce before the legitimate client submitted it.
-    if (!consumeChallengeNonce(valueStr)) {
+    if (!consumeChallengeNonce(valueStr, maxTime)) {
       return { valid: false, error: "Challenge nonce already used", code: "NONCE_REPLAY" };
     }
 

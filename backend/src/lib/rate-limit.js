@@ -13,6 +13,16 @@ export const SEP10_CHALLENGE_RATE_LIMIT_WINDOW_MS = Number(
 export const SEP10_CHALLENGE_RATE_LIMIT_MAX = Number(
   process.env.SEP10_CHALLENGE_RATE_LIMIT_MAX || 20,
 );
+// Per-IP ceiling on challenge issuance across *all* accounts (#584). The
+// per-account+IP limiter above is keyed on the caller-supplied `account`, so a
+// single IP could otherwise mint unlimited server-signed challenges by
+// rotating account values — each fresh account gets its own bucket.
+export const SEP10_CHALLENGE_IP_RATE_LIMIT_WINDOW_MS = Number(
+  process.env.SEP10_CHALLENGE_IP_RATE_LIMIT_WINDOW_MS || 60 * 1000,
+);
+export const SEP10_CHALLENGE_IP_RATE_LIMIT_MAX = Number(
+  process.env.SEP10_CHALLENGE_IP_RATE_LIMIT_MAX || 60,
+);
 export const SEP10_VERIFY_RATE_LIMIT_WINDOW_MS = Number(
   process.env.SEP10_VERIFY_RATE_LIMIT_WINDOW_MS || 60 * 1000,
 );
@@ -147,6 +157,11 @@ export function getSep10ChallengeRateLimitKey(req) {
   return `sep10:challenge:${account}:${ipKey}`;
 }
 
+export function getSep10ChallengeIpRateLimitKey(req) {
+  const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
+  return `sep10:challenge-ip:${ipKey}`;
+}
+
 export function getSep10VerifyRateLimitKey(req) {
   const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
   return `sep10:verify:${ipKey}`;
@@ -169,6 +184,37 @@ export function createSep10ChallengeRateLimit({
     legacyHeaders: false,
     validate: { ip: false },
     keyGenerator: getSep10ChallengeRateLimitKey,
+    handler: (req, res, _next, options) => {
+      setStandardRateLimitHeaders(res, req.rateLimit);
+      res.status(options.statusCode).json(options.message);
+    },
+    store,
+    passOnStoreError: true,
+  });
+}
+
+/**
+ * Per-IP aggregate limit for POST /auth/challenge (#584). Mounted in front of
+ * the per-account limiter so account rotation from one IP can't bypass it.
+ * Runs before body validation, so malformed requests count too.
+ */
+export function createSep10ChallengeIpRateLimit({
+  store,
+  rateLimitFactory = rateLimit,
+  max = SEP10_CHALLENGE_IP_RATE_LIMIT_MAX,
+  windowMs = SEP10_CHALLENGE_IP_RATE_LIMIT_WINDOW_MS,
+} = {}) {
+  return rateLimitFactory({
+    windowMs,
+    max,
+    message: {
+      error: "Too many challenge requests from this address, please try again later.",
+      code: "SEP10_RATE_LIMITED",
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { ip: false },
+    keyGenerator: getSep10ChallengeIpRateLimitKey,
     handler: (req, res, _next, options) => {
       setStandardRateLimitHeaders(res, req.rateLimit);
       res.status(options.statusCode).json(options.message);

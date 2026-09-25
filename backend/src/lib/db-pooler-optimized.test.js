@@ -607,6 +607,32 @@ describe("Database Pooler - Circuit breaker (Issue #895)", () => {
     const stats = getPoolerStats();
     expect(stats.fallbackMode.active).toBe(true);
   });
+
+  it("degrades to a single raw pool call when the circuit is open (Issue #1057)", async () => {
+    mockPoolQuery.mockRejectedValue(new Error("Database connection failed"));
+
+    for (let i = 0; i < 30; i++) {
+      try {
+        await optimizedQuery("SELECT 1", [], { label: "test-single-hop" });
+      } catch (err) {
+        // Expected to fail
+      }
+    }
+
+    expect(getPoolerStats().circuitBreaker.open).toBe(true);
+
+    mockPoolQuery.mockResolvedValue({ rows: [{ id: 1 }], rowCount: 1 });
+    const rateLimitCountBefore = getPoolerStats().rateLimiter.globalCount;
+    const poolCallsBefore = mockPoolQuery.mock.calls.length;
+
+    const result = await optimizedQuery("SELECT 1", [], { label: "test-single-hop" });
+
+    expect(result.rows).toEqual([{ id: 1 }]);
+    // Exactly one raw pool call, and the degraded path re-enters neither the
+    // rate limiter nor the cache — no recursive re-entry into optimizedQuery.
+    expect(mockPoolQuery).toHaveBeenCalledTimes(poolCallsBefore + 1);
+    expect(getPoolerStats().rateLimiter.globalCount).toBe(rateLimitCountBefore);
+  });
 });
 
 describe("Database Pooler - Enhanced signature verification (Issue #895)", () => {

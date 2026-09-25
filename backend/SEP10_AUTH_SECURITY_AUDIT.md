@@ -75,6 +75,14 @@ This audit covers the SEP-0010 Web Authentication flow: challenge generation, si
 
 **Fix:** Explicit guards with specific error codes (`INVALID_STRUCTURE`, `INVALID_TIME_BOUNDS`). Unexpected verification errors are logged, non-Error rejections are normalised, and tokens are never minted without a merchant id.
 
+### Medium — Signature verification cost unbounded (#585, fixed)
+
+**Issue:** Every decorated signature on a submitted challenge was run through Ed25519 verification against both the server and client keys, and again in the "unrecognized signature" pass. A forged challenge carrying the network maximum of 20 signatures forced ~60 verifications per request, before rejection.
+
+**Fix:** `verifyChallengeSignatures()` rejects more than `SEP10_MAX_CHALLENGE_SIGNATURES` (2) signatures before any cryptographic work, requires each signature's 4-byte hint to match the candidate signer's `signatureHint()` before verifying against the transaction hash, and classifies each signature exactly once (server, client, or unrecognized). A valid challenge costs exactly two verifications.
+
+**Impact:** Cryptographic work per `/auth/verify` is bounded at two Ed25519 verifications. Error codes (`SERVER_SIGNATURE_MISSING`, `CLIENT_SIGNATURE_INVALID`, `UNRECOGNIZED_SIGNATURE`) are unchanged.
+
 ### Error codes returned by `/auth/verify`
 
 `INVALID_XDR`, `INVALID_ACCOUNT`, `INVALID_STRUCTURE`, `INVALID_OPERATION`, `ACCOUNT_MISMATCH`, `HOME_DOMAIN_MISMATCH`, `INVALID_NONCE`, `INVALID_TIME_BOUNDS`, `CHALLENGE_EXPIRED`, `SERVER_SIGNATURE_MISSING`, `CLIENT_SIGNATURE_INVALID`, `UNRECOGNIZED_SIGNATURE`, `NONCE_REPLAY`, `AUTHENTICATION_FAILED`.
@@ -106,7 +114,7 @@ SEP10_NONCE_CACHE_MAX=10000
 
 ## Test Coverage
 
-- `backend/src/lib/sep10-auth.test.js` — nonce replay, home domain, XDR validation, store recovery, null guards (#1293), nonce claim ordering (#1295), cache expiry/cap (#1292), challenge integrity and JWT algorithm (#1294)
+- `backend/src/lib/sep10-auth.test.js` — nonce replay, home domain, XDR validation, store recovery, null guards (#1293), nonce claim ordering (#1295), cache expiry/cap (#1292), challenge integrity and JWT algorithm (#1294), signature verification bounds, hint filtering and forged/duplicated/tampered signatures (#585)
 - `backend/src/routes/auth.routes.test.js` — rate limits, retryable 503 on store failure, concurrent verify / retry-after-503 (#1295), advertised network passphrase (#1294)
 - `backend/src/lib/rate-limit.test.js` — SEP-10 key generation and limiter factories
 

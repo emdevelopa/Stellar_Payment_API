@@ -124,14 +124,13 @@ export default function createAuthRouter({
         const { account } = req.body;
 
         const challengeXdr = generateChallenge(account);
-        const networkPassphrase =
-          process.env.STELLAR_NETWORK === "public"
-            ? "Public Global Stellar Network ; September 2015"
-            : "Test SDF Network ; September 2015";
 
+        // Advertise the exact passphrase the challenge was built with. The old
+        // case-sensitive check told wallets "testnet" when STELLAR_NETWORK was
+        // e.g. "PUBLIC", so they signed for the wrong network (#1294).
         res.json({
           transaction: challengeXdr,
-          network_passphrase: networkPassphrase,
+          network_passphrase: getNetworkPassphrase(),
         });
       } catch (err) {
         next(err);

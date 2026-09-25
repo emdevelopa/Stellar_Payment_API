@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import * as StellarSdk from "stellar-sdk";
+import jwt from "jsonwebtoken";
 import {
   generateChallenge,
   verifyChallenge,
@@ -10,6 +11,7 @@ import {
   lookupMerchantByStellarAddress,
   Sep10AuthError,
   generateSessionToken,
+  verifySessionToken,
   consumeChallengeNonce,
   releaseChallengeNonce,
   pruneExpiredNonces,
@@ -513,6 +515,94 @@ describe("SEP-0010 Authentication", () => {
       process.env.SEP10_NONCE_CACHE_MAX = "not-a-number";
       for (let i = 0; i < 20; i += 1) consumeChallengeNonce(`n-${i}`.padEnd(32, "x"));
       expect(_getNonceCacheStatsForTests().size).toBe(20);
+    });
+  });
+
+  describe("SEP-10 challenge integrity (#1294)", () => {
+    /** Build a server-signed challenge with overridable envelope fields. */
+    function customChallenge({
+      source = serverKeypair,
+      sequence = "-1",
+      minTime,
+      maxTime,
+      signers = [serverKeypair, clientKeypair],
+    } = {}) {
+      const now = Math.floor(Date.now() / 1000);
+      const tx = new StellarSdk.TransactionBuilder(
+        new StellarSdk.Account(source.publicKey(), sequence),
+        {
+          fee: "100",
+          networkPassphrase: StellarSdk.Networks.TESTNET,
+          timebounds: { minTime: minTime ?? now, maxTime: maxTime ?? now + CHALLENGE_EXPIRES_IN },
+        },
+      )
+        .addOperation(
+          StellarSdk.Operation.manageData({
+            name: `${HOME_DOMAIN} auth`,
+            value: "n".repeat(48),
+            source: clientKeypair.publicKey(),
+          }),
+        )
+        .build();
+      signers.forEach((kp) => tx.sign(kp));
+      return tx.toXDR();
+    }
+
+    const verify = (xdr) => verifyChallenge(xdr, clientKeypair.publicKey(), HOME_DOMAIN);
+
+    it("accepts a well-formed custom challenge (control)", () => {
+      expect(verify(customChallenge()).valid).toBe(true);
+    });
+
+    it("rejects a challenge whose source account is not the server", () => {
+      const other = StellarSdk.Keypair.random();
+      const result = verify(customChallenge({ source: other }));
+      expect(result).toMatchObject({ valid: false, code: "INVALID_STRUCTURE" });
+      expect(result.error).toBe("Challenge was not issued by this server");
+    });
+
+    it("rejects a challenge with a non-zero sequence number", () => {
+      expect(verify(customChallenge({ sequence: "41" })).code).toBe("INVALID_STRUCTURE");
+    });
+
+    it("rejects a challenge with an unbounded maxTime", () => {
+      expect(verify(customChallenge({ maxTime: 0 })).code).toBe("INVALID_TIME_BOUNDS");
+    });
+
+    it("rejects a challenge valid for longer than CHALLENGE_EXPIRES_IN", () => {
+      const now = Math.floor(Date.now() / 1000);
+      const result = verify(customChallenge({ minTime: now, maxTime: now + 86_400 }));
+      expect(result.code).toBe("INVALID_TIME_BOUNDS");
+    });
+
+    it("rejects a challenge carrying a third-party signature", () => {
+      const intruder = StellarSdk.Keypair.random();
+      const result = verify(customChallenge({ signers: [serverKeypair, clientKeypair, intruder] }));
+      expect(result.code).toBe("UNRECOGNIZED_SIGNATURE");
+    });
+
+    it("does not consume the nonce of a rejected challenge", () => {
+      const intruder = StellarSdk.Keypair.random();
+      verify(customChallenge({ signers: [serverKeypair, clientKeypair, intruder] }));
+      expect(verify(customChallenge()).valid).toBe(true);
+    });
+
+    it("issues HS256 session tokens", () => {
+      const token = generateSessionToken("m-1", "a@example.com");
+      expect(jwt.decode(token, { complete: true }).header.alg).toBe("HS256");
+      expect(verifySessionToken(token)).toMatchObject({ valid: true, payload: { id: "m-1" } });
+    });
+
+    it("rejects session tokens signed with a different HMAC algorithm", () => {
+      const token = jwt.sign({ id: "m-1", merchant_id: "m-1" }, process.env.JWT_SECRET, {
+        algorithm: "HS512",
+      });
+      expect(verifySessionToken(token).valid).toBe(false);
+    });
+
+    it("rejects unsigned (alg: none) session tokens", () => {
+      const token = jwt.sign({ id: "m-1", merchant_id: "m-1" }, null, { algorithm: "none" });
+      expect(verifySessionToken(token).valid).toBe(false);
     });
   });
 });

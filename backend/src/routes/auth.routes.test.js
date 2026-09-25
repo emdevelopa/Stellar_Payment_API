@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import * as StellarSdk from "stellar-sdk";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockMaybeSingle, mockFrom, mockLogLoginAttempt } = vi.hoisted(() => ({
   mockMaybeSingle: vi.fn(),
@@ -250,6 +250,40 @@ describe("SEP-10 auth routes", () => {
 
       const second = await request(app).post("/api/auth/verify").send({ transaction: xdr });
       expect(second.body.code).toBe("NONCE_REPLAY");
+    });
+  });
+
+  describe("challenge network passphrase (#1294)", () => {
+    const original = process.env.STELLAR_NETWORK;
+
+    afterEach(() => {
+      if (original === undefined) delete process.env.STELLAR_NETWORK;
+      else process.env.STELLAR_NETWORK = original;
+    });
+
+    it("advertises the passphrase the challenge was actually built with", async () => {
+      // An upper-case value is lower-cased by the signer (public network) but
+      // the old route compared it case-sensitively and advertised testnet.
+      process.env.STELLAR_NETWORK = "PUBLIC";
+      vi.resetModules();
+      const { default: createFreshAuthRouter } = await import("./auth.js");
+      const app = createApp(createFreshAuthRouter());
+
+      const res = await request(app)
+        .post("/api/auth/challenge")
+        .send({ account: clientKeypair.publicKey() })
+        .expect(200);
+
+      expect(res.body.network_passphrase).toBe(StellarSdk.Networks.PUBLIC);
+      const tx = StellarSdk.TransactionBuilder.fromXDR(
+        res.body.transaction,
+        res.body.network_passphrase,
+      );
+      expect(tx.networkPassphrase).toBe(StellarSdk.Networks.PUBLIC);
+      expect(tx.signatures).toHaveLength(1);
+      expect(
+        serverKeypair.verify(tx.hash(), tx.signatures[0].signature()),
+      ).toBe(true);
     });
   });
 });

@@ -14,6 +14,7 @@ const NETWORK_PASSPHRASE =
 export const CHALLENGE_EXPIRES_IN = 300;
 export const MAX_CHALLENGE_XDR_BYTES = 8192;
 export const MIN_CHALLENGE_NONCE_LENGTH = 16;
+export const SESSION_TOKEN_ALGORITHM = "HS256";
 
 export const NONCE_SWEEP_INTERVAL_MS = 60_000;
 const DEFAULT_MAX_NONCE_CACHE = 10_000;
@@ -329,6 +330,16 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
       return { valid: false, error: "Invalid challenge structure", code: "INVALID_STRUCTURE" };
     }
 
+    // SEP-10: the challenge must be sourced from the server account with
+    // sequence number 0 so it can never be submitted to the network (#1294).
+    if (transaction.source !== serverKeypair.publicKey() || transaction.sequence !== "0") {
+      return {
+        valid: false,
+        error: "Challenge was not issued by this server",
+        code: "INVALID_STRUCTURE",
+      };
+    }
+
     if (!Array.isArray(transaction.operations) || transaction.operations.length !== 1) {
       return { valid: false, error: "Invalid challenge structure", code: "INVALID_STRUCTURE" };
     }
@@ -365,6 +376,12 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
       return { valid: false, error: "Challenge missing time bounds", code: "INVALID_TIME_BOUNDS" };
     }
 
+    // Reject unbounded (maxTime 0) or overly long windows, which would keep a
+    // leaked signed challenge usable far beyond CHALLENGE_EXPIRES_IN (#1294).
+    if (maxTime === 0 || maxTime - minTime > CHALLENGE_EXPIRES_IN) {
+      return { valid: false, error: "Invalid challenge time bounds", code: "INVALID_TIME_BOUNDS" };
+    }
+
     if (now < minTime || now > maxTime) {
       return { valid: false, error: "Challenge expired", code: "CHALLENGE_EXPIRED" };
     }
@@ -372,32 +389,40 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
     const txHash = transaction.hash();
     const signatures = Array.isArray(transaction.signatures) ? transaction.signatures : [];
 
-    const serverSigned = signatures.some((sig) => {
+    const signedBy = (keypair, sig) => {
       try {
-        return serverKeypair.verify(txHash, sig.signature());
+        return keypair.verify(txHash, sig.signature());
       } catch {
         return false;
       }
-    });
+    };
+
+    const serverSigned = signatures.some((sig) => signedBy(serverKeypair, sig));
 
     if (!serverSigned) {
       return { valid: false, error: "Server signature missing", code: "SERVER_SIGNATURE_MISSING" };
     }
 
     const clientKeypair = StellarSdk.Keypair.fromPublicKey(clientAccountId);
-    const clientSigned = signatures.some((sig) => {
-      try {
-        return clientKeypair.verify(txHash, sig.signature());
-      } catch {
-        return false;
-      }
-    });
+    const clientSigned = signatures.some((sig) => signedBy(clientKeypair, sig));
 
     if (!clientSigned) {
       return {
         valid: false,
         error: "Client signature missing or invalid",
         code: "CLIENT_SIGNATURE_INVALID",
+      };
+    }
+
+    // SEP-10: no signatures other than the server's and the client's (#1294).
+    const unrecognized = signatures.some(
+      (sig) => !signedBy(serverKeypair, sig) && !signedBy(clientKeypair, sig),
+    );
+    if (unrecognized) {
+      return {
+        valid: false,
+        error: "Challenge carries unrecognized signatures",
+        code: "UNRECOGNIZED_SIGNATURE",
       };
     }
 
@@ -466,13 +491,16 @@ export function generateSessionToken(merchantId, email) {
       merchant_id: merchantId,
     },
     getJwtSecret(),
-    { expiresIn: "24h" },
+    { algorithm: SESSION_TOKEN_ALGORITHM, expiresIn: "24h" },
   );
 }
 
 export function verifySessionToken(token) {
   try {
-    const payload = jwt.verify(token, getJwtSecret());
+    // Pin the algorithm so a token can't pick its own verification scheme (#1294).
+    const payload = jwt.verify(token, getJwtSecret(), {
+      algorithms: [SESSION_TOKEN_ALGORITHM],
+    });
     return { valid: true, payload };
   } catch {
     return { valid: false, error: "Invalid or expired session token" };

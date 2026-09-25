@@ -337,6 +337,34 @@ export const dbPoolerRateLimitUtilizationPercent = new client.Gauge({
 });
 
 /**
+ * Database Pooler Stats Cache Metrics (Issue #1055)
+ *
+ * Observes the short-TTL cache in front of `getPoolerStats()`. The live
+ * snapshot walks the pool, the query cache and the rate-limiter windows on
+ * every call; the cache is what makes it safe to call from a scrape loop.
+ */
+
+export const dbPoolerStatsCacheHits = new client.Counter({
+  name: "db_pooler_stats_cache_hits_total",
+  help: "Total number of database pooler stats snapshots served from cache",
+});
+
+export const dbPoolerStatsCacheMisses = new client.Counter({
+  name: "db_pooler_stats_cache_misses_total",
+  help: "Total number of database pooler stats snapshots that had to be recomputed",
+});
+
+export const dbPoolerStatsCacheEvictions = new client.Counter({
+  name: "db_pooler_stats_cache_evictions_total",
+  help: "Total number of expired or evicted entries dropped from the stats cache",
+});
+
+export const dbPoolerStatsCacheSize = new client.Gauge({
+  name: "db_pooler_stats_cache_size",
+  help: "Current number of entries held in the database pooler stats cache",
+});
+
+/**
  * Asset Issuer Granular Operational Metrics (Issue #1053)
  *
  * Per-transaction and per-issuer detail is deliberately NOT exported as
@@ -956,6 +984,10 @@ register.registerMetric(dbPoolerCircuitBreakerState);
 register.registerMetric(dbPoolerFallbackModeActive);
 register.registerMetric(dbPoolerActiveMerchantWindows);
 register.registerMetric(dbPoolerRateLimitUtilizationPercent);
+register.registerMetric(dbPoolerStatsCacheHits);
+register.registerMetric(dbPoolerStatsCacheMisses);
+register.registerMetric(dbPoolerStatsCacheEvictions);
+register.registerMetric(dbPoolerStatsCacheSize);
 register.registerMetric(assetIssuerVerificationsTotal);
 register.registerMetric(assetIssuerVerificationDuration);
 register.registerMetric(assetIssuerCacheOperationsTotal);

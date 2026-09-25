@@ -84,13 +84,25 @@ export default function createAuthRouter({
       }
 
       if (!merchant || !merchant.password_hash) {
-        await logLoginAttempt({ merchantId: null, ipAddress, userAgent, status: "failure" });
+        await logLoginAttempt({
+          merchantId: null,
+          ipAddress,
+          userAgent,
+          status: "failure",
+          reason: "invalid_credentials",
+        });
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
       const valid = await verifyPassword(password, merchant.password_hash);
       if (!valid) {
-        await logLoginAttempt({ merchantId: merchant.id, ipAddress, userAgent, status: "failure" });
+        await logLoginAttempt({
+          merchantId: merchant.id,
+          ipAddress,
+          userAgent,
+          status: "failure",
+          reason: "invalid_credentials",
+        });
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
@@ -176,6 +188,7 @@ export default function createAuthRouter({
             ipAddress,
             userAgent,
             status: "failure",
+            reason: verification.code,
           });
           return res.status(401).json({
             error: verification.error,
@@ -193,6 +206,7 @@ export default function createAuthRouter({
             ipAddress,
             userAgent,
             status: "failure",
+            reason: "no_merchant_for_account",
           });
           return res.status(401).json({
             error: "No merchant account found for this Stellar address",

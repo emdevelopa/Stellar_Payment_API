@@ -15,6 +15,20 @@
 
 import { createHash } from 'node:crypto';
 import { logger } from './logger.js';
+import {
+  pathPaymentQuoteCacheHits,
+  pathPaymentQuoteCacheMisses,
+  pathPaymentQuoteCacheEvictions,
+  pathPaymentQuoteCacheSize,
+} from './path-payment-metrics.js';
+
+/** Default cache metrics wired to the granular path-payment series (issue #1048). */
+const DEFAULT_METRICS = {
+  hit: pathPaymentQuoteCacheHits,
+  miss: pathPaymentQuoteCacheMisses,
+  eviction: pathPaymentQuoteCacheEvictions,
+  size: pathPaymentQuoteCacheSize,
+};
 
 const DEFAULT_TTL_MS = Number.parseInt(
   process.env.EXCHANGE_RATE_CACHE_TTL_MS || '30000',
@@ -149,7 +163,7 @@ let defaultInstance = null;
 
 export function getExchangeRateCache() {
   if (!defaultInstance) {
-    defaultInstance = new ExchangeRateCache();
+    defaultInstance = new ExchangeRateCache({ metrics: DEFAULT_METRICS });
   }
   return defaultInstance;
 }

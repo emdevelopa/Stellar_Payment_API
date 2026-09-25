@@ -60,6 +60,12 @@ import {
   NoPathFoundError,
 } from "../services/exchangeRateService.js";
 import {
+  pathPaymentQuoteRequestsTotal,
+  pathPaymentQuoteStageDuration,
+  pathPaymentQuotePathHops,
+  pathPaymentQuoteRate,
+} from "../lib/path-payment-metrics.js";
+import {
   findMatchingPayment,
   findAnyRecentPayment,
   getNetworkFeeStats,
@@ -1212,6 +1218,11 @@ function createPaymentsRouter({
           .is("deleted_at", null)
           .maybeSingle();
 
+        pathPaymentQuoteStageDuration.observe(
+          { stage: "payment_lookup" },
+          (Date.now() - startTime) / 1000,
+        );
+
         if (error) {
           error.status = 500;
           throw error;
@@ -1219,6 +1230,7 @@ function createPaymentsRouter({
 
         if (!data) {
           exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "not_found" });
           return res.status(404).json({ error: "Payment not found" });
         }
 
@@ -1230,6 +1242,7 @@ function createPaymentsRouter({
             { ...assetLabels, result: "not_pending" },
             (Date.now() - startTime) / 1000,
           );
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "not_pending" });
           return res.status(409).json({
             error: "Path payment quote is only available for pending payments",
             status: data.status,
@@ -1246,12 +1259,14 @@ function createPaymentsRouter({
             { ...assetLabels, result: "same_asset" },
             (Date.now() - startTime) / 1000,
           );
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "same_asset" });
           return res.status(400).json({
             error:
               "Source asset is the same as destination asset. Use a direct payment.",
           });
         }
 
+        const quoteStart = Date.now();
         let quote;
         try {
           quote = await getExchangeRateQuote({
@@ -1264,14 +1279,25 @@ function createPaymentsRouter({
           });
         } catch (err) {
           if (err instanceof NoPathFoundError) {
+            pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "no_path" });
             return res.status(404).json({
               error: "No path found for this asset pair",
             });
           }
           throw err;
         }
+        pathPaymentQuoteStageDuration.observe(
+          { stage: "horizon_quote" },
+          (Date.now() - quoteStart) / 1000,
+        );
 
         exchangeRateSlippageApplied.inc({ slippage_pct: String(quote.slippage) });
+        pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "success" });
+        pathPaymentQuotePathHops.observe(quote.path.length);
+        pathPaymentQuoteRate.observe({
+          source_asset: quote.sourceAsset,
+          dest_asset: assetLabels.dest_asset,
+        }, parseFloat(quote.sourceAmount) / parseFloat(quote.destinationAmount));
 
         res.json({
           source_asset: quote.sourceAsset,
@@ -1290,6 +1316,7 @@ function createPaymentsRouter({
           { ...assetLabels, result: "error" },
           (Date.now() - startTime) / 1000,
         );
+        pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "error" });
         next(err);
       }
     }

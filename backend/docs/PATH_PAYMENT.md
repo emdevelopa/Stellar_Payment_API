@@ -73,7 +73,7 @@ Exposed on `GET /metrics` (merged into the core registry output).
 | `path_payment_quote_cache_evictions_total` | counter | `cache` | LRU pressure |
 | `path_payment_quote_cache_size` | gauge | `cache` | live cache occupancy |
 | `path_payment_quote_path_hops` | histogram | – | multi-hop path complexity distribution |
-| `path_payment_quote_send_max_ratio` | histogram | – | how much the 1% send-max buffer overpays relative to the destination amount |
+| `path_payment_quote_rate` | histogram | `source_asset`, `dest_asset` | exchange-rate distribution per pair (source_amount / destination_amount) |
 
 Useful queries:
 

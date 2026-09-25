@@ -3,6 +3,9 @@ import { register } from "../lib/metrics.js";
 // Granular Payment Processor metrics live in their own registry (issue #1088)
 // and are merged into the scrape output below.
 import { paymentProcessorRegister } from "../lib/payment-processor-metrics.js";
+// Granular Path Payment Service metrics live in their own registry (issue #1048)
+// and are merged into the scrape output below.
+import { pathPaymentRegister } from "../lib/path-payment-metrics.js";
 
 const router = express.Router();
 
@@ -11,7 +14,7 @@ const router = express.Router();
  * /metrics:
  *   get:
  *     summary: Expose Prometheus metrics
- *     description: Returns the current state of Prometheus metrics for the application, including granular payment processor metrics.
+ *     description: Returns the current state of Prometheus metrics for the application, including granular payment processor and path payment metrics.
  *     tags: [Monitoring]
  *     responses:
  *       200:
@@ -23,12 +26,13 @@ const router = express.Router();
  */
 router.get("/metrics", async (req, res) => {
   try {
-    const [coreMetrics, processorMetrics] = await Promise.all([
+    const [coreMetrics, processorMetrics, pathPaymentMetrics] = await Promise.all([
       register.metrics(),
       paymentProcessorRegister.metrics(),
+      pathPaymentRegister.metrics(),
     ]);
     res.set("Content-Type", register.contentType);
-    res.end(`${coreMetrics}\n${processorMetrics}`);
+    res.end(`${coreMetrics}\n${processorMetrics}\n${pathPaymentMetrics}`);
   } catch (err) {
     res.status(500).end(err);
   }

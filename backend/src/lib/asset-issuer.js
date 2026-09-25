@@ -28,6 +28,17 @@ import {
     RATE_LIMIT_REDIS_PREFIX,
 } from "./rate-limit.js";
 import { logger } from "./logger.js";
+import {
+    assetIssuerVerificationsTotal,
+    assetIssuerVerificationDuration,
+    assetIssuerCacheOperationsTotal,
+    assetIssuerCacheSize,
+    assetIssuerQueryDuration,
+    assetIssuerErrorRecoveryTotal,
+    assetIssuerCircuitBreakerState,
+    assetIssuerOpenCircuitBreakers,
+    assetIssuerDeadLetterQueueSize,
+} from "./metrics.js";
 
 // Rate limiting constants
 export const ASSET_ISSUER_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -46,6 +57,98 @@ const DLQ_MAX_SIZE = 100;
 // Issue #1312: bounds for in-memory registries that were previously unbounded.
 const CIRCUIT_BREAKER_MAX_CONTEXTS = 1000;
 const VERIFICATION_CACHE_MAX_ENTRIES = 1000;
+
+// Issue #1050: bounds and TTL for the issuer query cache.
+const ISSUER_QUERY_CACHE_TTL_MS = 60 * 1000;
+const ISSUER_QUERY_CACHE_MAX_ENTRIES = 500;
+
+/**
+ * Issue #1050: bounded TTL cache for Asset Issuer query results.
+ *
+ * `AssetIssuerSignatureVerifier` already caches per-transaction verification
+ * results, but the aggregate read paths (`getIssuerStats`,
+ * `getAssetIssuerHealthMetrics`) re-queried the database on every call. Those
+ * results are derived from payment rows and change slowly, so a short TTL
+ * removes the repeated round trip without serving materially stale data.
+ *
+ * Expired entries are dropped on read rather than only on write, and the map
+ * is hard-capped with oldest-first eviction so a stream of distinct
+ * issuer/merchant keys cannot grow it without bound.
+ */
+class IssuerQueryCache {
+    constructor({ ttlMs = ISSUER_QUERY_CACHE_TTL_MS, maxEntries = ISSUER_QUERY_CACHE_MAX_ENTRIES } = {}) {
+        this.ttlMs = ttlMs;
+        this.maxEntries = maxEntries;
+        this.entries = new Map();
+        this.stats = { hits: 0, misses: 0, evictions: 0, expirations: 0 };
+    }
+
+    get(key) {
+        const entry = this.entries.get(key);
+        if (!entry) {
+            this.stats.misses++;
+            assetIssuerCacheOperationsTotal.inc({ operation: "miss" });
+            return undefined;
+        }
+        if (Date.now() - entry.timestamp >= this.ttlMs) {
+            this.entries.delete(key);
+            this.stats.expirations++;
+            this.stats.misses++;
+            assetIssuerCacheOperationsTotal.inc({ operation: "expiration" });
+            assetIssuerCacheOperationsTotal.inc({ operation: "miss" });
+            this._publishSize();
+            return undefined;
+        }
+        // Re-insert to refresh recency for LRU ordering.
+        this.entries.delete(key);
+        this.entries.set(key, entry);
+        this.stats.hits++;
+        assetIssuerCacheOperationsTotal.inc({ operation: "hit" });
+        return entry.value;
+    }
+
+    set(key, value) {
+        if (this.entries.has(key)) {
+            this.entries.delete(key);
+        }
+        while (this.entries.size >= this.maxEntries) {
+            this.entries.delete(this.entries.keys().next().value);
+            this.stats.evictions++;
+            assetIssuerCacheOperationsTotal.inc({ operation: "eviction" });
+        }
+        this.entries.set(key, { value, timestamp: Date.now() });
+        this._publishSize();
+    }
+
+    delete(key) {
+        const removed = this.entries.delete(key);
+        if (removed) {
+            assetIssuerCacheOperationsTotal.inc({ operation: "invalidation" });
+            this._publishSize();
+        }
+        return removed;
+    }
+
+    clear() {
+        this.entries.clear();
+        this._publishSize();
+    }
+
+    _publishSize() {
+        assetIssuerCacheSize.set(this.entries.size);
+    }
+
+    getStats() {
+        return {
+            size: this.entries.size,
+            ttlMs: this.ttlMs,
+            maxEntries: this.maxEntries,
+            ...this.stats,
+        };
+    }
+}
+
+const issuerQueryCache = new IssuerQueryCache();
 
 /**
  * Per-context circuit breaker states for failure domain isolation.
@@ -191,6 +294,7 @@ export class AssetIssuerErrorRecovery {
             { context: entry.context, errorType: entry.errorType, attempts: entry.attempts },
             'Asset issuer operation added to dead-letter queue'
         );
+        assetIssuerDeadLetterQueueSize.set(deadLetterQueue.length);
     }
 
     static getDeadLetterQueue() {
@@ -198,7 +302,23 @@ export class AssetIssuerErrorRecovery {
     }
 
     static drainDeadLetterQueue() {
-        return deadLetterQueue.splice(0, deadLetterQueue.length);
+        const drained = deadLetterQueue.splice(0, deadLetterQueue.length);
+        assetIssuerDeadLetterQueueSize.set(0);
+        return drained;
+    }
+
+    /**
+     * Issue #1053: publish the breaker gauges. Aggregated across contexts
+     * rather than labelled per context, so a caller cannot inflate series
+     * count by varying an issuer or merchant id embedded in a context string.
+     */
+    static _publishBreakerGauges() {
+        let open = 0;
+        for (const state of circuitBreakerRegistry.values()) {
+            if (state.state !== 'closed') open++;
+        }
+        assetIssuerOpenCircuitBreakers.set(open);
+        assetIssuerCircuitBreakerState.set(open > 0 ? 1 : 0);
     }
 
     // ─── Timeout Wrapper ─────────────────────────────────────────────────────────
@@ -244,6 +364,8 @@ export class AssetIssuerErrorRecovery {
 
         const effectiveMaxAttempts = disposition === 'probe' ? 1 : maxAttempts;
         let lastError = null;
+        let transientFailures = 0;
+        let lastTransientType = 'unknown';
 
         for (let attempt = 1; attempt <= effectiveMaxAttempts; attempt++) {
             try {
@@ -254,6 +376,12 @@ export class AssetIssuerErrorRecovery {
                 );
 
                 this._recordSuccess(context);
+                if (transientFailures > 0) {
+                    assetIssuerErrorRecoveryTotal.inc({
+                        error_type: lastTransientType,
+                        outcome: 'recovered',
+                    });
+                }
                 return result;
             } catch (error) {
                 lastError = error;
@@ -262,13 +390,23 @@ export class AssetIssuerErrorRecovery {
                 if (!errorClass.retryable || attempt === effectiveMaxAttempts) {
                     this._recordFailure(context, error);
                     const enhanced = this.enhanceError(error, context, attempt, errorClass);
+                    this._publishBreakerGauges();
 
                     if (!errorClass.retryable) {
+                        assetIssuerErrorRecoveryTotal.inc({
+                            error_type: errorClass.type,
+                            outcome: 'rejected',
+                        });
                         this._pushToDeadLetterQueue({
                             context,
                             errorType: errorClass.type,
                             errorMessage: error.message,
                             attempts: attempt,
+                        });
+                    } else {
+                        assetIssuerErrorRecoveryTotal.inc({
+                            error_type: errorClass.type,
+                            outcome: 'exhausted',
                         });
                     }
 
@@ -283,21 +421,29 @@ export class AssetIssuerErrorRecovery {
                 }
 
                 const delay = this.calculateRetryDelay(attempt, errorClass.priority);
+                transientFailures++;
+                lastTransientType = errorClass.type;
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
 
         this._recordFailure(context, lastError);
+        this._publishBreakerGauges();
+        const finalClass = this.classifyError(lastError);
+        assetIssuerErrorRecoveryTotal.inc({
+            error_type: finalClass.type,
+            outcome: 'exhausted',
+        });
         const finalEnhanced = this.enhanceError(
             lastError,
             context,
             effectiveMaxAttempts,
-            this.classifyError(lastError),
+            finalClass,
         );
 
         this._pushToDeadLetterQueue({
             context,
-            errorType: this.classifyError(lastError).type,
+            errorType: finalClass.type,
             errorMessage: lastError?.message,
             attempts: effectiveMaxAttempts,
         });
@@ -459,9 +605,11 @@ export class AssetIssuerErrorRecovery {
         } else {
             circuitBreakerRegistry.clear();
         }
+        this._publishBreakerGauges();
     }
 
     static getCircuitBreakerMetrics() {
+        this._publishBreakerGauges();
         const snapshot = {};
         for (const [ctx, state] of circuitBreakerRegistry.entries()) {
             snapshot[ctx] = {
@@ -676,6 +824,14 @@ export class AssetIssuerSignatureVerifier {
     }
 
     async verifyOperation(txHash, options = {}) {
+        const startedAt = process.hrtime.bigint();
+        const observe = (result, operation = "any") => {
+            const seconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+            const label = result?.valid ? "valid" : "invalid";
+            assetIssuerVerificationDuration.observe({ result: label }, seconds);
+            assetIssuerVerificationsTotal.inc({ result: label, operation });
+        };
+
         const {
             expectedOperation = null,
             expectedAssetCode = null,
@@ -688,6 +844,7 @@ export class AssetIssuerSignatureVerifier {
         if (!skipCache) {
             const cached = this.verificationCache.get(cacheKey);
             if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+                observe(cached.result, expectedOperation || 'any');
                 return cached.result;
             }
             if (cached) {
@@ -714,7 +871,9 @@ export class AssetIssuerSignatureVerifier {
         }
 
         try {
-            return await verificationPromise;
+            const result = await verificationPromise;
+            observe(result, result?.operationType || expectedOperation || 'any');
+            return result;
         } finally {
             this.pendingVerifications.delete(cacheKey);
         }
@@ -931,7 +1090,15 @@ export class AssetIssuerSignatureVerifier {
  */
 export class AssetIssuerQueryOptimizer {
 
-    static async getIssuerStats(issuer) {
+    static async getIssuerStats(issuer, { skipCache = false } = {}) {
+        const cacheKey = `issuer_stats:${issuer}`;
+        if (!skipCache) {
+            const cached = issuerQueryCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
         const query = `
       SELECT
         asset,
@@ -948,10 +1115,18 @@ export class AssetIssuerQueryOptimizer {
       ORDER BY total_volume DESC
     `;
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
-            () => queryWithRetry(query, [issuer]),
-            `get stats for issuer ${issuer}`
+        const result = await this._timeQuery('issuer_stats', () =>
+            AssetIssuerErrorRecovery.executeWithRecovery(
+                () => queryWithRetry(query, [issuer]),
+                `get stats for issuer ${issuer}`
+            )
         );
+
+        if (!skipCache) {
+            issuerQueryCache.set(cacheKey, result);
+        }
+
+        return result;
     }
 
     static async findPaymentsByAssetAndIssuer(assetCode, assetIssuer, options = {}) {
@@ -1069,7 +1244,15 @@ export class AssetIssuerQueryOptimizer {
         );
     }
 
-    static async getAssetIssuerHealthMetrics(merchantId) {
+    static async getAssetIssuerHealthMetrics(merchantId, { skipCache = false } = {}) {
+        const cacheKey = `health_metrics:${merchantId}`;
+        if (!skipCache) {
+            const cached = issuerQueryCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
         const query = `
       WITH asset_stats AS (
         SELECT
@@ -1113,10 +1296,41 @@ export class AssetIssuerQueryOptimizer {
       ORDER BY a.total_volume DESC
     `;
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
-            () => queryWithRetry(query, [merchantId]),
-            `get asset issuer health metrics for merchant ${merchantId}`
+        const result = await this._timeQuery('health_metrics', () =>
+            AssetIssuerErrorRecovery.executeWithRecovery(
+                () => queryWithRetry(query, [merchantId]),
+                `get asset issuer health metrics for merchant ${merchantId}`
+            )
         );
+
+        if (!skipCache) {
+            issuerQueryCache.set(cacheKey, result);
+        }
+
+        return result;
+    }
+
+    /**
+     * Issue #1053: time an asset issuer query. Labelled by query name (a fixed
+     * set) rather than by issuer, so the series count cannot be driven up by
+     * varying an issuer id. Failures are observed too, then rethrown.
+     */
+    static async _timeQuery(name, run) {
+        const startedAt = process.hrtime.bigint();
+        try {
+            const result = await run();
+            assetIssuerQueryDuration.observe(
+                { query: name },
+                Number(process.hrtime.bigint() - startedAt) / 1e9,
+            );
+            return result;
+        } catch (error) {
+            assetIssuerQueryDuration.observe(
+                { query: name },
+                Number(process.hrtime.bigint() - startedAt) / 1e9,
+            );
+            throw error;
+        }
     }
 
     static async logAssetIssuerVerification({ merchantId, txHash, verification, assetCode, assetIssuer } = {}) {
@@ -1154,10 +1368,53 @@ export class AssetIssuerQueryOptimizer {
             })
         ];
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
-            () => queryWithRetry(query, params),
-            `log asset issuer verification for merchant ${merchantId}`
+        const result = await AssetIssuerQueryOptimizer._timeQuery('verification_log', () =>
+            AssetIssuerErrorRecovery.executeWithRecovery(
+                () => queryWithRetry(query, params),
+                `log asset issuer verification for merchant ${merchantId}`
+            )
         );
+
+        // Issue #1050: a new verification changes this issuer's stats and this
+        // merchant's health rollup, so drop both cached reads. Bounded to the
+        // keys this write can actually affect.
+        AssetIssuerQueryOptimizer.invalidateQueryCache({
+            assetIssuer: assetIssuer || verification.assetIssuer,
+            merchantId,
+        });
+
+        return result;
+    }
+
+    // ─── Query Cache (Issue #1050) ───────────────────────────────────────────────
+
+    /**
+     * Drop the cached reads that a verification write makes stale. Call with no
+     * arguments to clear the whole cache; with `{ assetIssuer }` and/or
+     * `{ merchantId }` to drop only those keys. A call that names neither key
+     * but passes an options object is a no-op, so a write with no known
+     * issuer/merchant cannot wipe the cache for everyone.
+     */
+    static invalidateQueryCache(options) {
+        if (options === undefined) {
+            const size = issuerQueryCache.getStats().size;
+            issuerQueryCache.clear();
+            return size;
+        }
+
+        const { assetIssuer, merchantId } = options;
+        let removed = 0;
+        if (merchantId) {
+            if (issuerQueryCache.delete(`health_metrics:${merchantId}`)) removed++;
+        }
+        if (assetIssuer) {
+            if (issuerQueryCache.delete(`issuer_stats:${assetIssuer}`)) removed++;
+        }
+        return removed;
+    }
+
+    static getQueryCacheStats() {
+        return issuerQueryCache.getStats();
     }
 
     static async createOptimizedIndexes() {
@@ -1259,6 +1516,14 @@ export class AssetIssuerManager {
 
     getDeadLetterQueue() {
         return this.errorRecovery.getDeadLetterQueue();
+    }
+
+    getQueryCacheStats() {
+        return this.queryOptimizer.getQueryCacheStats();
+    }
+
+    invalidateQueryCache(options) {
+        return this.queryOptimizer.invalidateQueryCache(options);
     }
 }
 

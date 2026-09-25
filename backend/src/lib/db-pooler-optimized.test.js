@@ -50,6 +50,10 @@ vi.mock("./metrics.js", () => ({
   dbPoolerFallbackModeActive: { set: vi.fn() },
   dbPoolerActiveMerchantWindows: { set: vi.fn() },
   dbPoolerRateLimitUtilizationPercent: { set: vi.fn() },
+  dbPoolerStatsCacheHits: { inc: vi.fn() },
+  dbPoolerStatsCacheMisses: { inc: vi.fn() },
+  dbPoolerStatsCacheEvictions: { inc: vi.fn() },
+  dbPoolerStatsCacheSize: { set: vi.fn() },
 }));
 
 vi.mock("./logger.js", () => ({
@@ -69,6 +73,10 @@ import {
   dbPoolerFallbackModeActive,
   dbPoolerActiveMerchantWindows,
   dbPoolerRateLimitUtilizationPercent,
+  dbPoolerStatsCacheHits,
+  dbPoolerStatsCacheMisses,
+  dbPoolerStatsCacheEvictions,
+  dbPoolerStatsCacheSize,
 } from "./metrics.js";
 import { circuitBreaker as dbCircuitBreaker } from "./db.js";
 import {
@@ -78,6 +86,9 @@ import {
   optimizedQuery,
   optimizedWrite,
   getPoolerStats,
+  getCachedPoolerStats,
+  invalidatePoolerStatsCache,
+  getPoolerStatsCacheStats,
   clearQueryCache,
   queryRateLimiter,
   _resetDbPoolerCircuitBreakerForTests,
@@ -815,5 +826,104 @@ describe("Database Pooler - Write fallback security (Issue #1319)", () => {
     ).rejects.toMatchObject({ code: "DB_POOLER_RATE_LIMITED" });
 
     expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe("Database Pooler - Stats cache (Issue #1055)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    invalidatePoolerStatsCache();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    invalidatePoolerStatsCache();
+  });
+
+  it("serves a repeated read from cache and counts the hit", () => {
+    const first = getCachedPoolerStats();
+    const second = getCachedPoolerStats();
+
+    expect(second).toBe(first);
+    expect(dbPoolerStatsCacheHits.inc).toHaveBeenCalled();
+  });
+
+  it("counts a miss on the first read of a scope", () => {
+    getCachedPoolerStats();
+
+    expect(dbPoolerStatsCacheMisses.inc).toHaveBeenCalled();
+  });
+
+  it("keys the cache per scope", () => {
+    const a = getCachedPoolerStats({ scope: "a" });
+    const b = getCachedPoolerStats({ scope: "b" });
+
+    expect(a).not.toBe(b);
+    expect(getPoolerStatsCacheStats().size).toBe(2);
+  });
+
+  it("bypasses the cache when skipCache is set", () => {
+    const first = getCachedPoolerStats();
+    const second = getCachedPoolerStats({ skipCache: true });
+
+    expect(second).not.toBe(first);
+    // A bypassed read must not populate the cache either.
+    expect(getPoolerStatsCacheStats().size).toBe(1);
+  });
+
+  it("recomputes once the TTL has elapsed", () => {
+    vi.useFakeTimers();
+
+    const first = getCachedPoolerStats();
+    vi.advanceTimersByTime(getPoolerStatsCacheStats().ttlMs + 1);
+    const second = getCachedPoolerStats();
+
+    expect(second).not.toBe(first);
+    expect(getPoolerStatsCacheStats().expirations).toBe(1);
+  });
+
+  it("drops a single scope on invalidation, leaving others cached", () => {
+    getCachedPoolerStats({ scope: "a" });
+    getCachedPoolerStats({ scope: "b" });
+
+    invalidatePoolerStatsCache("a");
+
+    expect(getPoolerStatsCacheStats().size).toBe(1);
+    expect(getPoolerStatsCacheStats().invalidations).toBe(1);
+  });
+
+  it("clears every scope when invalidated with no argument", () => {
+    getCachedPoolerStats({ scope: "a" });
+    getCachedPoolerStats({ scope: "b" });
+
+    invalidatePoolerStatsCache();
+
+    expect(getPoolerStatsCacheStats().size).toBe(0);
+  });
+
+  it("stays bounded and counts evictions under a stream of distinct scopes", () => {
+    const { maxEntries } = getPoolerStatsCacheStats();
+    for (let i = 0; i < maxEntries + 5; i++) {
+      getCachedPoolerStats({ scope: `scope-${i}` });
+    }
+
+    expect(getPoolerStatsCacheStats().size).toBeLessThanOrEqual(maxEntries);
+    expect(dbPoolerStatsCacheEvictions.inc).toHaveBeenCalled();
+  });
+
+  it("publishes the size gauge as scopes are added", () => {
+    getCachedPoolerStats({ scope: "a" });
+
+    expect(dbPoolerStatsCacheSize.set).toHaveBeenLastCalledWith(1);
+  });
+
+  // The live accessor must stay uncached: circuit-breaker and fallback-mode
+  // assertions elsewhere in this file read getPoolerStats() immediately after
+  // changing that state, and a cached value would report a stale snapshot.
+  it("leaves getPoolerStats uncached", () => {
+    getCachedPoolerStats();
+
+    expect(getPoolerStats()).not.toBe(getCachedPoolerStats());
+    expect(getPoolerStats()).toEqual(getPoolerStats());
   });
 });

@@ -27,6 +27,10 @@ import {
   dbPoolerFallbackModeActive,
   dbPoolerActiveMerchantWindows,
   dbPoolerRateLimitUtilizationPercent,
+  dbPoolerStatsCacheHits,
+  dbPoolerStatsCacheMisses,
+  dbPoolerStatsCacheSize,
+  dbPoolerStatsCacheEvictions,
 } from "./metrics.js";
 
 // Error recovery #895: Circuit breaker for database pool failures
@@ -57,6 +61,13 @@ const RATE_LIMIT_MAX_MERCHANT_QUERIES = Number.parseInt(
 );
 // Issue #1317: hard upper bound on tracked merchant windows.
 const MAX_MERCHANT_WINDOWS = 10000;
+
+// Issue #1055: bounds and TTL for the pooler stats snapshot cache.
+const STATS_CACHE_TTL_MS = Number.parseInt(
+  process.env.DB_POOLER_STATS_CACHE_TTL_MS || "1000",
+  10,
+);
+const STATS_CACHE_MAX_ENTRIES = 4;
 
 // ── Query Rate Limiting (Issue #758) ───────────────────────────────────────────
 
@@ -664,7 +675,137 @@ export function clearQueryCache() {
   return queryCache.clear();
 }
 
+// ── Stats Cache (Issue #1055) ────────────────────────────────────────────────
+
+/**
+ * Bounded TTL cache for the pooler stats snapshot.
+ *
+ * `getPoolerStats()` walks the pg pool, the query cache and the rate-limiter
+ * window map on every call, so a metrics scrape hitting it at the standard
+ * interval turns one cheap read into a full state walk per scrape. This is a
+ * plain Map with a short TTL rather than an LRU: the key space is fixed (a
+ * handful of scopes), and entries are single snapshots, so ordering buys
+ * nothing here. The cap is still enforced so a future caller passing
+ * unbounded scope keys cannot grow it without limit.
+ */
+class StatsCache {
+  constructor({ ttlMs = STATS_CACHE_TTL_MS, maxEntries = STATS_CACHE_MAX_ENTRIES } = {}) {
+    this.ttlMs = ttlMs;
+    this.maxEntries = maxEntries;
+    this.entries = new Map();
+    this.stats = { hits: 0, misses: 0, evictions: 0, expirations: 0, invalidations: 0 };
+  }
+
+  get(key) {
+    const entry = this.entries.get(key);
+    if (!entry) {
+      this.stats.misses++;
+      dbPoolerStatsCacheMisses.inc();
+      return undefined;
+    }
+    if (Date.now() - entry.timestamp >= this.ttlMs) {
+      this.entries.delete(key);
+      this.stats.expirations++;
+      this.stats.misses++;
+      dbPoolerStatsCacheEvictions.inc();
+      dbPoolerStatsCacheMisses.inc();
+      this._publishSize();
+      return undefined;
+    }
+    this.stats.hits++;
+    dbPoolerStatsCacheHits.inc();
+    return entry.value;
+  }
+
+  set(key, value) {
+    if (this.entries.has(key)) {
+      this.entries.delete(key);
+    }
+    while (this.entries.size >= this.maxEntries) {
+      this.entries.delete(this.entries.keys().next().value);
+      this.stats.evictions++;
+      dbPoolerStatsCacheEvictions.inc();
+    }
+    this.entries.set(key, { value, timestamp: Date.now() });
+    this._publishSize();
+  }
+
+  delete(key) {
+    const removed = this.entries.delete(key);
+    if (removed) {
+      this.stats.invalidations++;
+      this._publishSize();
+    }
+    return removed;
+  }
+
+  clear() {
+    this.entries.clear();
+    this._publishSize();
+  }
+
+  _publishSize() {
+    dbPoolerStatsCacheSize.set(this.entries.size);
+  }
+
+  getStats() {
+    return {
+      size: this.entries.size,
+      ttlMs: this.ttlMs,
+      maxEntries: this.maxEntries,
+      ...this.stats,
+    };
+  }
+}
+
+const statsCache = new StatsCache();
+
+/**
+ * Get pooler statistics through a short-lived cache.
+ *
+ * Use this for high-frequency callers (metrics scrapes, health probes).
+ * `getPoolerStats()` remains the uncached accessor for callers that need a
+ * value guaranteed to reflect the current instant, such as a test or a
+ * circuit-breaker decision.
+ *
+ * @param {Object} options - Cache options
+ * @param {string} options.scope - Cache scope; distinct scopes are cached independently
+ * @param {boolean} options.skipCache - Bypass the cache and recompute
+ * @returns {Object} Pooler statistics
+ */
+export function getCachedPoolerStats({ scope = "default", skipCache = false } = {}) {
+  if (!skipCache) {
+    const cached = statsCache.get(scope);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+
+  const snapshot = getPoolerStats();
+
+  if (!skipCache) {
+    statsCache.set(scope, snapshot);
+  }
+
+  return snapshot;
+}
+
+/** Drop a cached stats snapshot, or the whole cache when called with no scope. */
+export function invalidatePoolerStatsCache(scope) {
+  if (scope === undefined) {
+    statsCache.clear();
+    return;
+  }
+  statsCache.delete(scope);
+}
+
+/** Cache bookkeeping for tests and diagnostics. */
+export function getPoolerStatsCacheStats() {
+  return statsCache.getStats();
+}
+
 export {
   queryRateLimiter,
   queryCache,
+  statsCache,
 };

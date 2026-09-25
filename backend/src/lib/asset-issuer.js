@@ -47,6 +47,81 @@ const DLQ_MAX_SIZE = 100;
 const CIRCUIT_BREAKER_MAX_CONTEXTS = 1000;
 const VERIFICATION_CACHE_MAX_ENTRIES = 1000;
 
+// Issue #1050: bounds and TTL for the issuer query cache.
+const ISSUER_QUERY_CACHE_TTL_MS = 60 * 1000;
+const ISSUER_QUERY_CACHE_MAX_ENTRIES = 500;
+
+/**
+ * Issue #1050: bounded TTL cache for Asset Issuer query results.
+ *
+ * `AssetIssuerSignatureVerifier` already caches per-transaction verification
+ * results, but the aggregate read paths (`getIssuerStats`,
+ * `getAssetIssuerHealthMetrics`) re-queried the database on every call. Those
+ * results are derived from payment rows and change slowly, so a short TTL
+ * removes the repeated round trip without serving materially stale data.
+ *
+ * Expired entries are dropped on read rather than only on write, and the map
+ * is hard-capped with oldest-first eviction so a stream of distinct
+ * issuer/merchant keys cannot grow it without bound.
+ */
+class IssuerQueryCache {
+    constructor({ ttlMs = ISSUER_QUERY_CACHE_TTL_MS, maxEntries = ISSUER_QUERY_CACHE_MAX_ENTRIES } = {}) {
+        this.ttlMs = ttlMs;
+        this.maxEntries = maxEntries;
+        this.entries = new Map();
+        this.stats = { hits: 0, misses: 0, evictions: 0, expirations: 0 };
+    }
+
+    get(key) {
+        const entry = this.entries.get(key);
+        if (!entry) {
+            this.stats.misses++;
+            return undefined;
+        }
+        if (Date.now() - entry.timestamp >= this.ttlMs) {
+            this.entries.delete(key);
+            this.stats.expirations++;
+            this.stats.misses++;
+            return undefined;
+        }
+        // Re-insert to refresh recency for LRU ordering.
+        this.entries.delete(key);
+        this.entries.set(key, entry);
+        this.stats.hits++;
+        return entry.value;
+    }
+
+    set(key, value) {
+        if (this.entries.has(key)) {
+            this.entries.delete(key);
+        }
+        while (this.entries.size >= this.maxEntries) {
+            this.entries.delete(this.entries.keys().next().value);
+            this.stats.evictions++;
+        }
+        this.entries.set(key, { value, timestamp: Date.now() });
+    }
+
+    delete(key) {
+        return this.entries.delete(key);
+    }
+
+    clear() {
+        this.entries.clear();
+    }
+
+    getStats() {
+        return {
+            size: this.entries.size,
+            ttlMs: this.ttlMs,
+            maxEntries: this.maxEntries,
+            ...this.stats,
+        };
+    }
+}
+
+const issuerQueryCache = new IssuerQueryCache();
+
 /**
  * Per-context circuit breaker states for failure domain isolation.
  */
@@ -931,7 +1006,15 @@ export class AssetIssuerSignatureVerifier {
  */
 export class AssetIssuerQueryOptimizer {
 
-    static async getIssuerStats(issuer) {
+    static async getIssuerStats(issuer, { skipCache = false } = {}) {
+        const cacheKey = `issuer_stats:${issuer}`;
+        if (!skipCache) {
+            const cached = issuerQueryCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
         const query = `
       SELECT
         asset,
@@ -948,10 +1031,16 @@ export class AssetIssuerQueryOptimizer {
       ORDER BY total_volume DESC
     `;
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
+        const result = await AssetIssuerErrorRecovery.executeWithRecovery(
             () => queryWithRetry(query, [issuer]),
             `get stats for issuer ${issuer}`
         );
+
+        if (!skipCache) {
+            issuerQueryCache.set(cacheKey, result);
+        }
+
+        return result;
     }
 
     static async findPaymentsByAssetAndIssuer(assetCode, assetIssuer, options = {}) {
@@ -1069,7 +1158,15 @@ export class AssetIssuerQueryOptimizer {
         );
     }
 
-    static async getAssetIssuerHealthMetrics(merchantId) {
+    static async getAssetIssuerHealthMetrics(merchantId, { skipCache = false } = {}) {
+        const cacheKey = `health_metrics:${merchantId}`;
+        if (!skipCache) {
+            const cached = issuerQueryCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
         const query = `
       WITH asset_stats AS (
         SELECT
@@ -1113,10 +1210,16 @@ export class AssetIssuerQueryOptimizer {
       ORDER BY a.total_volume DESC
     `;
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
+        const result = await AssetIssuerErrorRecovery.executeWithRecovery(
             () => queryWithRetry(query, [merchantId]),
             `get asset issuer health metrics for merchant ${merchantId}`
         );
+
+        if (!skipCache) {
+            issuerQueryCache.set(cacheKey, result);
+        }
+
+        return result;
     }
 
     static async logAssetIssuerVerification({ merchantId, txHash, verification, assetCode, assetIssuer } = {}) {
@@ -1154,10 +1257,51 @@ export class AssetIssuerQueryOptimizer {
             })
         ];
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
+        const result = await AssetIssuerErrorRecovery.executeWithRecovery(
             () => queryWithRetry(query, params),
             `log asset issuer verification for merchant ${merchantId}`
         );
+
+        // Issue #1050: a new verification changes this issuer's stats and this
+        // merchant's health rollup, so drop both cached reads. Bounded to the
+        // keys this write can actually affect.
+        AssetIssuerQueryOptimizer.invalidateQueryCache({
+            assetIssuer: assetIssuer || verification.assetIssuer,
+            merchantId,
+        });
+
+        return result;
+    }
+
+    // ─── Query Cache (Issue #1050) ───────────────────────────────────────────────
+
+    /**
+     * Drop the cached reads that a verification write makes stale. Call with no
+     * arguments to clear the whole cache; with `{ assetIssuer }` and/or
+     * `{ merchantId }` to drop only those keys. A call that names neither key
+     * but passes an options object is a no-op, so a write with no known
+     * issuer/merchant cannot wipe the cache for everyone.
+     */
+    static invalidateQueryCache(options) {
+        if (options === undefined) {
+            const size = issuerQueryCache.getStats().size;
+            issuerQueryCache.clear();
+            return size;
+        }
+
+        const { assetIssuer, merchantId } = options;
+        let removed = 0;
+        if (merchantId) {
+            if (issuerQueryCache.delete(`health_metrics:${merchantId}`)) removed++;
+        }
+        if (assetIssuer) {
+            if (issuerQueryCache.delete(`issuer_stats:${assetIssuer}`)) removed++;
+        }
+        return removed;
+    }
+
+    static getQueryCacheStats() {
+        return issuerQueryCache.getStats();
     }
 
     static async createOptimizedIndexes() {
@@ -1259,6 +1403,14 @@ export class AssetIssuerManager {
 
     getDeadLetterQueue() {
         return this.errorRecovery.getDeadLetterQueue();
+    }
+
+    getQueryCacheStats() {
+        return this.queryOptimizer.getQueryCacheStats();
+    }
+
+    invalidateQueryCache(options) {
+        return this.queryOptimizer.invalidateQueryCache(options);
     }
 }
 

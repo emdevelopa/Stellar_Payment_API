@@ -8,7 +8,6 @@
  */
 
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
-
 const {
     mockQueryWithRetry,
     mockVerifyTransactionSignature,
@@ -971,6 +970,12 @@ describe('AssetIssuerSignatureVerifier (Issue #888)', () => {
 describe('AssetIssuerQueryOptimizer (Issue #889)', () => {
     beforeEach(() => {
         AssetIssuerErrorRecovery.resetCircuitBreaker();
+        // Issue #1050: getIssuerStats/getAssetIssuerHealthMetrics are cached
+        // now, and these tests assert on mockQueryWithRetry.mock.calls[0] after
+        // a single call. Without clearing, an entry left by an earlier test
+        // serves the result from cache and no query is issued, so calls[0]
+        // belongs to whichever test ran first.
+        AssetIssuerQueryOptimizer.invalidateQueryCache();
         vi.clearAllMocks();
     });
 
@@ -1137,11 +1142,167 @@ describe('AssetIssuerQueryOptimizer (Issue #889)', () => {
 });
 
 // ============================================================================
+// Issue #1050: Query caching for issuer reads
+// ============================================================================
+describe('AssetIssuerQueryOptimizer query cache (Issue #1050)', () => {
+    beforeEach(() => {
+        AssetIssuerErrorRecovery.resetCircuitBreaker();
+        AssetIssuerQueryOptimizer.invalidateQueryCache();
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        AssetIssuerQueryOptimizer.invalidateQueryCache();
+    });
+
+    describe('getIssuerStats caching', () => {
+        test('serves a repeated read from cache without re-querying', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [{ asset: 'USDC', total_volume: '10' }] });
+
+            const first = await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            const second = await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+
+            expect(mockQueryWithRetry).toHaveBeenCalledTimes(1);
+            expect(second).toBe(first);
+        });
+
+        test('keys the cache per issuer', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBYY');
+
+            expect(mockQueryWithRetry).toHaveBeenCalledTimes(2);
+        });
+
+        test('bypasses the cache when skipCache is set', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX', { skipCache: true });
+
+            expect(mockQueryWithRetry).toHaveBeenCalledTimes(2);
+        });
+
+        test('does not cache a failed read', async () => {
+            const error = new Error('bad request');
+            error.status = 400;
+            mockQueryWithRetry.mockRejectedValue(error);
+
+            await expect(AssetIssuerQueryOptimizer.getIssuerStats('GBXX')).rejects.toThrow();
+
+            expect(AssetIssuerQueryOptimizer.getQueryCacheStats().size).toBe(0);
+        });
+    });
+
+    describe('getAssetIssuerHealthMetrics caching', () => {
+        test('serves a repeated read from cache without re-querying', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [{ asset: 'USDC' }] });
+
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
+
+            expect(mockQueryWithRetry).toHaveBeenCalledTimes(1);
+        });
+
+        test('keys the cache per merchant', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M2');
+
+            expect(mockQueryWithRetry).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    describe('invalidation', () => {
+        test('logging a verification drops the affected issuer and merchant entries', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
+            expect(AssetIssuerQueryOptimizer.getQueryCacheStats().size).toBe(2);
+
+            await AssetIssuerQueryOptimizer.logAssetIssuerVerification({
+                merchantId: 'M1',
+                txHash: 'abc123',
+                assetIssuer: 'GBXX',
+                verification: { valid: true, operationType: 'payment' },
+            });
+
+            expect(AssetIssuerQueryOptimizer.getQueryCacheStats().size).toBe(0);
+        });
+
+        test('leaves unrelated entries cached', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBYY');
+
+            AssetIssuerQueryOptimizer.invalidateQueryCache({ assetIssuer: 'GBXX' });
+
+            expect(AssetIssuerQueryOptimizer.getQueryCacheStats().size).toBe(1);
+        });
+
+        test('clears every entry when called with no arguments', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.getAssetIssuerHealthMetrics('M1');
+
+            const removed = AssetIssuerQueryOptimizer.invalidateQueryCache();
+
+            expect(removed).toBe(2);
+            expect(AssetIssuerQueryOptimizer.getQueryCacheStats().size).toBe(0);
+        });
+
+        // A write that knows neither issuer nor merchant must not wipe the
+        // cache for every other caller.
+        test('is a no-op when an options object names neither key', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+
+            const removed = AssetIssuerQueryOptimizer.invalidateQueryCache({});
+
+            expect(removed).toBe(0);
+            expect(AssetIssuerQueryOptimizer.getQueryCacheStats().size).toBe(1);
+        });
+    });
+
+    describe('cache bounds', () => {
+        test('stays bounded under a stream of distinct issuers', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            for (let i = 0; i < 600; i++) {
+                await AssetIssuerQueryOptimizer.getIssuerStats(`GB${i}`);
+            }
+
+            const stats = AssetIssuerQueryOptimizer.getQueryCacheStats();
+            expect(stats.size).toBeLessThanOrEqual(stats.maxEntries);
+            expect(stats.evictions).toBeGreaterThan(0);
+        });
+
+        test('reports hit and miss counters', async () => {
+            mockQueryWithRetry.mockResolvedValue({ rows: [] });
+
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+            await AssetIssuerQueryOptimizer.getIssuerStats('GBXX');
+
+            const stats = AssetIssuerQueryOptimizer.getQueryCacheStats();
+            expect(stats.hits).toBeGreaterThan(0);
+            expect(stats.misses).toBeGreaterThan(0);
+        });
+    });
+});
+
+// ============================================================================
 // AssetIssuerManager Integration
 // ============================================================================
 describe('AssetIssuerManager', () => {
     beforeEach(() => {
         AssetIssuerErrorRecovery.resetCircuitBreaker();
+        AssetIssuerQueryOptimizer.invalidateQueryCache();
         vi.clearAllMocks();
     });
 

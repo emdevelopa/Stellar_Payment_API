@@ -321,6 +321,27 @@ describe("SEP-0010 Authentication", () => {
       ).resolves.toBeNull();
     });
 
+    it("lookupMerchantByStellarAddress rejects an address shared by several merchants (#1296)", async () => {
+      const supabaseClient = {
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { code: "PGRST116", message: "multiple (or no) rows returned" },
+                }),
+              }),
+            }),
+          }),
+        }),
+      };
+
+      await expect(
+        lookupMerchantByStellarAddress(clientKeypair.publicKey(), supabaseClient),
+      ).rejects.toMatchObject({ code: "AMBIGUOUS_MERCHANT", httpStatus: 409 });
+    });
+
     it.each([undefined, null, ""])("refuses to issue a session token for merchant id %s", (id) => {
       expect(() => generateSessionToken(id, "a@example.com")).toThrow(
         "Cannot issue a session token without a merchant id",

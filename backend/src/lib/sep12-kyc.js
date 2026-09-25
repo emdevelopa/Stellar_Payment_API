@@ -73,10 +73,13 @@ function canonicalJson(obj) {
  * The canonical message a client signs to authorise a KYC write. Binds the
  * account, memo, a unix `timestamp` (replay window), and a hash of the field
  * payload so a captured signature cannot be replayed against different data.
+ * An optional `operation` (e.g. "get", "delete") is appended so a signature
+ * issued for one operation cannot be replayed for another.
  */
-export function buildSignaturePayload({ account, memo = "", timestamp, fields }) {
+export function buildSignaturePayload({ account, memo = "", timestamp, fields, operation }) {
   const fieldsHash = createHash("sha256").update(canonicalJson(fields)).digest("hex");
-  return `${account}:${memo}:${timestamp}:${fieldsHash}`;
+  const base = `${account}:${memo}:${timestamp}:${fieldsHash}`;
+  return operation ? `${base}:${operation}` : base;
 }
 
 /**
@@ -84,7 +87,7 @@ export function buildSignaturePayload({ account, memo = "", timestamp, fields })
  * Returns `{ valid: true }` or `{ valid: false, reason }` — never throws.
  */
 export function verifyCustomerSignature(
-  { account, memo = "", timestamp, fields, signature },
+  { account, memo = "", timestamp, fields, signature, operation },
   { maxAgeSeconds = SIGNATURE_MAX_AGE_SECONDS, now = Date.now() } = {},
 ) {
   if (!account || typeof signature !== "string" || signature.length === 0 || !timestamp) {
@@ -114,7 +117,7 @@ export function verifyCustomerSignature(
     return { valid: false, reason: "invalid_signature_encoding" };
   }
 
-  const payload = buildSignaturePayload({ account, memo, timestamp: ts, fields });
+  const payload = buildSignaturePayload({ account, memo, timestamp: ts, fields, operation });
   const hash = createHash("sha256").update(payload).digest();
 
   let ok = false;
@@ -275,13 +278,33 @@ export async function putCustomer(rawInput, deps = {}) {
 }
 
 /**
- * Fetch a customer's KYC record (SEP-12 `GET /customer`). Uses the unique
+ * Fetch a customer's KYC record (SEP-12 `GET /customer`). Requires a valid
+ * signature from the account holder. Uses the unique
  * (stellar_account, memo) index and selects only the needed columns (#591).
  */
-export async function getCustomer({ account, memo } = {}, deps = {}) {
+export async function getCustomer(
+  { account, memo, timestamp, signature } = {},
+  deps = {},
+) {
   const query = deps.query || queryWithRetry;
+  const verifySignature = deps.verifySignature || verifyCustomerSignature;
+  const now = deps.now;
+
   assertValidAccount(account);
   memo = normalizeMemo(memo);
+
+  // KYC records contain PII, so reads require proof of account ownership.
+  const signatureResult = verifySignature(
+    { account, memo, timestamp, signature, fields: {}, operation: "get" },
+    now ? { now } : undefined,
+  );
+  if (!signatureResult.valid) {
+    throw new KycError(
+      "SIGNATURE_INVALID",
+      `Signature verification failed: ${signatureResult.reason}`,
+      401,
+    );
+  }
 
   const sql = `
     SELECT id, stellar_account, memo, fields, status, created_at, updated_at
@@ -316,7 +339,7 @@ export async function deleteCustomer(
   memo = normalizeMemo(memo);
 
   const signatureResult = verifySignature(
-    { account, memo, timestamp, signature, fields: {} },
+    { account, memo, timestamp, signature, fields: {}, operation: "delete" },
     now ? { now } : undefined,
   );
   if (!signatureResult.valid) {

@@ -467,6 +467,17 @@ export async function lookupMerchantByStellarAddress(clientAccount, supabaseClie
     const { data, error } = response;
 
     if (error) {
+      // `merchants.recipient` is not unique. When several merchants share the
+      // address, maybeSingle() reports PGRST116; refuse to authenticate rather
+      // than surface a 500 or risk binding the session to the wrong merchant.
+      if (error.code === "PGRST116") {
+        logger.warn("sep10 merchant lookup matched multiple merchants for one Stellar address");
+        throw new Sep10AuthError(
+          "AMBIGUOUS_MERCHANT",
+          "Multiple merchant accounts are linked to this Stellar address",
+          409,
+        );
+      }
       if (isRetryableSep10StoreError(error)) {
         throw error;
       }

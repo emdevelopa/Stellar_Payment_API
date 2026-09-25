@@ -1,7 +1,7 @@
 /**
  * SEP-12 KYC routes.
  *
- *   GET    /sep12/customer            — fetch a customer's KYC status
+ *   GET    /sep12/customer            — fetch KYC status (signature-gated)
  *   PUT    /sep12/customer            — create/update KYC (signature-gated)
  *   DELETE /sep12/customer/:account   — delete a customer's KYC record
  *
@@ -115,6 +115,8 @@ export default function createSep12Router({ redisClient, redisStore } = {}) {
       const data = await getCustomer({
         account: req.query.account,
         memo: req.query.memo ?? "",
+        timestamp: req.query.timestamp,
+        signature: req.query.signature,
       });
       res.json({
         id: data.id,

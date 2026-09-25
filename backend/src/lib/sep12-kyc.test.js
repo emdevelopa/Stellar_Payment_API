@@ -23,8 +23,8 @@ function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
 
-function signRequest(keypair, { account, memo = "", timestamp, fields }) {
-  const payload = buildSignaturePayload({ account, memo, timestamp, fields });
+function signRequest(keypair, { account, memo = "", timestamp, fields, operation }) {
+  const payload = buildSignaturePayload({ account, memo, timestamp, fields, operation });
   const hash = createHash("sha256").update(payload).digest();
   return keypair.sign(hash).toString("base64");
 }
@@ -202,6 +202,13 @@ describe("putCustomer", () => {
 // getCustomer / deleteCustomer
 // ---------------------------------------------------------------------------
 
+function signedGet(kp, memo = "") {
+  const account = kp.publicKey();
+  const timestamp = nowSeconds();
+  const signature = signRequest(kp, { account, memo, timestamp, fields: {}, operation: "get" });
+  return { account, memo, timestamp, signature };
+}
+
 describe("getCustomer", () => {
   it("returns the mapped record on a hit", async () => {
     const kp = StellarSdk.Keypair.random();
@@ -220,7 +227,9 @@ describe("getCustomer", () => {
       ],
     });
 
-    const result = await getCustomer({ account });
+    const timestamp = nowSeconds();
+    const signature = signRequest(kp, { account, timestamp, fields: {}, operation: "get" });
+    const result = await getCustomer({ account, timestamp, signature });
     expect(result).toMatchObject({ id: "rec-1", account, status: "ACCEPTED" });
     const [sql] = queryWithRetry.mock.calls[0];
     expect(sql).toContain("WHERE stellar_account = $1 AND memo = $2");
@@ -229,10 +238,30 @@ describe("getCustomer", () => {
   it("throws 404 when absent", async () => {
     const kp = StellarSdk.Keypair.random();
     queryWithRetry.mockResolvedValue({ rows: [] });
-    await expect(getCustomer({ account: kp.publicKey() })).rejects.toMatchObject({
+    await expect(getCustomer(signedGet(kp))).rejects.toMatchObject({
       code: "NOT_FOUND",
       httpStatus: 404,
     });
+  });
+
+  it("rejects reads without a valid signature", async () => {
+    const kp = StellarSdk.Keypair.random();
+    await expect(getCustomer({ account: kp.publicKey() })).rejects.toMatchObject({
+      code: "SIGNATURE_INVALID",
+      httpStatus: 401,
+    });
+    expect(queryWithRetry).not.toHaveBeenCalled();
+  });
+
+  it("rejects a delete signature replayed as a read", async () => {
+    const kp = StellarSdk.Keypair.random();
+    const account = kp.publicKey();
+    const timestamp = nowSeconds();
+    const signature = signRequest(kp, { account, timestamp, fields: {}, operation: "delete" });
+    await expect(getCustomer({ account, timestamp, signature })).rejects.toMatchObject({
+      code: "SIGNATURE_INVALID",
+    });
+    expect(queryWithRetry).not.toHaveBeenCalled();
   });
 });
 
@@ -241,13 +270,26 @@ describe("deleteCustomer", () => {
     const kp = StellarSdk.Keypair.random();
     const account = kp.publicKey();
     const timestamp = nowSeconds();
-    const signature = signRequest(kp, { account, timestamp, fields: {} });
+    const signature = signRequest(kp, { account, timestamp, fields: {}, operation: "delete" });
 
     queryWithRetry.mockResolvedValue({ rows: [{ id: "rec-1" }] });
     await expect(deleteCustomer({ account, timestamp, signature })).resolves.toEqual({
       id: "rec-1",
       deleted: true,
     });
+  });
+
+  it("rejects a PUT-style signature with empty fields replayed as a delete", async () => {
+    const kp = StellarSdk.Keypair.random();
+    const account = kp.publicKey();
+    const timestamp = nowSeconds();
+    const signature = signRequest(kp, { account, timestamp, fields: {} });
+
+    await expect(deleteCustomer({ account, timestamp, signature })).rejects.toMatchObject({
+      code: "SIGNATURE_INVALID",
+      httpStatus: 401,
+    });
+    expect(queryWithRetry).not.toHaveBeenCalled();
   });
 
   it("rejects delete without valid signature", async () => {
@@ -265,7 +307,7 @@ describe("deleteCustomer", () => {
     const kp = StellarSdk.Keypair.random();
     const account = kp.publicKey();
     const timestamp = nowSeconds();
-    const signature = signRequest(kp, { account, timestamp, fields: {} });
+    const signature = signRequest(kp, { account, timestamp, fields: {}, operation: "delete" });
 
     queryWithRetry.mockResolvedValue({ rows: [] });
     await expect(deleteCustomer({ account, timestamp, signature })).rejects.toMatchObject({
@@ -285,7 +327,7 @@ describe("error recovery (#592)", () => {
     isRetryablePoolError.mockReturnValue(true);
     queryWithRetry.mockRejectedValue(Object.assign(new Error("connection terminated"), { code: "08006" }));
 
-    await expect(getCustomer({ account: kp.publicKey() })).rejects.toMatchObject({
+    await expect(getCustomer(signedGet(kp))).rejects.toMatchObject({
       code: "SERVICE_UNAVAILABLE",
       httpStatus: 503,
       retryable: true,
@@ -297,7 +339,7 @@ describe("error recovery (#592)", () => {
     isRetryablePoolError.mockReturnValue(false);
     queryWithRetry.mockRejectedValue(new Error("syntax error at or near"));
 
-    await expect(getCustomer({ account: kp.publicKey() })).rejects.toMatchObject({
+    await expect(getCustomer(signedGet(kp))).rejects.toMatchObject({
       code: "DB_ERROR",
       httpStatus: 500,
     });

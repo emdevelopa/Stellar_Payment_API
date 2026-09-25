@@ -24,14 +24,17 @@ import { validateRequest } from "../lib/validation.js";
 import { authChallengeSchema, authVerifySchema } from "../lib/request-schemas.js";
 import {
   createSep10ChallengeRateLimit,
+  createSep10ChallengeIpRateLimit,
   createSep10VerifyRateLimit,
 } from "../lib/rate-limit.js";
 
 const defaultSep10ChallengeRateLimit = createSep10ChallengeRateLimit();
+const defaultSep10ChallengeIpRateLimit = createSep10ChallengeIpRateLimit();
 const defaultSep10VerifyRateLimit = createSep10VerifyRateLimit();
 
 export default function createAuthRouter({
   sep10ChallengeRateLimit = defaultSep10ChallengeRateLimit,
+  sep10ChallengeIpRateLimit = defaultSep10ChallengeIpRateLimit,
   sep10VerifyRateLimit = defaultSep10VerifyRateLimit,
 } = {}) {
   const router = express.Router();
@@ -129,6 +132,9 @@ export default function createAuthRouter({
 
   router.post(
     "/auth/challenge",
+    // Per-IP ceiling first, so rotating `account` can't bypass the
+    // per-account+IP limiter below (#584).
+    sep10ChallengeIpRateLimit,
     sep10ChallengeRateLimit,
     validateRequest({ body: authChallengeSchema }),
     async (req, res, next) => {

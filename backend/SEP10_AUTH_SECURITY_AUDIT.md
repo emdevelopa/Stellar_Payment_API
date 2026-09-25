@@ -20,7 +20,7 @@ This audit covers the SEP-0010 Web Authentication flow: challenge generation, si
 | Home-domain spoofing | Challenge and verify both use `getHomeDomain()`; mismatch returns `HOME_DOMAIN_MISMATCH` | ✅ Fixed |
 | Missing server/client signatures | Both signatures verified against transaction hash | ✅ Implemented |
 | Expired challenges | Time bounds checked against server clock | ✅ Implemented |
-| Brute-force challenge/verify | Per-account+IP challenge limits; per-IP verify limits (#733) | ✅ Implemented |
+| Brute-force challenge/verify | Per-account+IP and per-IP challenge limits; per-IP verify limits (#733, #584) | ✅ Implemented |
 | JWT secret fallback | `JWT_SECRET` required at runtime; no default secret | ✅ Implemented |
 | Store outage during verify | Transient Supabase errors retried; retryable 503 returned (#587) | ✅ Implemented |
 | Information leakage via errors | Generic `AUTHENTICATION_FAILED` for parse failures; structured codes for known cases | ✅ Implemented |
@@ -83,8 +83,11 @@ This audit covers the SEP-0010 Web Authentication flow: challenge generation, si
 
 | Endpoint | Key | Default window | Default max |
 |----------|-----|----------------|-------------|
+| `POST /api/auth/challenge` (per IP, all accounts — #584) | `sep10:challenge-ip:{ip}` | 60s | 60 |
 | `POST /api/auth/challenge` | `sep10:challenge:{account}:{ip}` | 60s | 20 |
 | `POST /api/auth/verify` | `sep10:verify:{ip}` | 60s | 10 |
+
+Both challenge limiters apply: the per-IP ceiling runs first, so a client can't bypass the per-account limit by rotating the (caller-supplied) `account` value to get a fresh bucket for every request, which previously let one IP mint unlimited server-signed challenges. It runs before body validation, so malformed requests count against it too. Limited responses return `429` with `code: "SEP10_RATE_LIMITED"` and `X-RateLimit-*` / `RateLimit-*` headers.
 
 Redis-backed store (`rl:sep10:` prefix) is used when `REDIS_URL` is available; in-memory fallback otherwise.
 
@@ -93,6 +96,8 @@ Redis-backed store (`rl:sep10:` prefix) is used when `REDIS_URL` is available; i
 ```
 SEP10_CHALLENGE_RATE_LIMIT_WINDOW_MS=60000
 SEP10_CHALLENGE_RATE_LIMIT_MAX=20
+SEP10_CHALLENGE_IP_RATE_LIMIT_WINDOW_MS=60000
+SEP10_CHALLENGE_IP_RATE_LIMIT_MAX=60
 SEP10_VERIFY_RATE_LIMIT_WINDOW_MS=60000
 SEP10_VERIFY_RATE_LIMIT_MAX=10
 SEP10_NONCE_CACHE_MAX=10000
@@ -107,7 +112,7 @@ SEP10_NONCE_CACHE_MAX=10000
 ## Test Coverage
 
 - `backend/src/lib/sep10-auth.test.js` — nonce replay, home domain, XDR validation, store recovery, null guards (#1293), nonce claim ordering (#1295), cache expiry/cap (#1292), challenge integrity and JWT algorithm (#1294)
-- `backend/src/routes/auth.routes.test.js` — rate limits, retryable 503 on store failure, concurrent verify / retry-after-503 (#1295), advertised network passphrase (#1294)
+- `backend/src/routes/auth.routes.test.js` — rate limits (incl. per-IP challenge ceiling under account rotation, #584), retryable 503 on store failure, concurrent verify / retry-after-503 (#1295), advertised network passphrase (#1294)
 - `backend/src/lib/rate-limit.test.js` — SEP-10 key generation and limiter factories
 
 ## Security Assumptions

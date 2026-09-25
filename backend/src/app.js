@@ -35,6 +35,7 @@ import {
   createVerifyPaymentRateLimit,
   createMerchantRegistrationRateLimit,
   createSep10ChallengeRateLimit,
+  createSep10ChallengeIpRateLimit,
   createSep10VerifyRateLimit,
   createDashboardMetricsRateLimit,
 } from "./lib/rate-limit.js";
@@ -267,6 +268,7 @@ export async function createApp({ redisClient }) {
 
   const authRouter = createAuthRouter({
     sep10ChallengeRateLimit: createSep10ChallengeRateLimit({ store: sep10RateLimitStore }),
+    sep10ChallengeIpRateLimit: createSep10ChallengeIpRateLimit({ store: sep10RateLimitStore }),
     sep10VerifyRateLimit: createSep10VerifyRateLimit({ store: sep10RateLimitStore }),
   });
 

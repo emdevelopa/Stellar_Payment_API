@@ -36,6 +36,7 @@ vi.mock("../lib/request-schemas.js", () => ({
 import createAuthRouter from "./auth.js";
 import {
   createSep10ChallengeRateLimit,
+  createSep10ChallengeIpRateLimit,
   createSep10VerifyRateLimit,
   getSep10ChallengeRateLimitKey,
   getSep10VerifyRateLimitKey,
@@ -105,6 +106,51 @@ describe("SEP-10 auth routes", () => {
 
     expect(limited.status).toBe(429);
     expect(limited.body.code).toBe("SEP10_RATE_LIMITED");
+  });
+
+  it("rate-limits challenge requests per IP even when the account rotates (#584)", async () => {
+    const app = createApp(
+      createAuthRouter({
+        sep10ChallengeIpRateLimit: createSep10ChallengeIpRateLimit({ max: 2, windowMs: 60_000 }),
+        sep10ChallengeRateLimit: createSep10ChallengeRateLimit({ max: 100, windowMs: 60_000 }),
+      }),
+    );
+
+    // Each request uses a fresh account, so the per-account limiter never trips.
+    for (let i = 0; i < 2; i++) {
+      await request(app)
+        .post("/api/auth/challenge")
+        .send({ account: StellarSdk.Keypair.random().publicKey() })
+        .expect(200);
+    }
+
+    const limited = await request(app)
+      .post("/api/auth/challenge")
+      .send({ account: StellarSdk.Keypair.random().publicKey() });
+
+    expect(limited.status).toBe(429);
+    expect(limited.body.code).toBe("SEP10_RATE_LIMITED");
+    expect(limited.headers["x-ratelimit-limit"]).toBe("2");
+    expect(limited.headers["x-ratelimit-remaining"]).toBe("0");
+  });
+
+  it("counts malformed challenge requests against the per-IP limit (#584)", async () => {
+    const app = createApp(
+      createAuthRouter({
+        sep10ChallengeIpRateLimit: createSep10ChallengeIpRateLimit({ max: 1, windowMs: 60_000 }),
+      }),
+    );
+
+    // Rejected by body validation (the status depends on the app's error
+    // handler), but it has already consumed the per-IP budget.
+    const malformed = await request(app).post("/api/auth/challenge").send({ account: "not-a-key" });
+    expect(malformed.status).not.toBe(200);
+    expect(malformed.status).not.toBe(429);
+
+    const limited = await request(app)
+      .post("/api/auth/challenge")
+      .send({ account: clientKeypair.publicKey() });
+    expect(limited.status).toBe(429);
   });
 
   it("returns retryable 503 when merchant lookup store is temporarily unavailable", async () => {

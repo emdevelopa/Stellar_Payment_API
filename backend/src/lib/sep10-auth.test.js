@@ -20,6 +20,8 @@ import {
   _getNonceCacheStatsForTests,
   MAX_CHALLENGE_XDR_BYTES,
   _resetNonceCacheForTests,
+  verifyChallengeSignatures,
+  SEP10_MAX_CHALLENGE_SIGNATURES,
 } from "./sep10-auth.js";
 
 const HOME_DOMAIN = "localhost";
@@ -654,5 +656,114 @@ describe("SEP-0010 Authentication", () => {
       const token = jwt.sign({ id: "m-1", merchant_id: "m-1" }, null, { algorithm: "none" });
       expect(verifySessionToken(token).valid).toBe(false);
     });
+  });
+});
+
+describe("verifyChallengeSignatures (#585)", () => {
+  const server = StellarSdk.Keypair.random();
+  const client = StellarSdk.Keypair.random();
+
+  function unsignedChallenge(nonce = "a".repeat(48)) {
+    const now = Math.floor(Date.now() / 1000);
+    return new StellarSdk.TransactionBuilder(new StellarSdk.Account(server.publicKey(), "-1"), {
+      fee: "100",
+      networkPassphrase: StellarSdk.Networks.TESTNET,
+      timebounds: { minTime: now, maxTime: now + CHALLENGE_EXPIRES_IN },
+    })
+      .addOperation(
+        StellarSdk.Operation.manageData({
+          name: `${HOME_DOMAIN} auth`,
+          value: nonce,
+          source: client.publicKey(),
+        }),
+      )
+      .build();
+  }
+
+  /** A signature carrying `keypair`'s hint but bytes that don't verify. */
+  function forgedSignatureFor(keypair) {
+    return new StellarSdk.xdr.DecoratedSignature({
+      hint: keypair.signatureHint(),
+      signature: Buffer.alloc(64, 7),
+    });
+  }
+
+  function signed(...signers) {
+    const tx = unsignedChallenge();
+    for (const signer of signers) tx.sign(signer);
+    return tx;
+  }
+
+  it("accepts exactly the server and client signatures, in either order", () => {
+    expect(verifyChallengeSignatures(signed(server, client), server, client)).toEqual({ valid: true });
+    expect(verifyChallengeSignatures(signed(client, server), server, client)).toEqual({ valid: true });
+  });
+
+  it("verifies each signature at most once", () => {
+    const serverVerify = vi.spyOn(server, "verify");
+    const clientVerify = vi.spyOn(client, "verify");
+    verifyChallengeSignatures(signed(server, client), server, client);
+    expect(serverVerify.mock.calls.length + clientVerify.mock.calls.length).toBe(2);
+    serverVerify.mockRestore();
+    clientVerify.mockRestore();
+  });
+
+  it(`rejects more than ${SEP10_MAX_CHALLENGE_SIGNATURES} signatures before any Ed25519 work`, () => {
+    const serverVerify = vi.spyOn(server, "verify");
+    const clientVerify = vi.spyOn(client, "verify");
+    const tx = signed(server, client);
+    for (let i = 0; i < 18; i++) tx.sign(StellarSdk.Keypair.random());
+
+    expect(verifyChallengeSignatures(tx, server, client).code).toBe("UNRECOGNIZED_SIGNATURE");
+    expect(serverVerify).not.toHaveBeenCalled();
+    expect(clientVerify).not.toHaveBeenCalled();
+    serverVerify.mockRestore();
+    clientVerify.mockRestore();
+  });
+
+  it("skips Ed25519 verification for a signature whose hint matches neither signer", () => {
+    const serverVerify = vi.spyOn(server, "verify");
+    const clientVerify = vi.spyOn(client, "verify");
+    const tx = signed(server);
+    tx.sign(StellarSdk.Keypair.random());
+
+    expect(verifyChallengeSignatures(tx, server, client).code).toBe("CLIENT_SIGNATURE_INVALID");
+    // Only the real server signature was verified; the stranger's was hint-filtered.
+    expect(serverVerify).toHaveBeenCalledTimes(1);
+    expect(clientVerify).not.toHaveBeenCalled();
+    serverVerify.mockRestore();
+    clientVerify.mockRestore();
+  });
+
+  it("rejects a forged server signature that carries the right hint", () => {
+    const tx = signed(client);
+    tx.signatures.push(forgedSignatureFor(server));
+    expect(verifyChallengeSignatures(tx, server, client).code).toBe("SERVER_SIGNATURE_MISSING");
+  });
+
+  it("rejects a forged client signature that carries the right hint", () => {
+    const tx = signed(server);
+    tx.signatures.push(forgedSignatureFor(client));
+    expect(verifyChallengeSignatures(tx, server, client).code).toBe("CLIENT_SIGNATURE_INVALID");
+  });
+
+  it("rejects a duplicated server signature in place of the client's", () => {
+    const tx = signed(server);
+    tx.signatures.push(tx.signatures[0]);
+    expect(verifyChallengeSignatures(tx, server, client).code).toBe("CLIENT_SIGNATURE_INVALID");
+  });
+
+  it("rejects signatures over a different transaction (tampered challenge)", () => {
+    const original = signed(server, client);
+    const tampered = unsignedChallenge("b".repeat(48));
+    tampered.signatures.push(...original.signatures);
+    // Swapped nonce -> different tx hash, so neither signature verifies.
+    expect(verifyChallengeSignatures(tampered, server, client).valid).toBe(false);
+  });
+
+  it("rejects a challenge with no signatures", () => {
+    expect(verifyChallengeSignatures(unsignedChallenge(), server, client).code).toBe(
+      "SERVER_SIGNATURE_MISSING",
+    );
   });
 });

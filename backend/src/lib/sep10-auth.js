@@ -164,6 +164,35 @@ function getServerSigningKey() {
   return process.env.SEP10_SERVER_SIGNING_KEY;
 }
 
+// ---------------------------------------------------------------------------
+// Server keypair cache (#1030).
+// The secret is decoded once and reused: per-request `fromSecret` calls are
+// wasted ed25519 decodes, and re-reading env per call means a rotated/invalid
+// secret fails different requests differently. Validity is established at
+// first use (fail-fast with a clear error); tests reset via
+// `_resetServerKeypairCacheForTests` when they swap the env.
+// ---------------------------------------------------------------------------
+let _serverKeypair = null;
+
+export function getServerKeypair() {
+  if (_serverKeypair) return _serverKeypair;
+  const secret = getServerSigningKey();
+  if (!secret) {
+    throw new Error("SEP-0010 server signing key not configured");
+  }
+  try {
+    _serverKeypair = StellarSdk.Keypair.fromSecret(secret);
+  } catch {
+    _serverKeypair = null;
+    throw new Error("SEP-0010 server signing key is invalid (not a decodable secret seed)");
+  }
+  return _serverKeypair;
+}
+
+export function _resetServerKeypairCacheForTests() {
+  _serverKeypair = null;
+}
+
 /**
  * Normalise a thrown value into an Error (#1293).
  * A store client rejecting with `null`/`undefined` would otherwise be rethrown
@@ -250,19 +279,14 @@ export function validateChallengeXdr(challengeXdr) {
 }
 
 export function generateChallenge(clientAccountId, homeDomain = getHomeDomain()) {
-  const serverSigningKey = getServerSigningKey();
-
-  if (!serverSigningKey) {
-    throw new Error("SEP-0010 server signing key not configured");
-  }
+  // Cached singleton — decoded once, never re-read per request.
+  const serverKeypair = getServerKeypair();
 
   try {
     StellarSdk.Keypair.fromPublicKey(clientAccountId);
   } catch {
     throw new Error("Invalid client Stellar account");
   }
-
-  const serverKeypair = StellarSdk.Keypair.fromSecret(serverSigningKey);
   const nonce = randomBytes(32).toString("base64");
 
   const now = Math.floor(Date.now() / 1000);
@@ -300,9 +324,11 @@ export function generateChallenge(clientAccountId, homeDomain = getHomeDomain())
  * @returns {{ valid: boolean, nonce?: string, error?: string, code?: string }}
  */
 export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getHomeDomain()) {
-  const serverSigningKey = getServerSigningKey();
-
-  if (!serverSigningKey) {
+  // Cached singleton — same instance that signed the challenge.
+  let serverKeypair;
+  try {
+    serverKeypair = getServerKeypair();
+  } catch {
     return { valid: false, error: "SEP-0010 not configured", code: "NOT_CONFIGURED" };
   }
 
@@ -318,7 +344,6 @@ export function verifyChallenge(challengeXdr, clientAccountId, homeDomain = getH
   }
 
   try {
-    const serverKeypair = StellarSdk.Keypair.fromSecret(serverSigningKey);
     const transaction = new StellarSdk.TransactionBuilder.fromXDR(
       challengeXdr,
       NETWORK_PASSPHRASE,

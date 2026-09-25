@@ -127,7 +127,32 @@ describe("putCustomer", () => {
     const [sql, params] = queryWithRetry.mock.calls[0];
     expect(sql).toContain("ON CONFLICT (stellar_account, memo)");
     // Parameterised: values are bound, not interpolated (#593 — SQLi safe).
-    expect(params).toEqual([account, "", JSON.stringify(goodFields), "ACCEPTED"]);
+    expect(params).toEqual([account, "", JSON.stringify(goodFields), "ACCEPTED", timestamp]);
+  });
+
+  it("rejects a stale write that loses the signed_at guard with 409", async () => {
+    const kp = StellarSdk.Keypair.random();
+    const account = kp.publicKey();
+    const timestamp = nowSeconds();
+    const signature = signRequest(kp, { account, timestamp, fields: goodFields });
+
+    queryWithRetry.mockResolvedValue({ rows: [] });
+
+    await expect(
+      putCustomer({ account, timestamp, signature, fields: goodFields }),
+    ).rejects.toMatchObject({ code: "STALE_REQUEST", httpStatus: 409 });
+  });
+
+  it("handles a null input and non-string memo without a TypeError", async () => {
+    await expect(putCustomer(null)).rejects.toMatchObject({ httpStatus: 400 });
+    const account = StellarSdk.Keypair.random().publicKey();
+    await expect(putCustomer({ account, memo: ["x"] })).rejects.toMatchObject({
+      code: "INVALID_MEMO",
+    });
+    await expect(getCustomer({ account, memo: { a: 1 } })).rejects.toMatchObject({
+      code: "INVALID_MEMO",
+    });
+    expect(queryWithRetry).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid signature with 401 and never touches the DB", async () => {

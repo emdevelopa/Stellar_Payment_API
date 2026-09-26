@@ -100,14 +100,29 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 {t("selectAsset")}
               </label>
-              <div className="grid grid-cols-2 gap-4">
-                {SUPPORTED_ASSETS.map((asset) => (
+              <div
+                role="group"
+                aria-label={t("selectAsset")}
+                className="grid grid-cols-2 gap-4"
+              >
+                {SUPPORTED_ASSETS.map((asset, idx) => (
                   <button
                     key={asset.code}
                     type="button"
                     onClick={() => setSelectedAsset(asset)}
                     disabled={isBusy}
                     aria-pressed={selectedAsset.code === asset.code}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSelectedAsset(SUPPORTED_ASSETS[(idx + 1) % SUPPORTED_ASSETS.length]);
+                      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSelectedAsset(
+                          SUPPORTED_ASSETS[(idx - 1 + SUPPORTED_ASSETS.length) % SUPPORTED_ASSETS.length],
+                        );
+                      }
+                    }}
                     className={`flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                       selectedAsset.code === asset.code
                         ? "border-mint bg-mint/5 ring-1 ring-mint"

@@ -266,6 +266,21 @@ export default function CommandPalette() {
 
     if (view === "converter") return;
 
+    // Focus trap: this dialog has no other focusable descendants besides the
+    // search input, so Tab/Shift+Tab should cycle within the palette (moving
+    // through the result list) instead of letting focus escape to the page
+    // behind the backdrop. This mirrors the arrow-key wrapping behavior and
+    // gives Tab/Shift+Tab parity with ArrowDown/ArrowUp, a standard
+    // command-palette convention.
+    if (e.key === "Tab") {
+      if (filtered.length === 0) return;
+      e.preventDefault();
+      setActiveIndex((i) =>
+        e.shiftKey ? (i - 1 + filtered.length) % filtered.length : (i + 1) % filtered.length,
+      );
+      return;
+    }
+
     if (e.key === "ArrowDown") {
       if (filtered.length === 0) return;
       e.preventDefault();
@@ -280,9 +295,39 @@ export default function CommandPalette() {
       return;
     }
 
+    // Home/End jump to the first/last result. The search input is always
+    // focused while the palette is open, so these are only intercepted when
+    // there is no query text to avoid hijacking native cursor-to-start/end
+    // text editing behavior while a query is being typed.
+    if (e.key === "Home" && !query) {
+      if (filtered.length === 0) return;
+      e.preventDefault();
+      setActiveIndex(0);
+      return;
+    }
+
+    if (e.key === "End" && !query) {
+      if (filtered.length === 0) return;
+      e.preventDefault();
+      setActiveIndex(filtered.length - 1);
+      return;
+    }
+
     if (e.key === "Enter" && filtered.length > 0 && !executingId) {
       e.preventDefault();
       void select(filtered[activeIndex]);
+      return;
+    }
+
+    // Number-key quick-select (1-9): jump straight to and run the Nth
+    // visible result without needing to navigate there first. Ignored while
+    // typing a query so digits still work as normal search input.
+    if (!query && !executingId && /^[1-9]$/.test(e.key)) {
+      const index = Number(e.key) - 1;
+      if (index < filtered.length) {
+        e.preventDefault();
+        void select(filtered[index]);
+      }
     }
   }
 

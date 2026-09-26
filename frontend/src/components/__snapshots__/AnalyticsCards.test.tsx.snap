@@ -1,0 +1,458 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AnalyticsCards > snapshots > matches snapshot in loading state 1`] = `
+<div>
+  <div
+    class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+  >
+    <div
+      class="h-32 rounded-lg bg-[#F5F5F5] animate-pulse"
+    />
+    <div
+      class="h-32 rounded-lg bg-[#F5F5F5] animate-pulse"
+    />
+    <div
+      class="h-32 rounded-lg bg-[#F5F5F5] animate-pulse"
+    />
+  </div>
+</div>
+`;
+
+exports[`AnalyticsCards > snapshots > matches snapshot with populated metrics 1`] = `
+<div>
+  <div
+    class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+  >
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-0"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          1,500.00
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Total Volume (7D)
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-1"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          66.7%
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Success Rate
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-2"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          1
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Active intents
+        </p>
+      </div>
+    </button>
+  </div>
+</div>
+`;
+
+exports[`AnalyticsCards > snapshots > matches snapshot with the desktop dialog open 1`] = `
+<div>
+  <div
+    class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+  >
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-0"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          1,500.00
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Total Volume (7D)
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-1"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          66.7%
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Success Rate
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-2"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          1
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Active intents
+        </p>
+      </div>
+    </button>
+    <div
+      animate="[object Object]"
+      aria-hidden="true"
+      class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+      data-testid="analytics-card-backdrop"
+      exit="[object Object]"
+      initial="[object Object]"
+    />
+    <div
+      animate="[object Object]"
+      aria-labelledby="analytics-card-dialog-title"
+      aria-modal="true"
+      class="dark fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl"
+      data-testid="analytics-card-dialog"
+      exit="[object Object]"
+      initial="[object Object]"
+      role="dialog"
+    >
+      <div
+        class="mb-4 flex items-center justify-between border-b border-white/10 pb-4"
+      >
+        <p
+          class="font-mono text-xs uppercase tracking-[0.3em] text-mint"
+          id="analytics-card-dialog-title"
+        >
+          Total Volume (7D)
+        </p>
+        <button
+          aria-label="Close Total Volume (7D)"
+          class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+          data-testid="analytics-card-detail-close"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M6 18L18 6M6 6l12 12"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </div>
+      <div
+        class="flex flex-col gap-3 text-white"
+      >
+        <p
+          class="text-3xl font-bold tracking-tight"
+        >
+          1,500.00
+        </p>
+        <p
+          class="text-sm text-slate-300"
+        >
+          Total payment volume processed across all confirmed transactions in the last 7 days.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`AnalyticsCards > snapshots > matches snapshot with the mobile drawer open 1`] = `
+<div>
+  <div
+    class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+  >
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-0"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          1,500.00
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Total Volume (7D)
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-1"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          66.7%
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Success Rate
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-2"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          1
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Active intents
+        </p>
+      </div>
+    </button>
+    <div
+      animate="[object Object]"
+      aria-hidden="true"
+      class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+      data-testid="analytics-card-backdrop"
+      exit="[object Object]"
+      initial="[object Object]"
+    />
+    <div
+      animate="[object Object]"
+      aria-labelledby="analytics-card-drawer-title"
+      aria-modal="true"
+      class="dark fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-white/10 bg-slate-900 p-6 pb-8 shadow-2xl"
+      data-testid="analytics-card-drawer"
+      drag="y"
+      dragconstraints="[object Object]"
+      dragelastic="[object Object]"
+      exit="[object Object]"
+      initial="[object Object]"
+      role="dialog"
+      transition="[object Object]"
+    >
+      <div
+        aria-hidden="true"
+        class="mx-auto mb-4 h-1.5 w-12 shrink-0 rounded-full bg-white/20"
+        data-testid="analytics-card-drawer-handle"
+      />
+      <div
+        class="mb-4 flex items-center justify-between border-b border-white/10 pb-4"
+      >
+        <p
+          class="font-mono text-xs uppercase tracking-[0.3em] text-mint"
+          id="analytics-card-drawer-title"
+        >
+          Total Volume (7D)
+        </p>
+        <button
+          aria-label="Close Total Volume (7D)"
+          class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+          data-testid="analytics-card-detail-close"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M6 18L18 6M6 6l12 12"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </div>
+      <div
+        class="flex flex-col gap-3 text-white"
+      >
+        <p
+          class="text-3xl font-bold tracking-tight"
+        >
+          1,500.00
+        </p>
+        <p
+          class="text-sm text-slate-300"
+        >
+          Total payment volume processed across all confirmed transactions in the last 7 days.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`AnalyticsCards > snapshots > matches snapshot with the network-failure retry banner showing 1`] = `
+<div>
+  <div
+    class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+  >
+    <div
+      class="col-span-full flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+      role="alert"
+    >
+      <span>
+        Couldn't refresh analytics. Showing the last known values.
+      </span>
+      <button
+        class="shrink-0 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100"
+        type="button"
+      >
+        Retry
+      </button>
+    </div>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-0"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          0.00
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Total Volume (7D)
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-1"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          0.0%
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Success Rate
+        </p>
+      </div>
+    </button>
+    <button
+      aria-haspopup="dialog"
+      class="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+      id="analytics-card-2"
+      type="button"
+    >
+      <div
+        class="flex min-w-0 flex-col gap-1"
+      >
+        <p
+          class="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]"
+        >
+          0
+        </p>
+        <p
+          class="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider"
+        >
+          Active intents
+        </p>
+      </div>
+    </button>
+  </div>
+</div>
+`;

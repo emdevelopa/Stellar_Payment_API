@@ -1,0 +1,682 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CommandPalette > matches its dialog structure for the default (no query) state 1`] = `
+<div
+  aria-label="Command palette"
+  aria-modal="true"
+  class="w-full max-w-lg overflow-hidden rounded-[2rem] border border-[#1F1F1F] bg-black shadow-[0_30px_60px_rgba(0,0,0,0.8)] backdrop-blur-xl"
+  role="dialog"
+>
+  <div
+    class="flex items-center gap-3 border-b border-white/10 px-4 py-3"
+  >
+    <svg
+      class="h-5 w-5 shrink-0 text-[#A0A0A0]"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        cx="11"
+        cy="11"
+        r="7"
+      />
+      <path
+        d="m21 21-4.3-4.3"
+        stroke-linecap="round"
+      />
+    </svg>
+    <input
+      aria-activedescendant="cmd-dashboard"
+      aria-autocomplete="list"
+      aria-busy="false"
+      aria-controls="command-list"
+      aria-expanded="true"
+      aria-label="Search commands"
+      class="flex-1 bg-transparent font-heading text-sm font-black tracking-widest text-white outline-none placeholder:text-white/10 disabled:opacity-60"
+      placeholder="Type a command..."
+      role="combobox"
+      type="text"
+      value=""
+    />
+    <kbd
+      class="hidden rounded-lg border border-[#1F1F1F] bg-white/[0.03] px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block"
+    >
+      ESC
+    </kbd>
+  </div>
+  <ul
+    class="max-h-72 overflow-y-auto p-2"
+    id="command-list"
+    role="listbox"
+  >
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="true"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer bg-accent/10 text-white"
+      id="cmd-dashboard"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#00F5D4]/30 bg-[#00F5D4]/10 shadow-[0_0_15px_rgba(0,245,212,0.1)]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M3 9.5L12 4l9 5.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.5z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M9 22V12h6v10"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Dashboard
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          View payments, metrics and activity
+        </span>
+      </span>
+      <kbd
+        class="ml-auto hidden rounded-lg border border-white/10 bg-white/10 px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block"
+      >
+        ENTER
+      </kbd>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-settings"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <circle
+            cx="12"
+            cy="12"
+            r="3"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Settings
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Manage merchant profile, branding and webhooks
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-docs"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M4 4h9a3 3 0 0 1 3 3v13H7a3 3 0 0 0-3 3V4z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M20 20h-4V7a3 3 0 0 1 3-3h1v16z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Docs
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Browse integration guides and help topics
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-create-new-payment"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12 5v14M5 12h14"
+            stroke-linecap="round"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Create New Payment
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Generate a new payment link
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-copy-api-key"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            cx="8"
+            cy="12"
+            r="3.5"
+          />
+          <path
+            d="M11.5 12H21M17 12v3M14 12v2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Copy API Key
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Copy the current merchant API key to clipboard
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-toggle-theme"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M21.75 15A9.75 9.75 0 1 1 9 2.25a7.5 7.5 0 0 0 12.75 12.75z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Toggle Theme
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Cycle between light, dark and system modes
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-api-keys"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <circle
+            cx="12"
+            cy="12"
+            r="3"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          API Keys
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Open API key management settings
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-webhooks"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <circle
+            cx="12"
+            cy="12"
+            r="3"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Webhooks
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Configure webhook URL and inspect delivery logs
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-payment-history"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12 5v14M5 12h14"
+            stroke-linecap="round"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Payment History
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Review recent and historical payment records
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-help-api-guide"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+          />
+          <path
+            d="M9.5 9a2.5 2.5 0 1 1 4.3 1.7C13 11.5 12 12 12 13"
+            stroke-linecap="round"
+          />
+          <circle
+            cx="12"
+            cy="17"
+            fill="currentColor"
+            r="0.6"
+            stroke="none"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Help: Subscription API Guide
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Merchant integration guide for API key workflows
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-help-hmac-signatures"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+          />
+          <path
+            d="M9.5 9a2.5 2.5 0 1 1 4.3 1.7C13 11.5 12 12 12 13"
+            stroke-linecap="round"
+          />
+          <circle
+            cx="12"
+            cy="17"
+            fill="currentColor"
+            r="0.6"
+            stroke="none"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Help: Verify HMAC Signatures
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Validate webhook signatures correctly
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-help-x402-agentic-payments"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+          />
+          <path
+            d="M9.5 9a2.5 2.5 0 1 1 4.3 1.7C13 11.5 12 12 12 13"
+            stroke-linecap="round"
+          />
+          <circle
+            cx="12"
+            cy="17"
+            fill="currentColor"
+            r="0.6"
+            stroke="none"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Help: x402 Agentic Payments
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Set up pay-per-request pricing for agents
+        </span>
+      </span>
+    </li>
+    <li
+      aria-busy="false"
+      aria-disabled="false"
+      aria-selected="false"
+      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      id="cmd-asset-converter"
+      role="option"
+    >
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all border-[#1F1F1F] bg-white/[0.03]"
+      >
+        <svg
+          class="h-5 w-5 text-[#A0A0A0]"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M2 17 12 7l10 10"
+            opacity="0.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M2 12 12 2l10 10"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+      <span
+        class="flex flex-col gap-0.5"
+      >
+        <span
+          class="font-heading text-sm font-black uppercase tracking-widest"
+        >
+          Asset Converter
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]"
+        >
+          Look up Stellar conversion rates quickly
+        </span>
+      </span>
+    </li>
+  </ul>
+  <div
+    class="flex items-center gap-4 border-t border-white/10 px-4 py-2"
+  >
+    <span
+      class="flex items-center gap-1 text-[11px] text-slate-500"
+    >
+      <kbd
+        class="rounded border border-white/10 bg-white/5 px-1 py-0.5 font-mono text-[10px]"
+      >
+        UP/DOWN
+      </kbd>
+      navigate
+    </span>
+    <span
+      class="flex items-center gap-1 text-[11px] text-slate-500"
+    >
+      <kbd
+        class="rounded border border-white/10 bg-white/5 px-1 py-0.5 font-mono text-[10px]"
+      >
+        ENTER
+      </kbd>
+      select
+    </span>
+    <span
+      class="flex items-center gap-1 text-[11px] text-slate-500"
+    >
+      <kbd
+        class="rounded border border-white/10 bg-white/5 px-1 py-0.5 font-mono text-[10px]"
+      >
+        ESC
+      </kbd>
+      close
+    </span>
+  </div>
+</div>
+`;

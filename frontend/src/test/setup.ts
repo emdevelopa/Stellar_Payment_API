@@ -62,3 +62,11 @@ global.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
 } as any;
+
+// jsdom does not implement layout, so Element.prototype.scrollIntoView is
+// absent entirely rather than a no-op -- any component that calls it (e.g.
+// to keep a keyboard-active list item in view) throws in tests unless this
+// is stubbed.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}

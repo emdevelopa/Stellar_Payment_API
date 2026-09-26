@@ -337,11 +337,11 @@ export default function CommandPalette() {
     <div
       className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 pt-[15vh] backdrop-blur-sm"
       onClick={() => setOpen(false)}
-      aria-hidden="true"
     >
       <div
         role="dialog"
         aria-label="Command palette"
+        aria-modal="true"
         className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-[#1F1F1F] bg-black shadow-[0_30px_60px_rgba(0,0,0,0.8)] backdrop-blur-xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handlePaletteKeydown}

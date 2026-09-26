@@ -6,6 +6,43 @@ import { getRedisClient } from "./redis.js";
  */
 const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
+export function buildIdempotencyRedisKey(merchantId, idempotencyKey) {
+  return `idempotency:${merchantId}:${idempotencyKey}`;
+}
+
+export function hashIdempotencyPayload(body) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(body || {}))
+    .digest("hex");
+}
+
+/**
+ * Look up a previously cached idempotent response.
+ *
+ * Used by the payment session handler after it acquires the per-key session
+ * lock (issue #1450): a request that passed the middleware while a concurrent
+ * twin was still in flight must replay that twin's response instead of
+ * creating a second session.
+ *
+ * `payloadHash` must be the hash the middleware computed from the RAW body
+ * (exposed as `req.idempotency.payloadHash`), because downstream Zod schemas
+ * may transform `req.body`.
+ *
+ * @returns {Promise<null | {status:"hit", response:object} | {status:"mismatch"}>}
+ */
+export async function lookupIdempotentResponse({ redisClient, merchantId, idempotencyKey, payloadHash }) {
+  if (!redisClient || !merchantId || !idempotencyKey || !payloadHash) return null;
+  const cachedValue = await redisClient.get(buildIdempotencyRedisKey(merchantId, idempotencyKey));
+  if (!cachedValue) return null;
+
+  const { hash, response } = JSON.parse(cachedValue);
+  if (hash !== payloadHash) {
+    return { status: "mismatch" };
+  }
+  return { status: "hit", response };
+}
+
 /**
  * Idempotency middleware that checks and enforces idempotent requests.
  * Tracks the key tied to the payload hash and response.
@@ -40,13 +77,11 @@ export async function idempotencyMiddleware(req, res, next) {
   }
 
   const redisClient = getRedisClient();
-  const redisKey = `idempotency:${merchantId}:${idempotencyKey}`;
-  
+  const redisKey = buildIdempotencyRedisKey(merchantId, idempotencyKey);
+
   // Calculate hash of payload to ensure consistency
-  const payloadHash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(req.body || {}))
-    .digest("hex");
+  const payloadHash = hashIdempotencyPayload(req.body);
+  req.idempotency = { key: idempotencyKey, payloadHash };
 
   try {
     const cachedValue = await redisClient.get(redisKey);

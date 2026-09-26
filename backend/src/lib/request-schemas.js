@@ -6,6 +6,10 @@ import {
   validateMemo,
 } from "./stellar.js";
 import { resolveAssetIssuer } from "../constants/assetConstants.js";
+import {
+  merchantSettingsSchema,
+  customHeadersSchema,
+} from "./merchant-payload-validation.js";
  
 
 const VALID_MEMO_TYPES = ["text", "id", "hash", "return"];
@@ -213,11 +217,8 @@ export const registerMerchantZodSchema = z.object({
       logo_url: z.string().trim().optional(),
     })
     .optional(),
-  merchant_settings: z
-    .object({
-      send_success_emails: z.boolean().optional(),
-    })
-    .optional(),
+  // Issue #1482: strict — unknown settings keys are rejected, not dropped.
+  merchant_settings: merchantSettingsSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -251,8 +252,6 @@ export const paymentSessionZodSchema = paymentBaseSchema
 
 export const v2PaymentSessionSchema = paymentSessionZodSchema;
 
-const SAFE_HEADER_NAME_RE = /^[a-zA-Z0-9\-_]+$/;
-
 export const VALID_WEBHOOK_EVENTS = [
   "payment.confirmed",
   "payment.failed",
@@ -275,14 +274,8 @@ export const webhookSettingsSchema = z.object({
       .refine((val) => val.startsWith("https://"), "webhook_url must use HTTPS")
       .optional(),
   ),
-  custom_headers: z
-    .record(z.string(), z.string().min(1, "Header value must not be empty"))
-    .refine(
-      (obj) => Object.keys(obj).every((k) => SAFE_HEADER_NAME_RE.test(k)),
-      "Header names must contain only alphanumeric characters, hyphens, or underscores",
-    )
-    .optional()
-    .nullable(),
+  // Issue #1482: bounded count/length, no CR/LF, no reserved header names.
+  custom_headers: customHeadersSchema.optional().nullable(),
   subscribed_events: z
     .array(
       z.string().refine(
@@ -292,9 +285,7 @@ export const webhookSettingsSchema = z.object({
     )
     .optional()
     .nullable(),
-});
-
-
+}).strict();
 
 /**
  * Helper to parse and validate payment body for session creation.

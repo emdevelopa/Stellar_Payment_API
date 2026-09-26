@@ -8,6 +8,7 @@ import {
   webhookDispatchDuration,
   webhookDispatchRetriesTotal,
 } from "./metrics.js";
+import { RESERVED_WEBHOOK_HEADERS } from "./merchant-payload-validation.js";
 
 let supabaseClientPromise;
 
@@ -260,8 +261,8 @@ function scheduleRetries(url, payload, headers, paymentId) {
  *
  * Accepted: plain object whose keys are safe ASCII header names and whose
  * values are non-empty strings.
- * Reserved system headers (Content-Type, User-Agent, PLUTO-Signature) are
- * silently dropped to prevent merchants from overriding security controls.
+ * Reserved system headers (see RESERVED_WEBHOOK_HEADERS) and values containing
+ * CR/LF/NUL are silently dropped to prevent merchants from overriding security controls.
  *
  * @param {unknown} raw  The value stored in merchants.webhook_custom_headers.
  * @returns {Record<string, string>} A safe subset of the supplied headers.
@@ -270,20 +271,15 @@ export function sanitizeCustomHeaders(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
 
   const SAFE_HEADER_NAME = /^[a-zA-Z0-9\-_]+$/;
-  const RESERVED = new Set([
-    "content-type",
-    "user-agent",
-    "pluto-signature",
-    "stellar-signature",
-    "pluto-timestamp",
-    "stellar-timestamp",
-  ]);
 
   const result = {};
   for (const [key, value] of Object.entries(raw)) {
     if (!SAFE_HEADER_NAME.test(key)) continue;
-    if (RESERVED.has(key.toLowerCase())) continue;
+    if (RESERVED_WEBHOOK_HEADERS.has(key.toLowerCase())) continue;
     if (typeof value !== "string" || value.trim() === "") continue;
+    // Values persisted before issue #1482 were not CR/LF checked; never let
+    // one reach the outbound request (header injection).
+    if (/[\r\n\0]/.test(value)) continue;
     result[key] = value;
   }
   return result;

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockQueryWithRetry,
@@ -204,6 +204,52 @@ describe("paymentService", () => {
         recipient: "GRECIPIENT",
       }),
     );
+  });
+
+  describe("createPaymentSession persistence retry (issue #1449)", () => {
+    const merchant = {
+      id: "merchant-1",
+      allowed_issuers: [],
+      payment_limits: {},
+      branding_config: {},
+    };
+    const body = { amount: 5, asset: "XLM", recipient: "GRECIPIENT" };
+
+    beforeEach(() => {
+      process.env.PAYMENT_SESSION_RETRY_BASE_DELAY_MS = "0";
+    });
+
+    afterEach(() => {
+      delete process.env.PAYMENT_SESSION_RETRY_BASE_DELAY_MS;
+    });
+
+    it("retries a transient insert failure and creates the session", async () => {
+      const insert = vi
+        .fn()
+        .mockResolvedValueOnce({ error: { message: "TypeError: fetch failed", code: "" } })
+        .mockResolvedValue({ error: null });
+      mockSupabaseFrom.mockReturnValue({ insert });
+
+      const result = await paymentService.createPaymentSession(merchant, body);
+
+      expect(result.status).toBe("pending");
+      expect(insert).toHaveBeenCalledTimes(2);
+      // The same server-generated id is reused on retry (idempotent insert).
+      expect(insert.mock.calls[0][0].id).toBe(insert.mock.calls[1][0].id);
+    });
+
+    it("surfaces a non-retryable insert error as 500 without retrying", async () => {
+      const insert = vi
+        .fn()
+        .mockResolvedValue({ error: { message: "check violation", code: "23514" } });
+      mockSupabaseFrom.mockReturnValue({ insert });
+
+      await expect(paymentService.createPaymentSession(merchant, body)).rejects.toMatchObject({
+        status: 500,
+        code: "23514",
+      });
+      expect(insert).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("falls back to Supabase when the pooler exhausts retryable errors", async () => {

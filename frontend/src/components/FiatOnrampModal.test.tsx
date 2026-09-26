@@ -232,4 +232,31 @@ describe("FiatOnrampModal", () => {
       ).toBeInTheDocument();
     });
   });
+
+  it("asset group has role=group and accessible label", () => {
+    renderModal({ isOpen: true, onClose: vi.fn() });
+    expect(screen.getByRole("group", { name: "Select Asset" })).toBeInTheDocument();
+  });
+
+  it("ArrowRight on USDC selects SRT", () => {
+    renderModal({ isOpen: true, onClose: vi.fn() });
+    const usdcButton = screen.getByRole("button", { name: /USDC/ });
+    const srtButton = screen.getByRole("button", { name: /SRT/ });
+
+    expect(usdcButton).toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(usdcButton, { key: "ArrowRight" });
+    expect(srtButton).toHaveAttribute("aria-pressed", "true");
+    expect(usdcButton).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("ArrowLeft on USDC wraps to SRT", () => {
+    renderModal({ isOpen: true, onClose: vi.fn() });
+    const usdcButton = screen.getByRole("button", { name: /USDC/ });
+    const srtButton = screen.getByRole("button", { name: /SRT/ });
+
+    expect(usdcButton).toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(usdcButton, { key: "ArrowLeft" });
+    expect(srtButton).toHaveAttribute("aria-pressed", "true");
+    expect(usdcButton).toHaveAttribute("aria-pressed", "false");
+  });
 });

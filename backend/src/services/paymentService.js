@@ -33,6 +33,7 @@ import {
   validateAllowedIssuers,
 } from "../lib/payment-session-rules.js";
 import { getSupabaseClient } from "../lib/supabase-client.js";
+import { insertPaymentSessionWithRetry } from "../lib/payment-session-retry.js";
 import {
   paymentProcessorSessionsTotal,
   paymentProcessorSessionDuration,
@@ -576,9 +577,10 @@ export const paymentService = {
       created_at: now,
     };
 
-    const { error: insertError } = await supabase.from("payments").insert(payload);
-
-    if (insertError) {
+    // Issue #1449: retry transient persistence failures with backoff.
+    try {
+      await insertPaymentSessionWithRetry(supabase, payload);
+    } catch (insertError) {
       insertError.status = 500;
       recordSessionOutcome("persistence_failed");
       throw insertError;

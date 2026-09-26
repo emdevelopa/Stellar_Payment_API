@@ -46,6 +46,12 @@ import {
   validateAllowedIssuers,
 } from "../lib/payment-session-rules.js";
 import { getSupabaseClient } from "../lib/supabase-client.js";
+import { insertPaymentSessionWithRetry } from "../lib/payment-session-retry.js";
+import {
+  withPaymentSessionLock,
+  PAYMENT_SESSION_IN_PROGRESS,
+} from "../lib/payment-session-lock.js";
+import { lookupIdempotentResponse } from "../lib/idempotency.js";
 import {
   paymentProcessorSessionsTotal,
   paymentProcessorSessionDuration,
@@ -249,145 +255,185 @@ function createPaymentsRouter({
    *                   type: string
    *       400:
    *         description: Validation error or invalid Idempotency-Key
+   *       409:
+   *         description: A concurrent request with the same Idempotency-Key is still being processed (code PAYMENT_SESSION_IN_PROGRESS). Retry shortly to receive the cached response.
    *       429:
    *         description: Too many requests
    */
+  /**
+   * Issue #1450: serialize concurrent requests that share an Idempotency-Key
+   * (per merchant, across instances) so they can never create two sessions.
+   * The loser of the race gets 409; a request that acquires the lock after
+   * its twin finished replays the cached idempotent response.
+   */
   async function createSession(req, res, next) {
-    const sessionStart = Date.now();
+    const idempotencyKey = req.idempotency?.key ?? req.get?.("Idempotency-Key") ?? null;
     try {
-      const supabase = await getSupabaseClient();
-      const body = req.body;
-      const asset = body.asset?.toUpperCase();
-      logger.info({ merchantId: req.merchant?.id, amount: body.amount, asset: body.asset }, "DEBUG: createSession started");
-
-      // Shared business-rule validation (issue #1087) — issuer presence/format.
-      const { assetIssuer, rejection: issuerRejection } = resolveAndValidateIssuer(
-        asset,
-        body.asset_issuer,
+      await withPaymentSessionLock(
+        { merchantId: req.merchant?.id, idempotencyKey },
+        async (lock) => {
+          if (lock && req.idempotency?.payloadHash) {
+            const replay = await lookupIdempotentResponse({
+              redisClient: await connectRedisClient(),
+              merchantId: req.merchant.id,
+              idempotencyKey,
+              payloadHash: req.idempotency.payloadHash,
+            }).catch((err) => {
+              logger.warn({ err: err?.message }, "Idempotency replay lookup failed; continuing");
+              return null;
+            });
+            if (replay?.status === "hit") {
+              return res.status(201).json(replay.response);
+            }
+            if (replay?.status === "mismatch") {
+              return res.status(400).json({
+                error: "Idempotency-Key already used with a different request payload",
+              });
+            }
+          }
+          return createSessionUnlocked(req, res);
+        },
       );
-      if (issuerRejection) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: issuerRejection.reason });
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
-        paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "validation_failed" },
-          (Date.now() - sessionStart) / 1000,
-        );
-        return res.status(400).json({ error: issuerRejection.message });
-      }
-
-      // Shared business-rule validation (issue #1087) — per-asset limits (#153).
-      const limitRejection = validatePerAssetLimits({
-        rawAsset: body.asset,
-        amount: body.amount,
-        paymentLimits: req.merchant.payment_limits,
-      });
-      if (limitRejection) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: limitRejection.reason });
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
-        paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "validation_failed" },
-          (Date.now() - sessionStart) / 1000,
-        );
-        return res.status(400).json({
-          error: limitRejection.message,
-          ...limitRejection.details,
-        });
-      }
-
-      // Shared business-rule validation (issue #1087) — allowed-issuers check:
-      // if the merchant has configured a non-empty allowlist, only those
-      // issuer addresses may be used.
-      const allowedIssuerRejection = validateAllowedIssuers({
-        asset,
-        assetIssuer,
-        allowedIssuers: req.merchant.allowed_issuers,
-      });
-      if (allowedIssuerRejection) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
-        paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "validation_failed" },
-          (Date.now() - sessionStart) / 1000,
-        );
-        return res.status(400).json({ error: allowedIssuerRejection.message });
-      }
-
-      const isSandbox = body.sandbox === true;
-      const baseId = randomUUID();
-      const paymentId = isSandbox ? `test_${baseId}` : baseId;
-      const now = new Date().toISOString();
-      const paymentLinkBase =
-        process.env.PAYMENT_LINK_BASE || "http://localhost:3000";
-      const paymentLink = `${paymentLinkBase}/pay/${paymentId}`;
-      const resolvedBrandingConfig = resolveBrandingConfig({
-        merchantBranding: req.merchant.branding_config,
-        brandingOverrides: body.branding_overrides,
-      });
-
-      const metadata =
-        body.metadata && typeof body.metadata === "object"
-          ? { ...body.metadata }
-          : {};
-      metadata.branding_config = resolvedBrandingConfig;
-
-      const payload = {
-        id: paymentId,
-        merchant_id: req.merchant.id,
-        amount: body.amount,
-        asset,
-        asset_issuer: assetIssuer || null,
-        recipient: body.recipient,
-        description: body.description || null,
-        memo: body.message || body.memo || null,
-        memo_type: body.message ? "text" : (body.memo_type || null),
-        webhook_url: body.webhook_url || null,
-        client_id: body.client_id || null,
-        status: "pending",
-        tx_id: null,
-        metadata,
-        sandbox: isSandbox,
-        created_at: now,
-      };
-
-      const { error: insertError } = await supabase
-        .from("payments")
-        .insert(payload);
-
-      if (insertError) {
-        insertError.status = 500;
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "persistence_failed" });
-        paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "persistence_failed" },
-          (Date.now() - sessionStart) / 1000,
-        );
-        throw insertError;
-      }
-
-      // Only record production metrics for non-sandbox payments.
-      if (!isSandbox) {
-        paymentCreatedCounter.inc({ asset: body.asset });
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "created" });
-        paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "created" },
-          (Date.now() - sessionStart) / 1000,
-        );
-      }
-
-      logger.info({ paymentId: paymentId }, "DEBUG: createSession success");
-      res.status(201).json({
-        payment_id: paymentId,
-        payment_link: paymentLink,
-        status: "pending",
-        sandbox: isSandbox,
-        branding_config: resolvedBrandingConfig,
-      });
     } catch (err) {
+      if (err.code === PAYMENT_SESSION_IN_PROGRESS) {
+        return res.status(409).json({ error: err.message, code: err.code });
+      }
       logger.error({ err, merchantId: req.merchant?.id }, "DEBUG: createSession error");
       if (err.status === 400 && err.details) {
         return res.status(400).json({ error: err.message, ...err.details });
       }
       next(err);
     }
+  }
+
+  async function createSessionUnlocked(req, res) {
+    const sessionStart = Date.now();
+    const supabase = await getSupabaseClient();
+    const body = req.body;
+    const asset = body.asset?.toUpperCase();
+    logger.info({ merchantId: req.merchant?.id, amount: body.amount, asset: body.asset }, "DEBUG: createSession started");
+
+    // Shared business-rule validation (issue #1087) — issuer presence/format.
+    const { assetIssuer, rejection: issuerRejection } = resolveAndValidateIssuer(
+      asset,
+      body.asset_issuer,
+    );
+    if (issuerRejection) {
+      paymentFailedCounter.inc({ asset: body.asset, reason: issuerRejection.reason });
+      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+      paymentProcessorSessionDuration.observe(
+        { asset: body.asset, outcome: "validation_failed" },
+        (Date.now() - sessionStart) / 1000,
+      );
+      return res.status(400).json({ error: issuerRejection.message });
+    }
+
+    // Shared business-rule validation (issue #1087) — per-asset limits (#153).
+    const limitRejection = validatePerAssetLimits({
+      rawAsset: body.asset,
+      amount: body.amount,
+      paymentLimits: req.merchant.payment_limits,
+    });
+    if (limitRejection) {
+      paymentFailedCounter.inc({ asset: body.asset, reason: limitRejection.reason });
+      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+      paymentProcessorSessionDuration.observe(
+        { asset: body.asset, outcome: "validation_failed" },
+        (Date.now() - sessionStart) / 1000,
+      );
+      return res.status(400).json({
+        error: limitRejection.message,
+        ...limitRejection.details,
+      });
+    }
+
+    // Shared business-rule validation (issue #1087) — allowed-issuers check:
+    // if the merchant has configured a non-empty allowlist, only those
+    // issuer addresses may be used.
+    const allowedIssuerRejection = validateAllowedIssuers({
+      asset,
+      assetIssuer,
+      allowedIssuers: req.merchant.allowed_issuers,
+    });
+    if (allowedIssuerRejection) {
+      paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
+      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+      paymentProcessorSessionDuration.observe(
+        { asset: body.asset, outcome: "validation_failed" },
+        (Date.now() - sessionStart) / 1000,
+      );
+      return res.status(400).json({ error: allowedIssuerRejection.message });
+    }
+
+    const isSandbox = body.sandbox === true;
+    const baseId = randomUUID();
+    const paymentId = isSandbox ? `test_${baseId}` : baseId;
+    const now = new Date().toISOString();
+    const paymentLinkBase =
+      process.env.PAYMENT_LINK_BASE || "http://localhost:3000";
+    const paymentLink = `${paymentLinkBase}/pay/${paymentId}`;
+    const resolvedBrandingConfig = resolveBrandingConfig({
+      merchantBranding: req.merchant.branding_config,
+      brandingOverrides: body.branding_overrides,
+    });
+
+    const metadata =
+      body.metadata && typeof body.metadata === "object"
+        ? { ...body.metadata }
+        : {};
+    metadata.branding_config = resolvedBrandingConfig;
+
+    const payload = {
+      id: paymentId,
+      merchant_id: req.merchant.id,
+      amount: body.amount,
+      asset,
+      asset_issuer: assetIssuer || null,
+      recipient: body.recipient,
+      description: body.description || null,
+      memo: body.message || body.memo || null,
+      memo_type: body.message ? "text" : (body.memo_type || null),
+      webhook_url: body.webhook_url || null,
+      client_id: body.client_id || null,
+      status: "pending",
+      tx_id: null,
+      metadata,
+      sandbox: isSandbox,
+      created_at: now,
+    };
+
+    // Issue #1449: transient persistence failures are retried with
+    // exponential backoff; validation/constraint errors are not.
+    try {
+      await insertPaymentSessionWithRetry(supabase, payload);
+    } catch (insertError) {
+      insertError.status = 500;
+      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "persistence_failed" });
+      paymentProcessorSessionDuration.observe(
+        { asset: body.asset, outcome: "persistence_failed" },
+        (Date.now() - sessionStart) / 1000,
+      );
+      throw insertError;
+    }
+
+    // Only record production metrics for non-sandbox payments.
+    if (!isSandbox) {
+      paymentCreatedCounter.inc({ asset: body.asset });
+      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "created" });
+      paymentProcessorSessionDuration.observe(
+        { asset: body.asset, outcome: "created" },
+        (Date.now() - sessionStart) / 1000,
+      );
+    }
+
+    logger.info({ paymentId: paymentId }, "DEBUG: createSession success");
+    res.status(201).json({
+      payment_id: paymentId,
+      payment_link: paymentLink,
+      status: "pending",
+      sandbox: isSandbox,
+      branding_config: resolvedBrandingConfig,
+    });
   }
 
   router.post("/create-payment", createPaymentRateLimit, recaptchaMiddleware(), validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);

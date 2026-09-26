@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import Skeleton from "react-loading-skeleton";
@@ -39,6 +39,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
   const { step, isBusy, interactiveUrl, start, reset: resetFlow } = useSep24AnchorFlow({
     networkPassphrase: NETWORK_PASSPHRASE,
   });
+  const descriptionId = useId();
   const [amount, setAmount] = useState("");
   const [anchorDomain, setAnchorDomain] = useState(DEFAULT_ANCHOR);
   const [selectedAsset, setSelectedAsset] = useState(SUPPORTED_ASSETS[0]);
@@ -73,7 +74,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
   }, [start, anchorDomain, amount, selectedAsset, t]);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={t("title")}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={t("title")} descriptionId={descriptionId}>
       <AnimatePresence mode="wait">
         {step === "IDLE" && (
           <motion.div
@@ -84,7 +85,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
             transition={{ duration: 0.18 }}
             className="flex flex-col gap-6"
           >
-            <p className="text-sm text-slate-400">{t("description")}</p>
+            <p id={descriptionId} className="text-sm text-slate-400">{t("description")}</p>
 
             {error && (
               <div
@@ -157,6 +158,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
               type="button"
               onClick={handleStartDeposit}
               disabled={isBusy}
+              aria-busy={isBusy}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-mint py-4 text-sm font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             >
               {isBusy ? (

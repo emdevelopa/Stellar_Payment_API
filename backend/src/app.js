@@ -47,6 +47,7 @@ import {
 } from "./lib/transaction-signer.js";
 import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
 import oracleRouter from "./routes/oracle.js";
+import { getPaymentSessionValidatorHealth } from "./lib/payment-session-validator.js";
 
 export async function createApp({ redisClient }) {
   const app = express();
@@ -252,8 +253,34 @@ export async function createApp({ redisClient }) {
         database: dbOk ? "ok" : "unavailable",
         horizon: horizonOk ? "ok" : "unavailable",
         redis: redisAvailable ? "ok" : "unavailable",
+        // Informational only — does not affect `ok` / the status code.
+        payment_session_validator: getPaymentSessionValidatorHealth().status,
       },
     });
+  });
+
+  /**
+   * @swagger
+   * /health/payment-session-validator:
+   *   get:
+   *     summary: Payment Session Validator health telemetry
+   *     description: >
+   *       Rolling-window counts, rejection / error ratios and derived status
+   *       for payment session validation (issue #1448). Returns 503 only when
+   *       the validator is unhealthy (internal error ratio above threshold);
+   *       a degraded status (high rejection ratio or suspicious payload spike)
+   *       still returns 200.
+   *     tags: [Health]
+   *     security: []
+   *     responses:
+   *       200:
+   *         description: Validator healthy or degraded
+   *       503:
+   *         description: Validator unhealthy
+   */
+  app.get("/health/payment-session-validator", (_req, res) => {
+    const health = getPaymentSessionValidatorHealth();
+    res.status(health.status === "unhealthy" ? 503 : 200).json(health);
   });
 
   const verifyPaymentRateLimit = createVerifyPaymentRateLimit({

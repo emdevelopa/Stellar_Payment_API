@@ -9,6 +9,9 @@ import { trustlineManagerRegister } from "../lib/trustline-manager-metrics.js";
 // Granular Path Payment Service metrics live in their own registry (issue #1048)
 // and are merged into the scrape output below.
 import { pathPaymentRegister } from "../lib/path-payment-metrics.js";
+// Payment Session Validator metrics live in their own registry (issue #1448)
+// and are merged into the scrape output below.
+import { paymentSessionValidatorRegister } from "../lib/payment-session-validator-metrics.js";
 
 const router = express.Router();
 
@@ -17,7 +20,7 @@ const router = express.Router();
  * /metrics:
  *   get:
  *     summary: Expose Prometheus metrics
- *     description: Returns the current state of Prometheus metrics for the application, including granular payment processor, trustline manager and path payment metrics.
+ *     description: Returns the current state of Prometheus metrics for the application, including granular payment processor, trustline manager, path payment and payment session validator metrics.
  *     tags: [Monitoring]
  *     responses:
  *       200:
@@ -29,17 +32,15 @@ const router = express.Router();
  */
 router.get("/metrics", async (req, res) => {
   try {
-    const [coreMetrics, processorMetrics, trustlineMetrics, pathPaymentMetrics] =
-      await Promise.all([
-        register.metrics(),
-        paymentProcessorRegister.metrics(),
-        trustlineManagerRegister.metrics(),
-        pathPaymentRegister.metrics(),
-      ]);
+    const scrapes = await Promise.all([
+      register.metrics(),
+      paymentProcessorRegister.metrics(),
+      trustlineManagerRegister.metrics(),
+      pathPaymentRegister.metrics(),
+      paymentSessionValidatorRegister.metrics(),
+    ]);
     res.set("Content-Type", register.contentType);
-    res.end(
-      `${coreMetrics}\n${processorMetrics}\n${trustlineMetrics}\n${pathPaymentMetrics}`,
-    );
+    res.end(scrapes.join("\n"));
   } catch (err) {
     res.status(500).end(err);
   }

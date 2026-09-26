@@ -40,11 +40,7 @@ import {
   paymentFailedCounter,
 } from "../lib/metrics.js";
 import { sanitizeMetadataMiddleware } from "../lib/sanitize-metadata.js";
-import {
-  resolveAndValidateIssuer,
-  validatePerAssetLimits,
-  validateAllowedIssuers,
-} from "../lib/payment-session-rules.js";
+import { validatePaymentSession } from "../lib/payment-session-validator.js";
 import { getSupabaseClient } from "../lib/supabase-client.js";
 import {
   paymentProcessorSessionsTotal,
@@ -256,61 +252,35 @@ function createPaymentsRouter({
     const sessionStart = Date.now();
     try {
       const supabase = await getSupabaseClient();
-      const body = req.body;
-      const asset = body.asset?.toUpperCase();
-      logger.info({ merchantId: req.merchant?.id, amount: body.amount, asset: body.asset }, "DEBUG: createSession started");
+      logger.info({ merchantId: req.merchant?.id, amount: req.body?.amount, asset: req.body?.asset }, "DEBUG: createSession started");
 
-      // Shared business-rule validation (issue #1087) — issuer presence/format.
-      const { assetIssuer, rejection: issuerRejection } = resolveAndValidateIssuer(
-        asset,
-        body.asset_issuer,
-      );
-      if (issuerRejection) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: issuerRejection.reason });
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
-        paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "validation_failed" },
-          (Date.now() - sessionStart) / 1000,
-        );
-        return res.status(400).json({ error: issuerRejection.message });
-      }
-
-      // Shared business-rule validation (issue #1087) — per-asset limits (#153).
-      const limitRejection = validatePerAssetLimits({
-        rawAsset: body.asset,
-        amount: body.amount,
-        paymentLimits: req.merchant.payment_limits,
+      // Sanitization, strict payload checks and shared business rules
+      // (issues #1087, #1447) with validator metrics/health (#1448).
+      const validation = validatePaymentSession({
+        body: req.body,
+        merchant: req.merchant,
+        source: "http",
       });
-      if (limitRejection) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: limitRejection.reason });
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+      if (!validation.ok) {
+        const { rejection } = validation;
+        const assetLabel = req.body?.asset;
+        paymentFailedCounter.inc({
+          asset: assetLabel,
+          reason: rejection.reason === "issuer_not_allowed" ? "invalid_issuer" : rejection.reason,
+        });
+        paymentProcessorSessionsTotal.inc({ asset: assetLabel, outcome: "validation_failed" });
         paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "validation_failed" },
+          { asset: assetLabel, outcome: "validation_failed" },
           (Date.now() - sessionStart) / 1000,
         );
         return res.status(400).json({
-          error: limitRejection.message,
-          ...limitRejection.details,
+          error: rejection.message,
+          ...(rejection.rule === "limits" ? rejection.details : {}),
         });
       }
 
-      // Shared business-rule validation (issue #1087) — allowed-issuers check:
-      // if the merchant has configured a non-empty allowlist, only those
-      // issuer addresses may be used.
-      const allowedIssuerRejection = validateAllowedIssuers({
-        asset,
-        assetIssuer,
-        allowedIssuers: req.merchant.allowed_issuers,
-      });
-      if (allowedIssuerRejection) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
-        paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
-        paymentProcessorSessionDuration.observe(
-          { asset: body.asset, outcome: "validation_failed" },
-          (Date.now() - sessionStart) / 1000,
-        );
-        return res.status(400).json({ error: allowedIssuerRejection.message });
-      }
+      const body = validation.payload;
+      const { asset, assetIssuer } = validation;
 
       const isSandbox = body.sandbox === true;
       const baseId = randomUUID();

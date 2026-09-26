@@ -154,6 +154,7 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [view, setView] = useState<"commands" | "converter">("commands");
+  const [executingId, setExecutingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const router = useRouter();
@@ -180,6 +181,7 @@ export default function CommandPalette() {
       setQuery("");
       setActiveIndex(0);
       setView("commands");
+      setExecutingId(null);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -196,12 +198,14 @@ export default function CommandPalette() {
 
   const select = useCallback(
     async (command: PaletteCommand) => {
+      // Guard against re-entrancy: ignore new selections while an async
+      // command (currently only "copy-api-key") is still in flight.
+      if (executingId) return;
+
       if (command.action === "converter") {
         setView("converter");
         return;
       }
-
-      setOpen(false);
 
       if (command.action === "copy-api-key") {
         if (!apiKey) {
@@ -209,17 +213,31 @@ export default function CommandPalette() {
           return;
         }
 
+        // The clipboard write is the only network/async-adjacent side effect
+        // this component performs. Do not optimistically close the palette
+        // before we know the outcome — that left users with a stale, already
+        // -dismissed UI and only a toast on failure, with no way to retry
+        // from where they were. Instead, keep the palette open and show a
+        // pending state; only close on success, otherwise "roll back" to the
+        // open command list so the user can try again.
+        setExecutingId(command.id);
+
         try {
           if (typeof navigator === "undefined" || typeof navigator.clipboard?.writeText !== "function") {
             throw new Error("Clipboard API unavailable");
           }
           await navigator.clipboard.writeText(apiKey);
           toast.success("API key copied to clipboard.");
+          setOpen(false);
         } catch {
           toast.error("Unable to copy API key from this browser context.");
+        } finally {
+          setExecutingId(null);
         }
         return;
       }
+
+      setOpen(false);
 
       if (command.action === "toggle-theme") {
         const nextTheme = getNextTheme(theme);
@@ -232,7 +250,7 @@ export default function CommandPalette() {
         router.push(command.href);
       }
     },
-    [apiKey, resolvedTheme, router, theme, toggleTheme],
+    [apiKey, executingId, resolvedTheme, router, theme, toggleTheme],
   );
 
   function handlePaletteKeydown(e: React.KeyboardEvent) {
@@ -248,6 +266,21 @@ export default function CommandPalette() {
 
     if (view === "converter") return;
 
+    // Focus trap: this dialog has no other focusable descendants besides the
+    // search input, so Tab/Shift+Tab should cycle within the palette (moving
+    // through the result list) instead of letting focus escape to the page
+    // behind the backdrop. This mirrors the arrow-key wrapping behavior and
+    // gives Tab/Shift+Tab parity with ArrowDown/ArrowUp, a standard
+    // command-palette convention.
+    if (e.key === "Tab") {
+      if (filtered.length === 0) return;
+      e.preventDefault();
+      setActiveIndex((i) =>
+        e.shiftKey ? (i - 1 + filtered.length) % filtered.length : (i + 1) % filtered.length,
+      );
+      return;
+    }
+
     if (e.key === "ArrowDown") {
       if (filtered.length === 0) return;
       e.preventDefault();
@@ -262,9 +295,39 @@ export default function CommandPalette() {
       return;
     }
 
-    if (e.key === "Enter" && filtered.length > 0) {
+    // Home/End jump to the first/last result. The search input is always
+    // focused while the palette is open, so these are only intercepted when
+    // there is no query text to avoid hijacking native cursor-to-start/end
+    // text editing behavior while a query is being typed.
+    if (e.key === "Home" && !query) {
+      if (filtered.length === 0) return;
+      e.preventDefault();
+      setActiveIndex(0);
+      return;
+    }
+
+    if (e.key === "End" && !query) {
+      if (filtered.length === 0) return;
+      e.preventDefault();
+      setActiveIndex(filtered.length - 1);
+      return;
+    }
+
+    if (e.key === "Enter" && filtered.length > 0 && !executingId) {
       e.preventDefault();
       void select(filtered[activeIndex]);
+      return;
+    }
+
+    // Number-key quick-select (1-9): jump straight to and run the Nth
+    // visible result without needing to navigate there first. Ignored while
+    // typing a query so digits still work as normal search input.
+    if (!query && !executingId && /^[1-9]$/.test(e.key)) {
+      const index = Number(e.key) - 1;
+      if (index < filtered.length) {
+        e.preventDefault();
+        void select(filtered[index]);
+      }
     }
   }
 
@@ -274,11 +337,11 @@ export default function CommandPalette() {
     <div
       className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 pt-[15vh] backdrop-blur-sm"
       onClick={() => setOpen(false)}
-      aria-hidden="true"
     >
       <div
         role="dialog"
         aria-label="Command palette"
+        aria-modal="true"
         className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-[#1F1F1F] bg-black shadow-[0_30px_60px_rgba(0,0,0,0.8)] backdrop-blur-xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handlePaletteKeydown}
@@ -304,14 +367,16 @@ export default function CommandPalette() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                disabled={executingId !== null}
                 placeholder="Type a command..."
-                className="flex-1 bg-transparent font-heading text-sm font-black tracking-widest text-white outline-none placeholder:text-white/10"
+                className="flex-1 bg-transparent font-heading text-sm font-black tracking-widest text-white outline-none placeholder:text-white/10 disabled:opacity-60"
                 aria-label="Search commands"
                 aria-activedescendant={filtered.length > 0 ? `cmd-${filtered[activeIndex].id}` : undefined}
                 role="combobox"
                 aria-expanded="true"
                 aria-controls="command-list"
                 aria-autocomplete="list"
+                aria-busy={executingId !== null}
               />
 
               <kbd className="hidden rounded-lg border border-[#1F1F1F] bg-white/[0.03] px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block">
@@ -324,44 +389,61 @@ export default function CommandPalette() {
                 <li className="px-3 py-6 text-center text-sm text-slate-500">No matching commands</li>
               )}
 
-              {filtered.map((command, index) => (
-                <li
-                  key={command.id}
-                  id={`cmd-${command.id}`}
-                  role="option"
-                  aria-selected={index === activeIndex}
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-                    index === activeIndex ? "bg-accent/10 text-white" : "text-slate-300 hover:bg-white/5"
-                  }`}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => {
-                    void select(command);
-                  }}
-                >
-                  <span
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all ${
-                      index === activeIndex
-                        ? "border-[#00F5D4]/30 bg-[#00F5D4]/10 shadow-[0_0_15px_rgba(0,245,212,0.1)]"
-                        : "border-[#1F1F1F] bg-white/[0.03]"
-                    }`}
+              {filtered.map((command, index) => {
+                const isExecuting = executingId === command.id;
+
+                return (
+                  <li
+                    key={command.id}
+                    id={`cmd-${command.id}`}
+                    role="option"
+                    aria-selected={index === activeIndex}
+                    aria-busy={isExecuting}
+                    aria-disabled={executingId !== null && !isExecuting}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
+                      executingId !== null && !isExecuting
+                        ? "cursor-not-allowed opacity-40"
+                        : "cursor-pointer"
+                    } ${index === activeIndex ? "bg-accent/10 text-white" : "text-slate-300 hover:bg-white/5"}`}
+                    onMouseEnter={() => {
+                      if (!executingId) setActiveIndex(index);
+                    }}
+                    onClick={() => {
+                      void select(command);
+                    }}
                   >
-                    {getCommandIcon(command)}
-                  </span>
-
-                  <span className="flex flex-col gap-0.5">
-                    <span className="font-heading text-sm font-black uppercase tracking-widest">{command.label}</span>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]">
-                      {command.description}
+                    <span
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all ${
+                        index === activeIndex
+                          ? "border-[#00F5D4]/30 bg-[#00F5D4]/10 shadow-[0_0_15px_rgba(0,245,212,0.1)]"
+                          : "border-[#1F1F1F] bg-white/[0.03]"
+                      }`}
+                    >
+                      {isExecuting ? (
+                        <span
+                          className="h-4 w-4 animate-spin rounded-full border-2 border-[#00F5D4]/30 border-t-[#00F5D4]"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        getCommandIcon(command)
+                      )}
                     </span>
-                  </span>
 
-                  {index === activeIndex && (
-                    <kbd className="ml-auto hidden rounded-lg border border-white/10 bg-white/10 px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block">
-                      ENTER
-                    </kbd>
-                  )}
-                </li>
-              ))}
+                    <span className="flex flex-col gap-0.5">
+                      <span className="font-heading text-sm font-black uppercase tracking-widest">{command.label}</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-[#A0A0A0]">
+                        {isExecuting ? "Working…" : command.description}
+                      </span>
+                    </span>
+
+                    {index === activeIndex && !isExecuting && (
+                      <kbd className="ml-auto hidden rounded-lg border border-white/10 bg-white/10 px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block">
+                        ENTER
+                      </kbd>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
 
             <div className="flex items-center gap-4 border-t border-white/10 px-4 py-2">

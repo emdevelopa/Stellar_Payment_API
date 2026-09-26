@@ -222,10 +222,10 @@ export default function WebhookLogs() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full text-left text-sm">
+        <table className="w-full text-left text-sm" aria-label="Webhook delivery logs">
           <thead>
             <tr className="border-b border-white/10 bg-white/5">
-              <th className="px-4 py-3">
+              <th scope="col" className="px-4 py-3">
                 <label className="flex items-center gap-3 font-mono text-xs uppercase tracking-wider text-slate-400">
                   <input
                     type="checkbox"
@@ -238,16 +238,16 @@ export default function WebhookLogs() {
                   Select
                 </label>
               </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+              <th scope="col" className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
                 Status
               </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+              <th scope="col" className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
                 Event
               </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 sm:table-cell">
+              <th scope="col" className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 sm:table-cell">
                 Endpoint
               </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 md:table-cell">
+              <th scope="col" className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 md:table-cell">
                 Time
               </th>
             </tr>
@@ -262,8 +262,8 @@ export default function WebhookLogs() {
                   key={log.id}
                   tabIndex={0}
                   role="button"
-                  aria-label={`View details for webhook log ${log.event ?? log.id}, status ${log.status_code}`}
-                  className="group transition-colors hover:bg-white/5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mint"
+                  aria-label={`View delivery detail for ${log.event ?? "webhook"} (HTTP ${log.status_code})`}
+                  className="group cursor-pointer transition-colors hover:bg-white/5 focus:outline-none focus-visible:bg-white/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mint"
                   onClick={() => setViewingLog(log)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {

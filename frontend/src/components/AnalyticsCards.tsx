@@ -11,6 +11,7 @@ import {
   useDisplayPreferences,
   formatAmount,
 } from "@/lib/display-preferences";
+import { Modal } from "./ui/Modal";
 
 interface MetricsResponse {
   total_volume: number;
@@ -25,12 +26,20 @@ interface PaymentsResponse {
   payments: Payment[];
 }
 
+interface CardDetail {
+  id: string;
+  label: string;
+  value: string;
+  description: string;
+}
+
 export default function AnalyticsCards() {
   const [totalVolume, setTotalVolume] = useState<number>(0);
   const [successRate, setSuccessRate] = useState<number>(0);
   const [activeIntents, setActiveIntents] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
+
   const apiKey = useMerchantApiKey();
   const hydrated = useMerchantHydrated();
   const locale = useLocale();
@@ -92,43 +101,62 @@ export default function AnalyticsCards() {
     );
   }
 
+  const cards: CardDetail[] = [
+    {
+      id: "total-volume",
+      label: "Total Volume (7D)",
+      value: formatAmount(totalVolume, locale, hideCents),
+      description: "Total payment volume processed across all confirmed transactions in the last 7 days.",
+    },
+    {
+      id: "success-rate",
+      label: "Success Rate",
+      value: `${successRate.toFixed(1)}%`,
+      description: "Share of resolved payments (confirmed vs. confirmed + failed/refunded) in the last 7 days. Pending payments aren't counted until they resolve.",
+    },
+    {
+      id: "active-intents",
+      label: "Active intents",
+      value: String(activeIntents),
+      description: "Payments currently awaiting confirmation. These are not yet counted in the success rate above.",
+    },
+  ];
+
+  const openCard = cards.find((c) => c.id === openCardId) ?? null;
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {/* Total Volume */}
-      <div className="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 transition-all hover:bg-[#F9F9F9] sm:p-6">
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]">
-            {formatAmount(totalVolume, locale, hideCents)}
-          </p>
-          <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
-            Total Volume (7D)
-          </p>
-        </div>
-      </div>
+      {cards.map((card) => (
+        <button
+          key={card.id}
+          type="button"
+          onClick={() => setOpenCardId(card.id)}
+          className="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 text-left transition-all hover:bg-[#F9F9F9] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A] sm:p-6"
+          aria-haspopup="dialog"
+        >
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]">
+              {card.value}
+            </p>
+            <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
+              {card.label}
+            </p>
+          </div>
+        </button>
+      ))}
 
-      {/* Success Rate */}
-      <div className="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 transition-all hover:bg-[#F9F9F9] sm:p-6">
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]">
-            {successRate.toFixed(1)}%
-          </p>
-          <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
-            Success Rate
-          </p>
-        </div>
-      </div>
-
-      {/* Active Intents */}
-      <div className="min-w-0 overflow-hidden rounded-lg border border-[#E8E8E8] bg-white p-5 transition-all hover:bg-[#F9F9F9] sm:p-6">
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="break-words text-[clamp(26px,8vw,48px)] font-bold leading-none tracking-tight text-[#0A0A0A]">
-            {activeIntents}
-          </p>
-          <p className="text-xs font-medium text-[#6B6B6B] uppercase tracking-wider">
-            Active intents
-          </p>
-        </div>
-      </div>
+      <Modal
+        isOpen={openCard !== null}
+        onClose={() => setOpenCardId(null)}
+        title={openCard?.label ?? ""}
+      >
+        {openCard && (
+          <div className="flex flex-col gap-3">
+            <p className="text-3xl font-bold tracking-tight">{openCard.value}</p>
+            <p className="text-sm text-slate-300">{openCard.description}</p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -258,10 +258,19 @@ export default function WebhookLogs() {
               const selected = selectedLogIds.includes(log.id);
 
               return (
-                <tr 
-                  key={log.id} 
-                  className="group transition-colors hover:bg-white/5 cursor-pointer"
+                <tr
+                  key={log.id}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`View details for webhook log ${log.event ?? log.id}, status ${log.status_code}`}
+                  className="group transition-colors hover:bg-white/5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-mint"
                   onClick={() => setViewingLog(log)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setViewingLog(log);
+                    }
+                  }}
                 >
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <input

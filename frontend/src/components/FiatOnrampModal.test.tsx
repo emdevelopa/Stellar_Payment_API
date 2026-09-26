@@ -183,4 +183,53 @@ describe("FiatOnrampModal", () => {
 
     expect(onClose).toHaveBeenCalled();
   });
+
+  describe("WCAG 2.1 AA — ARIA attributes", () => {
+    it("dialog container has role=dialog and aria-modal=true", () => {
+      renderModal({ isOpen: true, onClose: vi.fn() });
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute("aria-modal", "true");
+    });
+
+    it("dialog is labelled by the modal title", () => {
+      renderModal({ isOpen: true, onClose: vi.fn() });
+      const dialog = screen.getByRole("dialog");
+      const labelledById = dialog.getAttribute("aria-labelledby");
+      expect(labelledById).toBeTruthy();
+      const titleEl = document.getElementById(labelledById!);
+      expect(titleEl).toHaveTextContent("Buy / Deposit Funds");
+    });
+
+    it("dialog has aria-describedby pointing at the description paragraph", () => {
+      renderModal({ isOpen: true, onClose: vi.fn() });
+      const dialog = screen.getByRole("dialog");
+      const describedById = dialog.getAttribute("aria-describedby");
+      expect(describedById).toBeTruthy();
+      const descEl = document.getElementById(describedById!);
+      expect(descEl).toHaveTextContent(/Deposit fiat via a Stellar anchor/i);
+    });
+
+    it("submit button exposes aria-busy=false at rest and aria-busy=true while busy", async () => {
+      renderModal({ isOpen: true, onClose: vi.fn() });
+      const continueBtn = screen.getByRole("button", { name: "Continue to Anchor" });
+      expect(continueBtn).toHaveAttribute("aria-busy", "false");
+
+      fireEvent.click(continueBtn);
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Connecting|Waiting|Preparing/i })).toHaveAttribute(
+          "aria-busy",
+          "true",
+        );
+      });
+    });
+
+    it("close button has a descriptive aria-label", () => {
+      renderModal({ isOpen: true, onClose: vi.fn() });
+      expect(
+        screen.getByRole("button", { name: /close buy \/ deposit funds/i }),
+      ).toBeInTheDocument();
+    });
+  });
 });

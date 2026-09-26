@@ -72,6 +72,63 @@ export const pathPaymentQuoteCacheSize = new client.Gauge({
   labelNames: ["cache"],
 });
 
+/**
+ * Exchange-rate cache concurrency control (issue #1445).
+ * In-process single-flight + cross-instance Redis lock coordination.
+ */
+export const exchangeRateCacheCoalescedRequests = new client.Counter({
+  name: "exchange_rate_cache_coalesced_requests_total",
+  help: "Quote requests that joined an in-flight load instead of querying Horizon",
+  labelNames: ["cache"],
+});
+
+export const exchangeRateCacheInflightLoads = new client.Gauge({
+  name: "exchange_rate_cache_inflight_loads",
+  help: "Exchange-rate quote loads currently in flight in this process",
+  labelNames: ["cache"],
+});
+
+export const exchangeRateCacheLoadTimeouts = new client.Counter({
+  name: "exchange_rate_cache_load_timeouts_total",
+  help: "Exchange-rate quote loads that exceeded the load timeout",
+  labelNames: ["cache"],
+});
+
+export const exchangeRateCacheStaleWritesPrevented = new client.Counter({
+  name: "exchange_rate_cache_stale_writes_prevented_total",
+  help: "Loads whose result was not cached because the key was invalidated mid-flight",
+  labelNames: ["cache"],
+});
+
+/** result: acquired | contended | error */
+export const exchangeRateLockAcquisitions = new client.Counter({
+  name: "exchange_rate_lock_acquisitions_total",
+  help: "Distributed exchange-rate lock acquisition attempts, by result",
+  labelNames: ["result"],
+});
+
+/** outcome: shared_hit | acquired | timeout | error */
+export const exchangeRateLockWaitDuration = new client.Histogram({
+  name: "exchange_rate_lock_wait_seconds",
+  help: "Time spent coordinating with other instances before a quote was available",
+  labelNames: ["outcome"],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+});
+
+/** result: hit | miss | invalid | error */
+export const exchangeRateSharedCacheLookups = new client.Counter({
+  name: "exchange_rate_shared_cache_lookups_total",
+  help: "Lookups against the Redis-backed shared exchange-rate quote cache, by result",
+  labelNames: ["result"],
+});
+
+/** reason: wait_timeout | redis_error */
+export const exchangeRateCoordinationFallbacks = new client.Counter({
+  name: "exchange_rate_coordination_fallbacks_total",
+  help: "Quote loads that bypassed distributed coordination and queried Horizon directly",
+  labelNames: ["reason"],
+});
+
 /** Number of intermediate assets in the returned path (0 = direct pair). */
 export const pathPaymentQuotePathHops = new client.Histogram({
   name: "path_payment_quote_path_hops",
@@ -96,6 +153,14 @@ register.registerMetric(pathPaymentQuoteCacheHits);
 register.registerMetric(pathPaymentQuoteCacheMisses);
 register.registerMetric(pathPaymentQuoteCacheEvictions);
 register.registerMetric(pathPaymentQuoteCacheSize);
+register.registerMetric(exchangeRateCacheCoalescedRequests);
+register.registerMetric(exchangeRateCacheInflightLoads);
+register.registerMetric(exchangeRateCacheLoadTimeouts);
+register.registerMetric(exchangeRateCacheStaleWritesPrevented);
+register.registerMetric(exchangeRateLockAcquisitions);
+register.registerMetric(exchangeRateLockWaitDuration);
+register.registerMetric(exchangeRateSharedCacheLookups);
+register.registerMetric(exchangeRateCoordinationFallbacks);
 register.registerMetric(pathPaymentQuotePathHops);
 register.registerMetric(pathPaymentQuoteRate);
 

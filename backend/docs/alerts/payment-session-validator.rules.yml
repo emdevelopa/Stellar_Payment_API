@@ -1,0 +1,94 @@
+# Prometheus alerting rules for the Payment Session Validator (issue #1448).
+#
+# Load with:   rule_files: ["docs/alerts/payment-session-validator.rules.yml"]
+# Validate:    promtool check rules docs/alerts/payment-session-validator.rules.yml
+#
+# Metric reference: docs/PAYMENT_SESSION_VALIDATOR.md
+
+groups:
+  - name: payment-session-validator
+    rules:
+      - alert: PaymentSessionValidatorInternalErrors
+        expr: sum(increase(payment_session_validator_evaluations_total{outcome="error"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Payment session validator is throwing internal errors
+          description: >
+            {{ $value | humanize }} validations failed with an internal error in
+            the last 5m. Sessions are not being created. Check logs for
+            "Payment session validator failed unexpectedly".
+
+      - alert: PaymentSessionValidatorUnhealthy
+        expr: max(payment_session_validator_health_state) >= 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Payment session validator reports unhealthy
+          description: >
+            Rolling-window error ratio is above threshold. See
+            GET /health/payment-session-validator for counts and reasons.
+
+      - alert: PaymentSessionValidatorHighRejectionRatio
+        expr: |
+          sum(rate(payment_session_validator_evaluations_total{outcome="rejected"}[10m]))
+            /
+          clamp_min(sum(rate(payment_session_validator_evaluations_total[10m])), 1e-9)
+            > 0.5
+          and sum(increase(payment_session_validator_evaluations_total[10m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than half of payment sessions are being rejected
+          description: >
+            Likely a broken client integration or a scripted probe. Break down
+            by rule/reason with payment_session_validator_rejections_total.
+
+      - alert: PaymentSessionValidatorSuspiciousPayloadSpike
+        expr: sum(increase(payment_session_validator_suspicious_payloads_total[5m])) > 10
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Spike in suspicious payment session payloads
+          description: >
+            {{ $value | humanize }} payloads carried forbidden keys, bidi control
+            characters, oversized fields or were not JSON objects in the last
+            5m. Correlate with the "Suspicious payment session payload" log
+            entries (they carry merchantId) to identify the source.
+
+      - alert: PaymentSessionValidatorPrototypePollutionAttempt
+        expr: sum(increase(payment_session_validator_suspicious_payloads_total{signal="forbidden_key"}[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Prototype-pollution keys submitted to payment session creation
+          description: The payload was rejected; this alert exists for security visibility.
+
+      - alert: PaymentSessionValidatorMerchantConfigAnomaly
+        expr: sum by (kind) (increase(payment_session_validator_config_anomalies_total[30m])) > 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "Merchant payment_limits misconfigured ({{ $labels.kind }})"
+          description: >
+            A merchant's limit bound is non-numeric or min > max; the unusable
+            bound is ignored. Find the merchant via the
+            "Merchant payment_limits misconfigured" log entry.
+
+      - alert: PaymentSessionValidatorSlow
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(payment_session_validator_duration_seconds_bucket[10m]))
+          ) > 0.025
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Payment session validation p99 latency above 25ms
+          description: Validation is pure CPU work and normally completes in well under 1ms.

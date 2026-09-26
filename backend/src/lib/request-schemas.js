@@ -3,6 +3,7 @@ import { HEX_COLOR_REGEX } from "./branding.js";
 import {
   isValidAssetCode,
   isValidStellarAccountId,
+  isValidStellarPublicKey,
   validateMemo,
 } from "./stellar.js";
 import { resolveAssetIssuer } from "../constants/assetConstants.js";

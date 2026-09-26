@@ -27,11 +27,7 @@ import {
 } from "../lib/metrics.js";
 import { paymentSignatureVerifier } from "../lib/payment-signature-verification.js";
 import { logger } from "../lib/logger.js";
-import {
-  resolveAndValidateIssuer,
-  validatePerAssetLimits,
-  validateAllowedIssuers,
-} from "../lib/payment-session-rules.js";
+import { validatePaymentSession } from "../lib/payment-session-validator.js";
 import { getSupabaseClient } from "../lib/supabase-client.js";
 import {
   paymentProcessorSessionsTotal,
@@ -460,26 +456,35 @@ export const paymentService = {
   async createPaymentSession(merchant, body) {
     const sessionStart = Date.now();
     const recordSessionOutcome = (outcome) => {
-      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome });
+      paymentProcessorSessionsTotal.inc({ asset: body?.asset, outcome });
       paymentProcessorSessionDuration.observe(
-        { asset: body.asset, outcome },
+        { asset: body?.asset, outcome },
         (Date.now() - sessionStart) / 1000,
       );
     };
     const supabase = await getSupabaseClient();
-    const asset = body.asset?.toUpperCase();
 
-    // Shared business-rule validation (issue #1087) — issuer presence/format.
-    const { assetIssuer, rejection: issuerRejection } = resolveAndValidateIssuer(
-      asset,
-      body.asset_issuer,
-    );
-    if (issuerRejection) {
+    // Sanitization, strict payload checks and shared business rules
+    // (issues #1087, #1447) with validator metrics/health (#1448). These are
+    // pure and cheap, so they run before the on-chain issuer lookup below —
+    // an invalid request never costs a Horizon round-trip.
+    const validation = validatePaymentSession({ body, merchant, source: "service" });
+    if (!validation.ok) {
+      const { rejection } = validation;
+      paymentFailedCounter.inc({
+        asset: body?.asset,
+        reason: rejection.reason === "issuer_not_allowed" ? "invalid_issuer" : rejection.reason,
+      });
       recordSessionOutcome("validation_failed");
-      const error = new Error(issuerRejection.message);
+      const error = new Error(rejection.message);
       error.status = 400;
+      if (rejection.rule === "limits") {
+        error.details = rejection.details;
+      }
       throw error;
     }
+    body = validation.payload;
+    const { asset, assetIssuer } = validation;
 
     // Task #756: Dynamic Issuer Verification with Error Recovery
     if (asset !== "XLM" && assetIssuer) {
@@ -499,36 +504,6 @@ export const paymentService = {
           throw recoveryError;
         }
       }
-    }
-
-    // Shared business-rule validation (issue #1087) — per-asset limits.
-    const limitRejection = validatePerAssetLimits({
-      rawAsset: body.asset,
-      amount: body.amount,
-      paymentLimits: merchant.payment_limits,
-    });
-    if (limitRejection) {
-      paymentFailedCounter.inc({ asset: body.asset, reason: limitRejection.reason });
-      recordSessionOutcome("validation_failed");
-      const error = new Error(limitRejection.message);
-      error.status = 400;
-      error.details = limitRejection.details;
-      throw error;
-    }
-
-    // Shared business-rule validation (issue #1087) — allowed issuers.
-    const allowedIssuers = merchant.allowed_issuers;
-    const allowlistRejection = validateAllowedIssuers({
-      asset,
-      assetIssuer,
-      allowedIssuers,
-    });
-    if (allowlistRejection) {
-      paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
-      recordSessionOutcome("validation_failed");
-      const error = new Error(allowlistRejection.message);
-      error.status = 400;
-      throw error;
     }
 
     const paymentId = randomUUID();

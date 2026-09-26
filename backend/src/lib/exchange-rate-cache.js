@@ -11,6 +11,17 @@
  * - Prometheus metrics for hit/miss/eviction counts
  * - Stale-while-revalidate tolerance (separate staleness window)
  * - Thread-safe via synchronous Map operations (Node.js single-threaded)
+ *
+ * Concurrency control (issue #1445):
+ * - getOrLoad() coalesces concurrent misses for the same key into ONE loader
+ *   call (single-flight), so a burst of identical quote requests produces a
+ *   single Horizon query per process.
+ * - delete()/clear() mark any in-flight load for the key as invalidated and
+ *   detach it. That load still resolves its own callers, but it can never
+ *   write its (possibly outdated) result back into the cache. Tracking this on
+ *   the in-flight entry keeps memory bounded by the number of active loads.
+ * - Loads are bounded by a timeout so a hung loader cannot pin waiters forever.
+ * Cross-process coordination lives in exchange-rate-coordinator.js.
  */
 
 import { createHash } from 'node:crypto';
@@ -20,15 +31,37 @@ import {
   pathPaymentQuoteCacheMisses,
   pathPaymentQuoteCacheEvictions,
   pathPaymentQuoteCacheSize,
+  exchangeRateCacheCoalescedRequests,
+  exchangeRateCacheInflightLoads,
+  exchangeRateCacheLoadTimeouts,
+  exchangeRateCacheStaleWritesPrevented,
 } from './path-payment-metrics.js';
 
-/** Default cache metrics wired to the granular path-payment series (issue #1048). */
+/**
+ * Default cache metrics wired to the granular path-payment series (issue #1048)
+ * plus the concurrency-control series (issue #1445).
+ */
 const DEFAULT_METRICS = {
   hit: pathPaymentQuoteCacheHits,
   miss: pathPaymentQuoteCacheMisses,
   eviction: pathPaymentQuoteCacheEvictions,
   size: pathPaymentQuoteCacheSize,
+  coalesced: exchangeRateCacheCoalescedRequests,
+  inflight: exchangeRateCacheInflightLoads,
+  loadTimeout: exchangeRateCacheLoadTimeouts,
+  staleWritePrevented: exchangeRateCacheStaleWritesPrevented,
 };
+
+export class CacheLoadTimeoutError extends Error {
+  constructor(timeoutMs) {
+    super(`Exchange rate load timed out after ${timeoutMs}ms`);
+    this.name = 'CacheLoadTimeoutError';
+    // `status` is what the Express error handler reads; `statusCode`
+    // matches ExchangeRateError.
+    this.status = 504;
+    this.statusCode = 504;
+  }
+}
 
 const DEFAULT_TTL_MS = Number.parseInt(
   process.env.EXCHANGE_RATE_CACHE_TTL_MS || '30000',
@@ -79,6 +112,24 @@ export class ExchangeRateCache {
     this.metrics = metrics;
     /** @type {Map<string, {data: unknown, insertedAt: number}>} */
     this.cache = new Map();
+    /**
+     * In-flight loads (single-flight).
+     * @type {Map<string, {promise: Promise<unknown>, invalidated: boolean}>}
+     */
+    this.inflight = new Map();
+  }
+
+  /** Detach the in-flight load for `key` (if any) and forbid its write-back. */
+  _invalidateInflight(key) {
+    const entry = this.inflight.get(key);
+    if (!entry) return;
+    entry.invalidated = true;
+    this.inflight.delete(key);
+    this._updateInflightGauge();
+  }
+
+  _updateInflightGauge() {
+    this.metrics?.inflight?.set?.({ cache: 'exchange_rate' }, this.inflight.size);
   }
 
   /**
@@ -125,11 +176,78 @@ export class ExchangeRateCache {
       logger.debug(`ExchangeRateCache: evicted oldest entry (key prefix: ${oldestKey?.slice(0, 8)})`);
     }
     this.cache.set(key, { data, insertedAt: Date.now() });
+    this.metrics?.size?.set?.({ cache: 'exchange_rate' }, this.cache.size);
   }
 
-  /** Remove a specific entry (e.g. after a payment status change makes its quote stale). */
+  /**
+   * Return a fresh cached value, or run `loader` exactly once per key no
+   * matter how many callers ask concurrently.
+   *
+   * @template T
+   * @param {string} key
+   * @param {() => Promise<T>} loader
+   * @param {object} [opts]
+   * @param {number} [opts.timeoutMs] reject waiters if the load exceeds this
+   * @returns {Promise<{data: T, source: 'cache'|'loader'|'coalesced'}>}
+   */
+  async getOrLoad(key, loader, { timeoutMs = 0 } = {}) {
+    const cached = this.get(key);
+    if (cached.hit && !cached.stale) {
+      return { data: cached.data, source: 'cache' };
+    }
+
+    const existing = this.inflight.get(key);
+    if (existing) {
+      this.metrics?.coalesced?.inc?.({ cache: 'exchange_rate' });
+      return { data: await existing.promise, source: 'coalesced' };
+    }
+
+    const entry = { promise: null, invalidated: false };
+    entry.promise = (async () => {
+      try {
+        // Invoke the loader on a later microtask so the entry is registered
+        // in `inflight` first — even a synchronously throwing loader then
+        // goes through the cleanup in `finally`.
+        const data = await withTimeout(Promise.resolve().then(loader), timeoutMs, () => {
+          this.metrics?.loadTimeout?.inc?.({ cache: 'exchange_rate' });
+        });
+        if (entry.invalidated) {
+          this.metrics?.staleWritePrevented?.inc?.({ cache: 'exchange_rate' });
+          logger.debug(`ExchangeRateCache: dropped write for invalidated key (prefix: ${key?.slice(0, 8)})`);
+        } else {
+          this.set(key, data);
+        }
+        return data;
+      } finally {
+        // Only remove our own entry; an invalidation may already have
+        // detached it and a newer load may occupy the slot.
+        if (this.inflight.get(key) === entry) {
+          this.inflight.delete(key);
+          this._updateInflightGauge();
+        }
+      }
+    })();
+    this.inflight.set(key, entry);
+    this._updateInflightGauge();
+
+    return { data: await entry.promise, source: 'loader' };
+  }
+
+  /** Number of keys currently being loaded. */
+  get inflightCount() {
+    return this.inflight.size;
+  }
+
+  /**
+   * Remove a specific entry (e.g. after a payment status change makes its
+   * quote stale). Also detaches any in-flight load so the next caller starts
+   * a fresh one; the detached load cannot write its result back.
+   */
   delete(key) {
-    return this.cache.delete(key);
+    this._invalidateInflight(key);
+    const removed = this.cache.delete(key);
+    this.metrics?.size?.set?.({ cache: 'exchange_rate' }, this.cache.size);
+    return removed;
   }
 
   /** Evict all entries older than ttlMs. Returns the number of evicted entries. */
@@ -153,10 +271,33 @@ export class ExchangeRateCache {
     return this.cache.size;
   }
 
-  /** Clear all entries — intended for test isolation. */
+  /** Clear all entries and invalidate every in-flight load. */
   clear() {
+    for (const key of [...this.inflight.keys()]) {
+      this._invalidateInflight(key);
+    }
     this.cache.clear();
+    this.metrics?.size?.set?.({ cache: 'exchange_rate' }, 0);
   }
+}
+
+/**
+ * Race `promise` against a timer. `timeoutMs <= 0` disables the timeout.
+ * The timer is always cleared so it never keeps the event loop alive.
+ */
+function withTimeout(promise, timeoutMs, onTimeout) {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return promise;
+  }
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new CacheLoadTimeoutError(timeoutMs));
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 let defaultInstance = null;

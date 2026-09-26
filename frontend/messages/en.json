@@ -16,12 +16,15 @@
     "codeInputPlaceholder": "000000",
     "verifyButton": "Verify & Enable",
     "verifying": "Verifying…",
+    "retryButton": "Retry",
+    "stepAnnouncement": "Step {current} of {total}",
     "successTitle": "Two-Factor Authentication Enabled",
     "successDescription": "Your account is now protected. You will be prompted for a code on each login.",
     "error": {
       "setupFailed": "Failed to start 2FA setup. Please try again.",
       "invalidCode": "Invalid code. Please try again.",
-      "codeLength": "Please enter the 6-digit code from your authenticator app."
+      "codeLength": "Please enter the 6-digit code from your authenticator app.",
+      "networkFailure": "Couldn't reach the server. Check your connection and retry — your code and QR setup are still here."
     }
   },
   "localeSwitcher": {

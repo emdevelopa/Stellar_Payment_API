@@ -1,0 +1,729 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`TwoFactorAuthSetup > snapshots > matches snapshot in enabling state 1`] = `
+<div>
+  <section
+    aria-busy="true"
+    aria-label="Two-factor authentication setup"
+    class="flex flex-col gap-6"
+  >
+    <div
+      aria-label="Setup steps"
+      class="flex items-center gap-0"
+      role="list"
+    >
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            aria-current="step"
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint/20 text-mint"
+          >
+            <span>
+              1
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-white/20 bg-white/5 text-slate-500"
+          >
+            <span>
+              2
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-white/20 bg-white/5 text-slate-500"
+          >
+            <span>
+              3
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p
+      aria-live="polite"
+      class="sr-only"
+      role="status"
+    >
+      Step 1 of 3
+    </p>
+    <div
+      class="flex flex-col gap-4 text-center"
+    >
+      <div
+        class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-mint/10"
+      >
+        <svg
+          aria-hidden="true"
+          class="h-8 w-8 text-mint"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          viewBox="0 0 24 24"
+        >
+          <rect
+            height="10"
+            rx="2"
+            width="14"
+            x="5"
+            y="11"
+          />
+          <path
+            d="M8 11V7a4 4 0 0 1 8 0v4"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
+      <div>
+        <h3
+          class="text-base font-semibold text-white"
+        >
+          Enable Two-Factor Authentication
+        </h3>
+        <p
+          class="mt-1 text-sm text-slate-400"
+        >
+          Protect your account with an authenticator app. You will need to scan a QR code to get started.
+        </p>
+      </div>
+      <button
+        aria-busy="true"
+        class="mx-auto flex min-w-[10rem] items-center justify-center gap-2 rounded-xl bg-mint px-6 py-3 text-sm font-bold text-black transition-all hover:scale-[1.01] hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+        disabled=""
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          data-testid="spinner"
+          role="img"
+        />
+        <span>
+          Setting up…
+        </span>
+      </button>
+    </div>
+  </section>
+</div>
+`;
+
+exports[`TwoFactorAuthSetup > snapshots > matches snapshot in idle state 1`] = `
+<div>
+  <section
+    aria-busy="false"
+    aria-label="Two-factor authentication setup"
+    class="flex flex-col gap-6"
+  >
+    <div
+      aria-label="Setup steps"
+      class="flex items-center gap-0"
+      role="list"
+    >
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            aria-current="step"
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint/20 text-mint"
+          >
+            <span>
+              1
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-white/20 bg-white/5 text-slate-500"
+          >
+            <span>
+              2
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-white/20 bg-white/5 text-slate-500"
+          >
+            <span>
+              3
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p
+      aria-live="polite"
+      class="sr-only"
+      role="status"
+    >
+      Step 1 of 3
+    </p>
+    <div
+      class="flex flex-col gap-4 text-center"
+    >
+      <div
+        class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-mint/10"
+      >
+        <svg
+          aria-hidden="true"
+          class="h-8 w-8 text-mint"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          viewBox="0 0 24 24"
+        >
+          <rect
+            height="10"
+            rx="2"
+            width="14"
+            x="5"
+            y="11"
+          />
+          <path
+            d="M8 11V7a4 4 0 0 1 8 0v4"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
+      <div>
+        <h3
+          class="text-base font-semibold text-white"
+        >
+          Enable Two-Factor Authentication
+        </h3>
+        <p
+          class="mt-1 text-sm text-slate-400"
+        >
+          Protect your account with an authenticator app. You will need to scan a QR code to get started.
+        </p>
+      </div>
+      <button
+        aria-busy="false"
+        class="mx-auto flex min-w-[10rem] items-center justify-center gap-2 rounded-xl bg-mint px-6 py-3 text-sm font-bold text-black transition-all hover:scale-[1.01] hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+        type="button"
+      >
+        Enable 2FA
+      </button>
+    </div>
+  </section>
+</div>
+`;
+
+exports[`TwoFactorAuthSetup > snapshots > matches snapshot in scan state 1`] = `
+<div>
+  <section
+    aria-busy="false"
+    aria-label="Two-factor authentication setup"
+    class="flex flex-col gap-6"
+  >
+    <div
+      aria-label="Setup steps"
+      class="flex items-center gap-0"
+      role="list"
+    >
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint text-black"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-3.5 w-3.5"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M13.5 2.5L6 10 2.5 6.5 1 8l5 5 9-9-1.5-1.5z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            aria-current="step"
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint/20 text-mint"
+          >
+            <span>
+              2
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-white/20 bg-white/5 text-slate-500"
+          >
+            <span>
+              3
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p
+      aria-live="polite"
+      class="sr-only"
+      role="status"
+    >
+      Step 2 of 3
+    </p>
+    <div
+      class="flex flex-col gap-5"
+    >
+      <div>
+        <h3
+          class="text-sm font-semibold text-white"
+        >
+          Scan with your authenticator app
+        </h3>
+        <p
+          class="mt-1 text-xs text-slate-400"
+        >
+          Use Google Authenticator, Authy, or any TOTP-compatible app to scan the code below.
+        </p>
+      </div>
+      <div
+        class="flex justify-center"
+      >
+        <img
+          alt="TOTP QR code — scan with your authenticator app"
+          class="h-48 w-48 rounded-xl border border-white/10 bg-white p-2"
+          height="192"
+          src="data:image/png;base64,mock-qr"
+          width="192"
+        />
+      </div>
+      <div
+        class="rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+      >
+        <p
+          class="text-[10px] uppercase tracking-widest text-slate-500"
+        >
+          Or enter key manually
+        </p>
+        <p
+          aria-label="manualKeyAria"
+          class="mt-1 break-all font-mono text-xs text-mint"
+        >
+          JBSWY3DPEHPK3PXP
+        </p>
+      </div>
+      <div
+        class="flex flex-col gap-2"
+      >
+        <label
+          class="text-xs font-semibold text-white"
+          for=":rs:"
+        >
+          Enter 6-digit code
+        </label>
+        <input
+          aria-busy="false"
+          aria-invalid="false"
+          class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center font-mono text-xl tracking-[0.4em] text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 disabled:opacity-50"
+          id=":rs:"
+          inputmode="numeric"
+          maxlength="6"
+          pattern="[0-9]{6}"
+          placeholder="000000"
+          type="text"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-col gap-2 sm:flex-row"
+      >
+        <button
+          aria-busy="false"
+          class="flex w-full items-center justify-center gap-2 rounded-xl bg-mint py-3 text-sm font-bold text-black transition-all hover:scale-[1.01] hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+          disabled=""
+          type="button"
+        >
+          Verify & Enable
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
+`;
+
+exports[`TwoFactorAuthSetup > snapshots > matches snapshot in success state 1`] = `
+<div>
+  <section
+    aria-busy="false"
+    aria-label="Two-factor authentication setup"
+    class="flex flex-col gap-6"
+  >
+    <div
+      aria-label="Setup steps"
+      class="flex items-center gap-0"
+      role="list"
+    >
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint text-black"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-3.5 w-3.5"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M13.5 2.5L6 10 2.5 6.5 1 8l5 5 9-9-1.5-1.5z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint text-black"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-3.5 w-3.5"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M13.5 2.5L6 10 2.5 6.5 1 8l5 5 9-9-1.5-1.5z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            aria-current="step"
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint text-black"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-3.5 w-3.5"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M13.5 2.5L6 10 2.5 6.5 1 8l5 5 9-9-1.5-1.5z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p
+      aria-live="polite"
+      class="sr-only"
+      role="status"
+    >
+      Step 3 of 3
+    </p>
+    <div
+      aria-live="polite"
+      class="flex flex-col items-center gap-4 py-2 text-center"
+      role="status"
+    >
+      <div
+        class="flex h-16 w-16 items-center justify-center rounded-full bg-mint/15"
+      >
+        <svg
+          aria-hidden="true"
+          class="h-8 w-8 text-mint"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M5 13l4 4L19 7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+      <div>
+        <h3
+          class="text-base font-semibold text-white"
+        >
+          Two-Factor Authentication Enabled
+        </h3>
+        <p
+          class="mt-1 text-sm text-slate-400"
+        >
+          Your account is now protected. You will be prompted for a code on each login.
+        </p>
+      </div>
+    </div>
+  </section>
+</div>
+`;
+
+exports[`TwoFactorAuthSetup > snapshots > matches snapshot with a code entered and a network-failure retry action showing 1`] = `
+<div>
+  <section
+    aria-busy="false"
+    aria-label="Two-factor authentication setup"
+    class="flex flex-col gap-6"
+  >
+    <div
+      aria-label="Setup steps"
+      class="flex items-center gap-0"
+      role="list"
+    >
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint text-black"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-3.5 w-3.5"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M13.5 2.5L6 10 2.5 6.5 1 8l5 5 9-9-1.5-1.5z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            aria-current="step"
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-mint bg-mint/20 text-mint"
+          >
+            <span>
+              2
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        class="h-px flex-1 bg-white/10 mx-1"
+      />
+      <div
+        role="listitem"
+      >
+        <div
+          class="flex flex-col items-center gap-1"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors border-white/20 bg-white/5 text-slate-500"
+          >
+            <span>
+              3
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p
+      aria-live="polite"
+      class="sr-only"
+      role="status"
+    >
+      Step 2 of 3
+    </p>
+    <div
+      class="flex flex-col gap-5"
+    >
+      <div>
+        <h3
+          class="text-sm font-semibold text-white"
+        >
+          Scan with your authenticator app
+        </h3>
+        <p
+          class="mt-1 text-xs text-slate-400"
+        >
+          Use Google Authenticator, Authy, or any TOTP-compatible app to scan the code below.
+        </p>
+      </div>
+      <div
+        class="flex justify-center"
+      >
+        <img
+          alt="TOTP QR code — scan with your authenticator app"
+          class="h-48 w-48 rounded-xl border border-white/10 bg-white p-2"
+          height="192"
+          src="data:image/png;base64,mock-qr"
+          width="192"
+        />
+      </div>
+      <div
+        class="rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+      >
+        <p
+          class="text-[10px] uppercase tracking-widest text-slate-500"
+        >
+          Or enter key manually
+        </p>
+        <p
+          aria-label="manualKeyAria"
+          class="mt-1 break-all font-mono text-xs text-mint"
+        >
+          JBSWY3DPEHPK3PXP
+        </p>
+      </div>
+      <div
+        class="flex flex-col gap-2"
+      >
+        <label
+          class="text-xs font-semibold text-white"
+          for=":rt:"
+        >
+          Enter 6-digit code
+        </label>
+        <input
+          aria-busy="false"
+          aria-describedby="2fa-error"
+          aria-invalid="true"
+          class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center font-mono text-xl tracking-[0.4em] text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 disabled:opacity-50"
+          id=":rt:"
+          inputmode="numeric"
+          maxlength="6"
+          pattern="[0-9]{6}"
+          placeholder="000000"
+          type="text"
+          value="123456"
+        />
+        <p
+          class="text-xs text-red-400"
+          id="2fa-error"
+          role="alert"
+        >
+          Couldn't reach the server. Check your connection and retry — your code and QR setup are still here.
+        </p>
+      </div>
+      <div
+        class="flex flex-col gap-2 sm:flex-row"
+      >
+        <button
+          aria-busy="false"
+          class="flex w-full items-center justify-center gap-2 rounded-xl bg-mint py-3 text-sm font-bold text-black transition-all hover:scale-[1.01] hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+          type="button"
+        >
+          Verify & Enable
+        </button>
+        <button
+          class="flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 py-3 text-sm font-bold text-white transition-all hover:bg-white/10 sm:w-auto sm:px-6"
+          type="button"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
+`;

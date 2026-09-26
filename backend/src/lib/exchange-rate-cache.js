@@ -56,6 +56,9 @@ export class CacheLoadTimeoutError extends Error {
   constructor(timeoutMs) {
     super(`Exchange rate load timed out after ${timeoutMs}ms`);
     this.name = 'CacheLoadTimeoutError';
+    // `status` is what the Express error handler reads; `statusCode`
+    // matches ExchangeRateError.
+    this.status = 504;
     this.statusCode = 504;
   }
 }

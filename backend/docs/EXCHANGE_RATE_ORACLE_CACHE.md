@@ -134,10 +134,33 @@ not only on `prune()`.
   not `slippage` or `source_account`. The route always uses the default
   slippage.
 
-## 7. Tests
+## 7. Tests (#1446)
 
 | Suite | Scope |
 |---|---|
-| `src/lib/exchange-rate-cache.test.js` | LRU/TTL plus single-flight, invalidation races, timeouts |
-| `src/lib/exchange-rate-coordinator.test.js` | lock semantics, leader/follower, takeover, fail-open, poisoned entries |
-| `src/services/exchangeRateService.test.js` | service wiring, burst coalescing, shared reuse, invalidation |
+| `src/lib/exchange-rate-cache.test.js` | LRU/TTL plus single-flight, invalidation races, sync-throwing loaders, timeouts, gauges |
+| `src/lib/exchange-rate-coordinator.test.js` | lock ownership and expiry, leader/follower, leader failure and crash takeover, wait-timeout fallback, fail-open, poisoned shared entries |
+| `src/services/exchangeRateService.test.js` | service wiring, burst coalescing, `NoPathFoundError` fan-out, shared reuse, cross-instance invalidation, Redis outage |
+| `tests/integration/exchange-rate-cache.test.js` | real HTTP stack on `GET /api/path-payment-quote/:id`: 40-request burst → 1 Horizon call, distinct pairs, 404/502 fan-out without caching, 504 on hung Horizon, invalidation mid-flight, `/metrics`, Redis coordination, poisoned entry, Redis down |
+| `load-tests/exchange-rate-cache-stress.test.js` | 5k concurrent → 1 call; 20k over 250 keys → 250 calls; LRU churn; invalidation storm; failure isolation; 8 simulated instances sharing Redis → 1 call per key; cold-instance reuse; lock-holder crash; Redis outage mid-burst; stuck lock; leak check |
+
+`tests/helpers/fake-redis.js` is an in-memory Redis (SET NX/PX, GET, DEL,
+compare-and-delete EVAL, TTL expiry, injectable latency and failures). Many
+coordinators can share one instance to simulate a scaled deployment
+deterministically, without a live Redis.
+
+HTTP bursts wait until every request has joined the in-flight load, using
+`exchange_rate_cache_coalesced_requests_total`, before releasing the stubbed
+Horizon response. supertest opens a separate server per request, so arrival
+order is otherwise not guaranteed.
+
+The suites were mutation-checked against `exchange-rate-cache.js`. Disabling
+single-flight fails 16 tests. Dropping the invalidation guard fails 4.
+
+```
+npx vitest run src/lib/exchange-rate-cache.test.js \
+               src/lib/exchange-rate-coordinator.test.js \
+               src/services/exchangeRateService.test.js \
+               tests/integration/exchange-rate-cache.test.js
+npm run test:load -- exchange-rate-cache-stress
+```

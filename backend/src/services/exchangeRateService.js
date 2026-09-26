@@ -8,6 +8,14 @@
  *   3. Slippage application + response shaping
  *   4. Prometheus metrics
  *
+ * Concurrency control (issue #1445):
+ *   - Concurrent misses for the same quote share ONE load per process
+ *     (ExchangeRateCache.getOrLoad single-flight).
+ *   - When configureExchangeRateCoordination() has been given a live Redis
+ *     client, that load is further coordinated across instances by a
+ *     distributed lock + shared quote store (exchange-rate-coordinator.js).
+ *     Coordination fails open to a direct Horizon query.
+ *
  * The route handler calls getExchangeRateQuote() and only handles HTTP concerns;
  * all exchange-rate logic lives here.
  */
@@ -17,9 +25,42 @@ import {
   getExchangeRateCache,
   generateRateCacheKey,
 } from '../lib/exchange-rate-cache.js';
+import { ExchangeRateCoordinator } from '../lib/exchange-rate-coordinator.js';
 import { logger } from '../lib/logger.js';
 
 const DEFAULT_SLIPPAGE = parseFloat(process.env.PATH_PAYMENT_SLIPPAGE ?? '0.01');
+
+/** Upper bound on a single quote load, so waiters are never pinned forever. */
+const LOAD_TIMEOUT_MS = (() => {
+  const raw = Number.parseInt(process.env.EXCHANGE_RATE_LOAD_TIMEOUT_MS ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 15_000;
+})();
+
+/** @type {ExchangeRateCoordinator|null} */
+let coordinator = null;
+
+/**
+ * Enable cross-instance coordination. Call once at startup with a connected
+ * Redis client; passing a missing/closed client leaves coordination disabled.
+ *
+ * @param {object} opts
+ * @param {object|null} opts.redisClient
+ * @returns {boolean} whether coordination is enabled
+ */
+export function configureExchangeRateCoordination({ redisClient, ...options } = {}) {
+  if (!redisClient?.isOpen || typeof redisClient.sendCommand !== 'function') {
+    coordinator = null;
+    return false;
+  }
+  coordinator = new ExchangeRateCoordinator({ redisClient, ...options });
+  logger.info('Exchange-rate cache distributed coordination enabled');
+  return true;
+}
+
+/** Disable cross-instance coordination (test isolation / shutdown). */
+export function resetExchangeRateCoordination() {
+  coordinator = null;
+}
 
 export class ExchangeRateError extends Error {
   constructor(message, statusCode = 502) {
@@ -67,18 +108,50 @@ export async function getExchangeRateQuote({
     destAssetIssuer,
   );
 
-  const cached = cache.get(cacheKey);
-  if (cached.hit && !cached.stale) {
-    logger.debug('exchange_rate_cache: HIT');
-    return { ...cached.data, cached: true };
+  const fetchFromHorizon = () => fetchQuoteFromHorizon({
+    sourceAssetCode,
+    sourceAssetIssuer,
+    destAssetCode,
+    destAssetIssuer,
+    destAmount,
+    sourceAccount,
+    slippage,
+  });
+
+  // Captured per call so a later reconfiguration cannot change an in-flight load.
+  const activeCoordinator = coordinator;
+  const loader = activeCoordinator
+    ? async () => {
+        const { data, source } = await activeCoordinator.load(cacheKey, fetchFromHorizon);
+        // A quote reused from a peer instance never reached Horizon here.
+        return { ...data, cached: source === 'shared' };
+      }
+    : fetchFromHorizon;
+
+  const { data, source } = await cache.getOrLoad(cacheKey, loader, {
+    timeoutMs: LOAD_TIMEOUT_MS,
+  });
+
+  if (source === 'loader') {
+    logger.debug('exchange_rate_cache: MISS — loaded');
+    return data;
   }
 
-  if (cached.hit && cached.stale) {
-    logger.debug('exchange_rate_cache: STALE — revalidating');
-  }
+  // 'cache' (fresh hit) or 'coalesced' (joined another caller's load):
+  // either way this request did not query Horizon itself.
+  logger.debug(`exchange_rate_cache: ${source === 'cache' ? 'HIT' : 'COALESCED'}`);
+  return { ...data, cached: true };
+}
 
-  logger.debug('exchange_rate_cache: MISS — querying Horizon');
-
+async function fetchQuoteFromHorizon({
+  sourceAssetCode,
+  sourceAssetIssuer,
+  destAssetCode,
+  destAssetIssuer,
+  destAmount,
+  sourceAccount,
+  slippage,
+}) {
   const path = await findStrictReceivePaths({
     sourceAccount,
     destAssetCode,
@@ -107,7 +180,6 @@ export async function getExchangeRateQuote({
     cached:                  false,
   };
 
-  cache.set(cacheKey, quote);
   return quote;
 }
 
@@ -124,5 +196,14 @@ export function invalidateExchangeRateQuote(
 ) {
   const cache = getExchangeRateCache();
   const key = generateRateCacheKey(sourceAsset, destAsset, destAmount, sourceAssetIssuer, destAssetIssuer);
-  return cache.delete(key);
+  const removed = cache.delete(key);
+
+  // Propagate to peers via the shared store. Fire-and-forget keeps this
+  // function synchronous for existing callers; failures only mean peers
+  // keep the quote until its short TTL expires.
+  coordinator?.invalidate(key).catch((err) => {
+    logger.warn({ err: err?.message }, 'Failed to invalidate shared exchange-rate quote');
+  });
+
+  return removed;
 }

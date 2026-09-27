@@ -71,3 +71,15 @@ verify_output.txt
 # ── Lock files (keep pnpm-lock.yaml, ignore others) ───────────────
 # Root-level package-lock from accidental npm installs
 package-lock.json!.env.sample
+
+# ── Additional ignores ────────────────────────────────────────────
+**/__snapshots__/
+**/*.snap
+*.swp
+*.swo
+*.tmp
+*.temp
+logs/
+**/logs/
+.env.local
+.env.*.local

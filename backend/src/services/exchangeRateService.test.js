@@ -34,11 +34,15 @@ describe('getExchangeRateQuote', () => {
   beforeEach(() => {
     resetExchangeRateCache();
     vi.clearAllMocks();
+    process.env.EXCHANGE_RATE_ORACLE_RETRY_BASE_DELAY_MS = '0';
+    process.env.EXCHANGE_RATE_ORACLE_RETRY_MAX_DELAY_MS = '0';
     findStrictReceivePaths.mockResolvedValue(MOCK_PATH);
   });
 
   afterEach(() => {
     resetExchangeRateCache();
+    delete process.env.EXCHANGE_RATE_ORACLE_RETRY_BASE_DELAY_MS;
+    delete process.env.EXCHANGE_RATE_ORACLE_RETRY_MAX_DELAY_MS;
   });
 
   it('returns a quote with correct fields', async () => {
@@ -96,13 +100,36 @@ describe('getExchangeRateQuote', () => {
     }
   });
 
-  it('propagates Horizon errors as-is', async () => {
+  it('propagates Horizon errors as-is after retries are exhausted', async () => {
     const horizonErr = new Error('Horizon unavailable');
     horizonErr.status = 503;
     findStrictReceivePaths.mockRejectedValue(horizonErr);
     await expect(
       getExchangeRateQuote({ sourceAssetCode: 'XLM', destAssetCode: 'USDC', destAmount: '1.0' }),
     ).rejects.toThrow('Horizon unavailable');
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(3);
+    expect(horizonErr.retryAttempts).toBe(3);
+  });
+
+  it('retries a transient Horizon failure and then returns the quote', async () => {
+    findStrictReceivePaths
+      .mockRejectedValueOnce(Object.assign(new Error('unavailable'), { status: 503 }))
+      .mockResolvedValueOnce(MOCK_PATH);
+    const quote = await getExchangeRateQuote({
+      sourceAssetCode: 'XLM',
+      destAssetCode: 'USDC',
+      destAmount: '1.0',
+    });
+    expect(quote.sourceAmount).toBe('0.5000000');
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a deterministic 400', async () => {
+    findStrictReceivePaths.mockRejectedValue(Object.assign(new Error('bad request'), { status: 400 }));
+    await expect(
+      getExchangeRateQuote({ sourceAssetCode: 'XLM', destAssetCode: 'USDC', destAmount: '1.0' }),
+    ).rejects.toThrow('bad request');
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(1);
   });
 
   it('applies custom slippage correctly', async () => {
@@ -153,6 +180,8 @@ describe('concurrency control (issue #1445)', () => {
     resetExchangeRateCache();
     resetExchangeRateCoordination();
     vi.clearAllMocks();
+    process.env.EXCHANGE_RATE_ORACLE_RETRY_BASE_DELAY_MS = '0';
+    process.env.EXCHANGE_RATE_ORACLE_RETRY_MAX_DELAY_MS = '0';
     findStrictReceivePaths.mockResolvedValue(MOCK_PATH);
   });
 

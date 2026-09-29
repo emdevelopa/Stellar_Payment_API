@@ -36,6 +36,11 @@ import {
   exchangeRateCacheLoadTimeouts,
   exchangeRateCacheStaleWritesPrevented,
 } from './path-payment-metrics.js';
+import {
+  classifyOracleLoadError,
+  recordOracleLoad,
+  recordOracleLookup,
+} from './exchange-rate-oracle-telemetry.js';
 
 /**
  * Default cache metrics wired to the granular path-payment series (issue #1048)
@@ -142,6 +147,7 @@ export class ExchangeRateCache {
     const entry = this.cache.get(key);
     if (!entry) {
       this.metrics?.miss?.inc?.({ cache: 'exchange_rate' });
+      recordOracleLookup('miss');
       return { hit: false, data: null, stale: false };
     }
 
@@ -150,11 +156,13 @@ export class ExchangeRateCache {
     if (age > this.staleToleranceMs) {
       this.cache.delete(key);
       this.metrics?.miss?.inc?.({ cache: 'exchange_rate' });
+      recordOracleLookup('miss');
       return { hit: false, data: null, stale: false };
     }
 
     const stale = age > this.ttlMs;
     this.metrics?.hit?.inc?.({ cache: 'exchange_rate', stale: stale ? '1' : '0' });
+    recordOracleLookup(stale ? 'stale' : 'hit');
 
     // Refresh recency in LRU order
     this.cache.delete(key);
@@ -204,6 +212,7 @@ export class ExchangeRateCache {
 
     const entry = { promise: null, invalidated: false };
     entry.promise = (async () => {
+      const started = Date.now();
       try {
         // Invoke the loader on a later microtask so the entry is registered
         // in `inflight` first — even a synchronously throwing loader then
@@ -217,7 +226,11 @@ export class ExchangeRateCache {
         } else {
           this.set(key, data);
         }
+        recordOracleLoad('success', Date.now() - started);
         return data;
+      } catch (err) {
+        recordOracleLoad(classifyOracleLoadError(err), Date.now() - started, err);
+        throw err;
       } finally {
         // Only remove our own entry; an invalidation may already have
         // detached it and a newer load may occupy the slot.

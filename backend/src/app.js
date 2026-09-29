@@ -48,6 +48,7 @@ import {
 import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
 import oracleRouter from "./routes/oracle.js";
 import { getPaymentSessionValidatorHealth } from "./lib/payment-session-validator.js";
+import { getExchangeRateOracleHealth } from "./lib/exchange-rate-oracle-telemetry.js";
 import { configureExchangeRateCoordination } from "./services/exchangeRateService.js";
 
 export async function createApp({ redisClient }) {
@@ -260,6 +261,7 @@ export async function createApp({ redisClient }) {
         redis: redisAvailable ? "ok" : "unavailable",
         // Informational only — does not affect `ok` / the status code.
         payment_session_validator: getPaymentSessionValidatorHealth().status,
+        exchange_rate_oracle_cache: getExchangeRateOracleHealth().status,
       },
     });
   });
@@ -285,6 +287,30 @@ export async function createApp({ redisClient }) {
    */
   app.get("/health/payment-session-validator", (_req, res) => {
     const health = getPaymentSessionValidatorHealth();
+    res.status(health.status === "unhealthy" ? 503 : 200).json(health);
+  });
+
+  /**
+   * @swagger
+   * /health/exchange-rate-oracle-cache:
+   *   get:
+   *     summary: Exchange Rate Oracle Cache health telemetry
+   *     description: >
+   *       Rolling-window load and lookup counts plus derived status for the
+   *       exchange-rate quote cache (issue #1443). Returns 503 only when the
+   *       cache is unhealthy (internal error ratio above threshold). A
+   *       degraded status (timeouts or stale lookups) still returns 200.
+   *       The body contains no quotes, asset codes, or account ids.
+   *     tags: [Health]
+   *     security: []
+   *     responses:
+   *       200:
+   *         description: Cache healthy or degraded
+   *       503:
+   *         description: Cache unhealthy
+   */
+  app.get("/health/exchange-rate-oracle-cache", (_req, res) => {
+    const health = getExchangeRateOracleHealth();
     res.status(health.status === "unhealthy" ? 503 : 200).json(health);
   });
 

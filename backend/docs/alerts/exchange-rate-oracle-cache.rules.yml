@@ -1,0 +1,89 @@
+# Prometheus alerting rules for the Exchange Rate Oracle Cache (issue #1443).
+#
+# Load with:   rule_files: ["docs/alerts/exchange-rate-oracle-cache.rules.yml"]
+# Validate:    promtool check rules docs/alerts/exchange-rate-oracle-cache.rules.yml
+#
+# Metric reference: docs/EXCHANGE_RATE_ORACLE_CACHE.md
+
+groups:
+  - name: exchange-rate-oracle-cache
+    rules:
+      - alert: ExchangeRateOracleCacheUnhealthy
+        expr: max(exchange_rate_oracle_cache_health_state) >= 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Exchange rate oracle cache reports unhealthy
+          description: >
+            Rolling-window internal error ratio is above threshold. Quote loads
+            are failing. See GET /health/exchange-rate-oracle-cache for counts
+            and reasons. "No path" results are excluded from this ratio.
+
+      - alert: ExchangeRateOracleCacheHighErrorRatio
+        expr: |
+          sum(rate(exchange_rate_oracle_cache_loads_total{outcome="error"}[10m]))
+            /
+          clamp_min(sum(rate(exchange_rate_oracle_cache_loads_total[10m])), 1e-9)
+            > 0.05
+          and sum(increase(exchange_rate_oracle_cache_loads_total[10m])) >= 20
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of exchange-rate oracle loads are internal errors
+          description: >
+            Horizon or the quote loader is failing. Check logs for
+            "Exchange rate oracle cache load failed".
+
+      - alert: ExchangeRateOracleCacheLoadTimeouts
+        expr: sum(increase(exchange_rate_oracle_cache_loads_total{outcome="timeout"}[10m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Exchange-rate oracle loads are timing out
+          description: >
+            More than 5 loads hit the load timeout in 10m. Waiters receive 504.
+            A hung Horizon call is the usual cause.
+
+      - alert: ExchangeRateOracleCacheHighStaleRatio
+        expr: |
+          sum(rate(exchange_rate_oracle_cache_lookups_total{result="stale"}[10m]))
+            /
+          clamp_min(sum(rate(exchange_rate_oracle_cache_lookups_total[10m])), 1e-9)
+            > 0.5
+          and sum(increase(exchange_rate_oracle_cache_lookups_total[10m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Most exchange-rate cache lookups are past the fresh TTL
+          description: >
+            Quotes are being refreshed constantly. The TTL may be shorter than
+            the request interval, or invalidation is too aggressive.
+
+      - alert: ExchangeRateOracleCacheRetriesExhausted
+        expr: sum(increase(exchange_rate_oracle_cache_retries_total{result="exhausted"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Exchange-rate oracle retries were exhausted
+          description: >
+            A quote load kept failing after exponential backoff. The last error
+            is returned to the caller and is not cached. Check Horizon.
+
+      - alert: ExchangeRateOracleCacheSlowLoads
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(exchange_rate_oracle_cache_load_duration_seconds_bucket[10m]))
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Exchange-rate oracle load p99 latency above 5s
+          description: >
+            Upstream quote latency is high. The HTTP load timeout is 15s by
+            default (EXCHANGE_RATE_LOAD_TIMEOUT_MS).

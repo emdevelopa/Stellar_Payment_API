@@ -7,6 +7,7 @@ import {
   normalizeApiKeyExpiry,
 } from "../lib/merchant-payload-validation.js";
 import { sendWebhook } from "../lib/webhooks.js";
+import { invalidateStellarToml } from "../lib/sep0001-toml-coordinator.js";
 import { getPayloadForVersion } from "../webhooks/resolver.js";
 
 const DEFAULT_WEBHOOK_SECRET_ROTATION_GRACE_HOURS = 24;
@@ -269,6 +270,9 @@ export const merchantService = {
       error.status = 500;
       throw error;
     }
+
+    // Branding feeds the SEP-0001 [ORG] section; drop cached copies everywhere.
+    await invalidateStellarToml(merchantId);
 
     return { branding_config: data.branding_config };
   },

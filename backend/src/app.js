@@ -1,7 +1,6 @@
 import cors from "cors";
 import helmet from "helmet";
 import express from "express";
-import { Server as SocketIOServer } from "socket.io";
 import swaggerUi from "swagger-ui-express";
 import { ZodError } from "zod";
 import path from "node:path";
@@ -49,6 +48,7 @@ import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
 import oracleRouter from "./routes/oracle.js";
 import { getPaymentSessionValidatorHealth } from "./lib/payment-session-validator.js";
 import { configureExchangeRateCoordination } from "./services/exchangeRateService.js";
+import { createRelayServer } from "./lib/websocket-relay-server.js";
 
 export async function createApp({ redisClient }) {
   const app = express();
@@ -62,64 +62,13 @@ export async function createApp({ redisClient }) {
   const __dirname = path.dirname(__filename);
   const publicDir = path.join(__dirname, "..", "public");
 
-  // Create socket.io instance (attached to HTTP server in server.js)
-  const io = new SocketIOServer({
-    cors: {
-      origin: process.env.CORS_ALLOWED_ORIGINS
-        ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-        : ["http://localhost:3000"],
-      credentials: true,
-    },
-  });
-
-  const checkoutRoomName = (paymentId) => `checkout:${paymentId}`;
-  const emitCheckoutPresence = (paymentId) => {
-    const room = checkoutRoomName(paymentId);
-    const activeViewers = io.sockets.adapter.rooms.get(room)?.size ?? 0;
-
-    io.to(room).emit("checkout:presence", {
-      payment_id: paymentId,
-      active_viewers: activeViewers,
-    });
-  };
-
-  // Socket.io room management: clients join their merchant-specific room
-  io.on("connection", (socket) => {
-    const joinedCheckoutRooms = new Set();
-
-    socket.on("join:merchant", ({ merchant_id }) => {
-      if (typeof merchant_id === "string" && merchant_id.length > 0) {
-        socket.join(`merchant:${merchant_id}`);
-      }
-    });
-
-    socket.on("join:checkout", ({ payment_id }) => {
-      if (typeof payment_id !== "string" || payment_id.length === 0) {
-        return;
-      }
-
-      const room = checkoutRoomName(payment_id);
-      joinedCheckoutRooms.add(payment_id);
-      socket.join(room);
-      emitCheckoutPresence(payment_id);
-    });
-
-    socket.on("leave:checkout", ({ payment_id }) => {
-      if (typeof payment_id !== "string" || payment_id.length === 0) {
-        return;
-      }
-
-      joinedCheckoutRooms.delete(payment_id);
-      socket.leave(checkoutRoomName(payment_id));
-      emitCheckoutPresence(payment_id);
-    });
-
-    socket.on("disconnect", () => {
-      for (const paymentId of joinedCheckoutRooms) {
-        emitCheckoutPresence(paymentId);
-      }
-      joinedCheckoutRooms.clear();
-    });
+  // Create socket.io relay (attached to HTTP server in server.js). Inbound
+  // events are sanitized and strictly validated before use (issue #1452).
+  const io = createRelayServer({
+    corsOrigins: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+      : ["http://localhost:3000"],
+    logger,
   });
 
   // Make DB pool and io accessible on every request

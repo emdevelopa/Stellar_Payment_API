@@ -10,6 +10,7 @@
  */
 
 import jwt from "jsonwebtoken";
+import { sanitizeRelayPayload } from "./websocket-relay-validation.js";
 
 // ─── Allowed message fields ───────────────────────────────────────────────────
 
@@ -135,7 +136,8 @@ function verifyRelayToken(token, secret) {
  *
  * @param {any} msg - The parsed WebSocket message object
  * @returns {{ sanitized: object, warnings: string[] }}
- * @throws {Error} When `msg` is not a non-null object, or when required fields are missing
+ * @throws {Error} When `msg` is not a non-null object, when required fields are missing,
+ *   or (RelayValidationError) when a field value breaks the relay payload limits
  */
 function sanitizeRelayMessage(msg) {
   if (msg === null || typeof msg !== "object" || Array.isArray(msg)) {
@@ -145,10 +147,12 @@ function sanitizeRelayMessage(msg) {
   const warnings = [];
   const sanitized = {};
 
-  // Copy only allowed fields
+  // Copy only allowed fields, deep-sanitizing each value so nested payloads
+  // cannot carry prototype-pollution keys or control characters (issue #1452)
   for (const [key, value] of Object.entries(msg)) {
     if (ALLOWED_MESSAGE_FIELDS.has(key)) {
-      sanitized[key] = value;
+      const clean = sanitizeRelayPayload(value);
+      if (clean !== undefined) sanitized[key] = clean;
     } else {
       warnings.push(`Unknown field stripped: '${key}'`);
     }

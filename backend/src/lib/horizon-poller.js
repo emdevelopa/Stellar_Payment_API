@@ -46,6 +46,7 @@ import { sendReceiptEmail } from "./email.js";
 import { renderReceiptEmail } from "./email-templates.js";
 import { getPayloadForVersion } from "../webhooks/resolver.js";
 import { streamManager } from "./stream-manager.js";
+import { sanitizeOutboundPayload } from "./websocket-relay-validation.js";
 import { connectRedisClient, invalidatePaymentCache } from "./redis.js";
 import { logger } from "./logger.js";
 import {
@@ -790,7 +791,14 @@ function sleep(ms) {
 function notifyPaymentEvent(payment, { sseEvent, sseData, socketEvent, socketData }) {
   streamManager.notify(payment.id, sseEvent, sseData);
   if (_io && payment.merchant_id) {
-    _io.to(`merchant:${payment.merchant_id}`).emit(socketEvent, socketData);
+    let payload;
+    try {
+      payload = sanitizeOutboundPayload(socketData);
+    } catch (err) {
+      logger.warn({ err, paymentId: payment.id, socketEvent }, "Horizon poller: dropped unsafe socket payload");
+      return;
+    }
+    _io.to(`merchant:${payment.merchant_id}`).emit(socketEvent, payload);
   }
 }
 

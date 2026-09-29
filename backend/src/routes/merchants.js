@@ -23,6 +23,7 @@ import {
   setApiKeyExpirySchema,
 } from "../lib/merchant-payload-validation.js";
 import { renderReceiptEmail } from "../lib/email-templates.js";
+import { invalidateStellarToml } from "../lib/sep0001-toml-coordinator.js";
 import {
   createWebhookDomainVerificationState,
   readWebhookDomainVerification,
@@ -360,6 +361,9 @@ function createMerchantsRouter({
           error.status = 500;
           throw error;
         }
+
+        // Branding feeds the SEP-0001 [ORG] section; drop cached copies everywhere.
+        await invalidateStellarToml(req.merchant.id);
 
         res.json({ branding_config: data.branding_config });
       } catch (err) {

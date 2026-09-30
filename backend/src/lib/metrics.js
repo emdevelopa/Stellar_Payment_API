@@ -688,6 +688,51 @@ export const fraudDetectionCacheSize = new client.Gauge({
   help: "Current number of entries in the fraud detection risk score cache",
 });
 
+// Fraud Detection Engine — alert metrics & health telemetry (#1428)
+export const fraudDetectionAlertsFired = new client.Counter({
+  name: 'fraud_detection_alerts_fired_total',
+  help: 'Total number of fraud alerts fired (high-risk decisions)',
+  labelNames: ['merchant_id', 'risk_level', 'alert_type'],
+  registers: [register],
+});
+
+export const fraudDetectionHealthStatus = new client.Gauge({
+  name: 'fraud_detection_health_status',
+  help: 'Health status of the Fraud Detection Engine (1=healthy, 0=degraded)',
+  labelNames: ['component'],
+  registers: [register],
+});
+
+export const fraudDetectionRuleHits = new client.Counter({
+  name: 'fraud_detection_rule_hits_total',
+  help: 'Number of times each fraud detection rule was triggered',
+  labelNames: ['rule_name', 'merchant_id'],
+  registers: [register],
+});
+
+export const fraudDetectionEngineLatency = new client.Histogram({
+  name: 'fraud_detection_engine_latency_seconds',
+  help: 'Latency of the Fraud Detection Engine evaluation in seconds',
+  labelNames: ['merchant_id', 'risk_level'],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
+  registers: [register],
+});
+
+export const fraudDetectionCacheHealth = new client.Gauge({
+  name: 'fraud_detection_cache_health',
+  help: 'Cache health metrics for Fraud Detection Engine (size, hit rate)',
+  labelNames: ['metric_type'],
+  registers: [register],
+});
+
+export const fraudDetectionAnomalyScore = new client.Histogram({
+  name: 'fraud_detection_anomaly_score',
+  help: 'Distribution of anomaly scores computed by the Fraud Detection Engine',
+  labelNames: ['merchant_id'],
+  buckets: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+  registers: [register],
+});
+
 /**
  * Horizon Client Metrics (Issue #1106, #1108)
  */
@@ -1035,6 +1080,12 @@ register.registerMetric(fraudDetectionVelocityExceeded);
 register.registerMetric(fraudDetectionGeographicAnomaly);
 register.registerMetric(fraudDetectionMetadataAnomalies);
 register.registerMetric(fraudDetectionCacheSize);
+register.registerMetric(fraudDetectionAlertsFired);
+register.registerMetric(fraudDetectionHealthStatus);
+register.registerMetric(fraudDetectionRuleHits);
+register.registerMetric(fraudDetectionEngineLatency);
+register.registerMetric(fraudDetectionCacheHealth);
+register.registerMetric(fraudDetectionAnomalyScore);
 register.registerMetric(horizonClientOperations);
 register.registerMetric(horizonClientErrors);
 register.registerMetric(horizonClientRetries);

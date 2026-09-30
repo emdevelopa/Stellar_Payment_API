@@ -24,7 +24,14 @@ import {
   fraudDetectionGeographicAnomaly,
   fraudDetectionMetadataAnomalies,
   fraudDetectionCacheSize,
+  fraudDetectionAlertsFired,
+  fraudDetectionHealthStatus,
+  fraudDetectionRuleHits,
+  fraudDetectionEngineLatency,
+  fraudDetectionCacheHealth,
+  fraudDetectionAnomalyScore,
 } from "./metrics.js";
+import { sanitizeAndValidateFraudPayload, validateMerchantId } from "./fraud-detection-sanitizer.js";
 
 const RISK_THRESHOLDS = {
   low: 20,
@@ -90,6 +97,11 @@ function getCacheKey(key) {
 }
 
 export function clearCache(merchantId) {
+  const validation = validateMerchantId(merchantId);
+  if (!validation.valid) {
+    logger.warn({ errors: validation.errors }, '[FraudDetection] Invalid merchantId for cache clear');
+    return;
+  }
   const keysToDelete = [];
   for (const key of riskScoreCache.keys()) {
     if (key.startsWith(`${merchantId}:`)) {
@@ -283,8 +295,23 @@ function calculateBaseRiskScore(payment) {
   return { score, factors };
 }
 
-export function analyzePayment(payment, options = {}) {
-  const { includeHistoricalData = false } = options;
+export function analyzePayment(payment, merchantId) {
+  // Sanitize and validate payload before any processing (#1427)
+  const validation = sanitizeAndValidateFraudPayload(payment, merchantId);
+  if (!validation.valid) {
+    fraudDetectionPaymentsAnalyzed.inc();
+    logger.warn({ errors: validation.errors }, '[FraudDetection] Payload rejected due to validation errors');
+    return {
+      riskLevel: 'unknown',
+      riskScore: 0,
+      flags: ['validation_failed'],
+      errors: validation.errors,
+      cached: false,
+    };
+  }
+  // Use sanitized payment data from this point
+  payment = validation.payload;
+  merchantId = validation.merchantId;
 
   fraudDetectionPaymentsAnalyzed.inc();
 
@@ -295,20 +322,52 @@ export function analyzePayment(payment, options = {}) {
     return cached.analysis;
   }
 
+  // Start latency timer after cache check (#1428)
+  const endTimer = fraudDetectionEngineLatency.startTimer({ merchant_id: merchantId });
+
   const { score: baseScore, factors: baseFactors } = calculateBaseRiskScore(payment);
+
+  // Track individual rule hits (#1428)
+  for (const factor of baseFactors) {
+    if (factor.type === 'large_amount') {
+      fraudDetectionRuleHits.inc({ rule_name: 'large_amount', merchant_id: merchantId });
+    } else if (factor.type === 'stale_payment') {
+      fraudDetectionRuleHits.inc({ rule_name: 'stale_payment', merchant_id: merchantId });
+    } else if (factor.type === 'missing_recipient') {
+      fraudDetectionRuleHits.inc({ rule_name: 'missing_recipient', merchant_id: merchantId });
+    } else if (factor.type === 'invalid_recipient_format') {
+      fraudDetectionRuleHits.inc({ rule_name: 'invalid_recipient_format', merchant_id: merchantId });
+    }
+  }
 
   const paymentHash = `${payment.merchant_id}:${payment.recipient}:${payment.asset}`;
   const velocityAnomalies = checkVelocityAnomalies(paymentHash, Number(payment.amount));
   const velocityRisk = velocityAnomalies.length > 0 ? 20 : 0;
 
+  if (velocityAnomalies.length > 0) {
+    fraudDetectionRuleHits.inc({ rule_name: 'velocity_anomaly', merchant_id: merchantId });
+  }
+
   const geographicAnomalies = checkGeographicAnomalies(payment, []);
   const geographicRisk = geographicAnomalies.length > 0 ? 15 : 0;
+
+  if (geographicAnomalies.length > 0) {
+    fraudDetectionRuleHits.inc({ rule_name: 'geographic_anomaly', merchant_id: merchantId });
+  }
 
   const metadataAnomalies = checkMetadataAnomalies(payment);
   const metadataRisk = metadataAnomalies.length > 0 ? 10 : 0;
 
+  if (metadataAnomalies.length > 0) {
+    fraudDetectionRuleHits.inc({ rule_name: 'metadata_anomaly', merchant_id: merchantId });
+  }
+
   const memoAnomalies = checkMemoAnomalies(payment);
   const memoRisk = memoAnomalies.length > 0 ? 8 : 0;
+
+  if (memoAnomalies.length > 0) {
+    fraudDetectionRuleHits.inc({ rule_name: 'suspicious_memo', merchant_id: merchantId });
+  }
 
   const totalScore = Math.min(
     baseScore + velocityRisk + geographicRisk + metadataRisk + memoRisk,
@@ -332,9 +391,14 @@ export function analyzePayment(payment, options = {}) {
 
   if (totalScore >= RISK_THRESHOLDS.high) {
     fraudDetectionHighRiskDetected.inc({ level: riskLevel });
+    // Fire alert counter for high/critical risk payments (#1428)
+    fraudDetectionAlertsFired.inc({ merchant_id: merchantId, risk_level: riskLevel, alert_type: 'payment_risk' });
   }
 
   fraudDetectionRiskScore.observe(totalScore);
+
+  // Record anomaly score for distribution tracking (#1428)
+  fraudDetectionAnomalyScore.observe({ merchant_id: merchantId }, totalScore);
 
   const allAnomalies = [
     ...baseFactors,
@@ -382,6 +446,9 @@ export function analyzePayment(payment, options = {}) {
     "Fraud detection analysis complete",
   );
 
+  // End latency timer with risk level label (#1428)
+  endTimer({ risk_level: riskLevel });
+
   return analysis;
 }
 
@@ -414,4 +481,22 @@ export function resetMetrics() {
   riskScoreCache.clear();
   velocityTracker.clear();
   fraudDetectionCacheSize.set(0);
+}
+
+/**
+ * Returns health status of the Fraud Detection Engine and updates health telemetry metrics (#1428).
+ */
+export function getFraudDetectionHealthStatus() {
+  const cacheSize = riskScoreCache.size;
+  const isHealthy = cacheSize <= MAX_RISK_CACHE_ENTRIES;
+  fraudDetectionHealthStatus.set({ component: 'cache' }, isHealthy ? 1 : 0);
+  fraudDetectionHealthStatus.set({ component: 'engine' }, 1);
+  fraudDetectionCacheHealth.set({ metric_type: 'size' }, cacheSize);
+  fraudDetectionCacheHealth.set({ metric_type: 'max_entries' }, MAX_RISK_CACHE_ENTRIES);
+  return {
+    status: isHealthy ? 'healthy' : 'degraded',
+    cacheSize,
+    maxCacheEntries: MAX_RISK_CACHE_ENTRIES,
+    timestamp: new Date().toISOString(),
+  };
 }

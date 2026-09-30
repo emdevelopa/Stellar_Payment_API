@@ -28,7 +28,7 @@ Short-lived JWTs (60s expiry) signed with `X402_JWT_SECRET`. Agents include them
 This project makes real Stellar testnet transactions:
 - Payment creation stores recipient Stellar addresses
 - Horizon polling confirms on-chain USDC/XLM payments
-- x402 agent submits real USDC payments on testnet
+- x402 agent submits real USDC payments on testnet.
 - All transactions verifiable on [Stellar Expert (testnet)](https://stellar.expert/explorer/testnet)
 
 USDC issuer (testnet): `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`

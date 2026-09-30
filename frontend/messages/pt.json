@@ -16,12 +16,15 @@
     "codeInputPlaceholder": "000000",
     "verifyButton": "Verificar e ativar",
     "verifying": "Verificando…",
+    "retryButton": "Tentar novamente",
+    "stepAnnouncement": "Etapa {current} de {total}",
     "successTitle": "Autenticacao em duas etapas ativada",
     "successDescription": "Sua conta esta agora protegida. Voce sera solicitado um codigo em cada login.",
     "error": {
       "setupFailed": "Falha ao iniciar a configuracao de 2FA. Tente novamente.",
       "invalidCode": "Codigo invalido. Tente novamente.",
-      "codeLength": "Insira o codigo de 6 digitos do seu aplicativo de autenticacao."
+      "codeLength": "Insira o codigo de 6 digitos do seu aplicativo de autenticacao.",
+      "networkFailure": "Nao foi possivel conectar ao servidor. Verifique sua conexao e tente novamente — seu codigo e a configuracao QR continuam aqui."
     }
   },
   "localeSwitcher": {

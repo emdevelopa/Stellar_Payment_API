@@ -2,200 +2,89 @@
  * Robust three-state Circuit Breaker for the Audit Logger (issue #771).
  * Supports CLOSED, OPEN, and HALF_OPEN states following Drips Wave standards.
  *
- * Enhanced in issue #1432 with:
- * - sanitizePayload() — allowlist filtering, string truncation, sensitive field
- *   redaction, and prototype-pollution protection.
- * - validatePayload() — strict field-level validation with descriptive errors.
- */
-
-// ---------------------------------------------------------------------------
-// Issue #1432 — Payload Sanitization and Strict Validation
-// ---------------------------------------------------------------------------
-
-/**
- * Fields that are allowed through sanitization. Any key not in this list is
- * stripped from the payload before processing.
+ * Issue #1433 — Prometheus alert metrics and health telemetry:
+ *   Adds Gauge/Counter/Histogram prom-client metrics for circuit state,
+ *   state transitions, failures, successes, open duration, health checks,
+ *   and retry attempts. Exposes a static getMetrics() helper.
  *
- * @type {Set<string>}
+ * Issue #1434 — Automated retry with exponential backoff:
+ *   Adds execute(fn, options) method with configurable maxRetries,
+ *   baseDelayMs * 2^attempt + jitter formula, optional retryableErrors
+ *   filter, and CircuitOpenError for fast-fail when circuit is open.
  */
-const PAYLOAD_ALLOWLIST = new Set([
-  "event",
-  "timestamp",
-  "merchantId",
-  "userId",
-  "sessionId",
-  "paymentId",
-  "amount",
-  "asset",
-  "status",
-  "metadata",
-  "ipAddress",
-  "userAgent",
-  "requestId",
-  "correlationId",
-  "source",
-  "action",
-  "result",
-  "errorCode",
-  "errorMessage",
-]);
+
+import client from "prom-client";
+
+// ── Prometheus metrics (self-contained, own sub-registry) ────────────────────
+// All metric names are prefixed with `audit_circuit_breaker_` to avoid any
+// collision with the application-wide metrics defined in metrics.js.
+
+const _cbRegistry = new client.Registry();
+
+const cbStateGauge = new client.Gauge({
+  name: "audit_circuit_breaker_state",
+  help: "Current state of the audit circuit breaker (0=CLOSED, 1=OPEN, 2=HALF_OPEN)",
+  labelNames: ["label"],
+  registers: [_cbRegistry],
+});
+
+const cbTransitionsTotal = new client.Counter({
+  name: "audit_circuit_breaker_transitions_total",
+  help: "Total number of audit circuit breaker state transitions",
+  labelNames: ["label", "from_state", "to_state"],
+  registers: [_cbRegistry],
+});
+
+const cbFailuresTotal = new client.Counter({
+  name: "audit_circuit_breaker_failures_total",
+  help: "Total number of audit circuit breaker failure recordings",
+  labelNames: ["label"],
+  registers: [_cbRegistry],
+});
+
+const cbSuccessesTotal = new client.Counter({
+  name: "audit_circuit_breaker_successes_total",
+  help: "Total number of audit circuit breaker success recordings",
+  labelNames: ["label"],
+  registers: [_cbRegistry],
+});
+
+const cbOpenDurationSeconds = new client.Histogram({
+  name: "audit_circuit_breaker_open_duration_seconds",
+  help: "Duration the audit circuit breaker spent in OPEN state before recovering",
+  labelNames: ["label"],
+  buckets: [1, 5, 15, 30, 60, 120, 300],
+  registers: [_cbRegistry],
+});
+
+const cbHealthCheckTotal = new client.Counter({
+  name: "audit_circuit_breaker_health_check_total",
+  help: "Total number of audit circuit breaker health checks (isOpen calls)",
+  labelNames: ["label", "result"],
+  registers: [_cbRegistry],
+});
+
+const cbRetryAttemptTotal = new client.Counter({
+  name: "audit_circuit_breaker_retry_attempt_total",
+  help: "Total number of retry attempts made inside execute()",
+  labelNames: ["label", "attempt"],
+  registers: [_cbRegistry],
+});
+
+// ── CircuitOpenError ─────────────────────────────────────────────────────────
 
 /**
- * Field names whose values must be redacted (replaced with "[REDACTED]").
- * Matched case-insensitively against each key.
- *
- * @type {RegExp}
+ * Thrown by execute() when the circuit is OPEN and the call is short-circuited.
  */
-const SENSITIVE_FIELD_PATTERN = /^(password|secret|token|apikey|privatekey|authorization)$/i;
-
-/**
- * Keys that indicate prototype-pollution attempts and must be blocked.
- *
- * @type {Set<string>}
- */
-const PROTOTYPE_POLLUTION_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-
-/** Maximum allowed string value length before truncation. */
-const MAX_STRING_LENGTH = 1000;
-
-/**
- * Custom error thrown when payload validation fails.
- */
-export class ValidationError extends Error {
-  /**
-   * @param {string} field  - The name of the field that failed validation.
-   * @param {string} reason - Human-readable explanation of the failure.
-   */
-  constructor(field, reason) {
-    super(`Validation failed for field "${field}": ${reason}`);
-    this.name = "ValidationError";
-    this.field = field;
-    this.reason = reason;
+export class CircuitOpenError extends Error {
+  constructor(label) {
+    super(`Circuit breaker is OPEN for '${label}' — call rejected`);
+    this.name = "CircuitOpenError";
+    this.code = "CIRCUIT_OPEN";
   }
 }
 
-/**
- * Returns a sanitized copy of `payload` by:
- * 1. Stripping keys not present in PAYLOAD_ALLOWLIST.
- * 2. Truncating string values longer than MAX_STRING_LENGTH characters.
- * 3. Removing fields whose key names indicate prototype-pollution attempts.
- * 4. Redacting sensitive fields (password, secret, token, apiKey, privateKey,
- *    authorization) by replacing their values with "[REDACTED]".
- *
- * This function does **not** mutate the original payload.
- *
- * @param {object} payload - Raw incoming payload object.
- * @returns {object} Clean, sanitized copy.
- */
-export function sanitizePayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return {};
-  }
-
-  const clean = {};
-
-  for (const key of Object.keys(payload)) {
-    // 1. Block prototype-pollution keys
-    if (PROTOTYPE_POLLUTION_KEYS.has(key)) {
-      continue;
-    }
-
-    // 2. Strip keys not in the allowlist
-    if (!PAYLOAD_ALLOWLIST.has(key)) {
-      continue;
-    }
-
-    const value = payload[key];
-
-    // 3. Redact sensitive fields
-    if (SENSITIVE_FIELD_PATTERN.test(key)) {
-      clean[key] = "[REDACTED]";
-      continue;
-    }
-
-    // 4. Truncate long strings
-    if (typeof value === "string" && value.length > MAX_STRING_LENGTH) {
-      clean[key] = value.slice(0, MAX_STRING_LENGTH);
-      continue;
-    }
-
-    clean[key] = value;
-  }
-
-  return clean;
-}
-
-/**
- * Validates that `payload` satisfies all required field constraints.
- *
- * Rules:
- * - `event`      — required, non-empty string matching `/^[a-zA-Z0-9._:-]{1,100}$/`
- * - `timestamp`  — required, valid ISO 8601 string **or** finite Unix epoch number
- * - `merchantId` — required, non-empty string (UUID or alphanumeric, max 128 chars)
- *
- * @param {object} payload - Payload to validate (typically already sanitized).
- * @returns {true} Returns `true` when all checks pass.
- * @throws {ValidationError} When any required field is missing or invalid.
- */
-export function validatePayload(payload) {
-  if (!payload || typeof payload !== "object") {
-    throw new ValidationError("payload", "must be a non-null object");
-  }
-
-  // --- event ---
-  if (payload.event === undefined || payload.event === null) {
-    throw new ValidationError("event", "required field is missing");
-  }
-  if (typeof payload.event !== "string" || payload.event.trim() === "") {
-    throw new ValidationError("event", "must be a non-empty string");
-  }
-  if (!/^[a-zA-Z0-9._:-]{1,100}$/.test(payload.event)) {
-    throw new ValidationError(
-      "event",
-      "must match /^[a-zA-Z0-9._:-]{1,100}$/ (only alphanumeric, dot, underscore, colon, or hyphen; 1–100 chars)",
-    );
-  }
-
-  // --- timestamp ---
-  if (payload.timestamp === undefined || payload.timestamp === null) {
-    throw new ValidationError("timestamp", "required field is missing");
-  }
-  if (typeof payload.timestamp === "number") {
-    if (!Number.isFinite(payload.timestamp) || payload.timestamp < 0) {
-      throw new ValidationError("timestamp", "numeric Unix epoch must be a finite non-negative number");
-    }
-  } else if (typeof payload.timestamp === "string") {
-    const parsed = Date.parse(payload.timestamp);
-    if (Number.isNaN(parsed)) {
-      throw new ValidationError("timestamp", "string timestamp must be a valid ISO 8601 date");
-    }
-  } else {
-    throw new ValidationError("timestamp", "must be a valid ISO 8601 string or Unix epoch number");
-  }
-
-  // --- merchantId ---
-  if (payload.merchantId === undefined || payload.merchantId === null) {
-    throw new ValidationError("merchantId", "required field is missing");
-  }
-  if (typeof payload.merchantId !== "string" || payload.merchantId.trim() === "") {
-    throw new ValidationError("merchantId", "must be a non-empty string");
-  }
-  if (payload.merchantId.length > 128) {
-    throw new ValidationError("merchantId", "must not exceed 128 characters");
-  }
-  if (!/^[a-zA-Z0-9_-]+$/.test(payload.merchantId)) {
-    throw new ValidationError(
-      "merchantId",
-      "must be alphanumeric (letters, digits, hyphens, or underscores only)",
-    );
-  }
-
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// Circuit Breaker
-// ---------------------------------------------------------------------------
+// ── State constants ──────────────────────────────────────────────────────────
 
 export const CircuitState = {
   CLOSED: "CLOSED",
@@ -203,7 +92,29 @@ export const CircuitState = {
   HALF_OPEN: "HALF_OPEN",
 };
 
+/** Numeric value for the state gauge (matches the labels in alerting rules). */
+const STATE_GAUGE_VALUE = {
+  [CircuitState.CLOSED]: 0,
+  [CircuitState.OPEN]: 1,
+  [CircuitState.HALF_OPEN]: 2,
+};
+
+// ── AuditCircuitBreaker ──────────────────────────────────────────────────────
+
 export class AuditCircuitBreaker {
+  /**
+   * @param {object}   opts
+   * @param {number}   [opts.failureThreshold=5]      - Failures before OPEN
+   * @param {number}   [opts.resetTimeoutMs=60000]     - OPEN hold time in ms
+   * @param {number}   [opts.halfOpenRequired=2]       - Successes to re-CLOSE
+   * @param {string}   [opts.label="circuit-breaker"]  - Label for logs & metrics
+   * @param {Function} [opts.onClose]                  - Callback on CLOSED transition
+   * @param {Function} [opts.onOpen]                   - Callback on OPEN transition
+   * @param {Function} [opts.onHalfOpen]               - Callback on HALF_OPEN transition
+   * @param {number}   [opts.maxRetries=3]             - Max retries in execute()
+   * @param {number}   [opts.retryBaseDelayMs=100]     - Base delay for backoff in execute()
+   * @param {string[]} [opts.retryableErrors]          - Substrings; all errors retried if absent
+   */
   constructor({
     failureThreshold = 5,
     resetTimeoutMs = 60000,
@@ -212,6 +123,9 @@ export class AuditCircuitBreaker {
     onClose = null,
     onOpen = null,
     onHalfOpen = null,
+    maxRetries = 3,
+    retryBaseDelayMs = 100,
+    retryableErrors = null,
   } = {}) {
     this.failureThreshold = failureThreshold;
     this.resetTimeoutMs = resetTimeoutMs;
@@ -220,54 +134,114 @@ export class AuditCircuitBreaker {
     this.onClose = onClose;
     this.onOpen = onOpen;
     this.onHalfOpen = onHalfOpen;
+    this.maxRetries = maxRetries;
+    this.retryBaseDelayMs = retryBaseDelayMs;
+    this.retryableErrors = retryableErrors;
 
     this.state = CircuitState.CLOSED;
     this.failures = 0;
     this.openedAt = null;
     this.halfOpenSuccesses = 0;
+
+    // Initialise gauge to CLOSED (0) so Prometheus has a value from the start.
+    cbStateGauge.set({ label: this.label }, STATE_GAUGE_VALUE[CircuitState.CLOSED]);
   }
 
+  // ── Core state machine ────────────────────────────────────────────────────
+
+  /**
+   * Returns true if the circuit is currently blocking calls.
+   * Side-effect: may transition OPEN → HALF_OPEN when the reset timeout elapses.
+   *
+   * @param {number} [now=Date.now()]
+   * @returns {boolean}
+   */
   isOpen(now = Date.now()) {
     if (this.state === CircuitState.OPEN) {
       if (now - this.openedAt >= this.resetTimeoutMs) {
+        const fromState = CircuitState.OPEN;
         this.state = CircuitState.HALF_OPEN;
         this.halfOpenSuccesses = 0;
-        console.info(`[${this.label}] Circuit breaker transitioned to HALF_OPEN — allowing trial requests`);
+
+        cbStateGauge.set({ label: this.label }, STATE_GAUGE_VALUE[CircuitState.HALF_OPEN]);
+        cbTransitionsTotal.inc({ label: this.label, from_state: fromState, to_state: CircuitState.HALF_OPEN });
+        cbHealthCheckTotal.inc({ label: this.label, result: "closed" });
+
+        console.info(
+          `[${this.label}] Circuit breaker transitioned to HALF_OPEN — allowing trial requests`,
+        );
         if (typeof this.onHalfOpen === "function") {
           this.onHalfOpen();
         }
         return false;
       }
+
+      cbHealthCheckTotal.inc({ label: this.label, result: "open" });
       return true;
     }
+
+    cbHealthCheckTotal.inc({ label: this.label, result: "closed" });
     return false;
   }
 
+  /**
+   * Record a successful operation.
+   * In HALF_OPEN, accumulates successes and may transition to CLOSED.
+   */
   recordSuccess() {
+    cbSuccessesTotal.inc({ label: this.label });
+
     if (this.state === CircuitState.HALF_OPEN) {
       this.halfOpenSuccesses += 1;
       if (this.halfOpenSuccesses >= this.halfOpenRequired) {
+        const fromState = CircuitState.HALF_OPEN;
+
+        // Observe how long the circuit was open before recovering.
+        if (this.openedAt !== null) {
+          const openDurationSeconds = (Date.now() - this.openedAt) / 1000;
+          cbOpenDurationSeconds.observe({ label: this.label }, openDurationSeconds);
+        }
+
         this.state = CircuitState.CLOSED;
         this.failures = 0;
         this.halfOpenSuccesses = 0;
+        this.openedAt = null;
+
+        cbStateGauge.set({ label: this.label }, STATE_GAUGE_VALUE[CircuitState.CLOSED]);
+        cbTransitionsTotal.inc({ label: this.label, from_state: fromState, to_state: CircuitState.CLOSED });
+
         console.info(`[${this.label}] Circuit breaker CLOSED — service recovered`);
         if (typeof this.onClose === "function") {
           this.onClose();
         }
       }
     } else {
+      // CLOSED state: reset consecutive failure counter on success
       this.failures = 0;
     }
   }
 
+  /**
+   * Record a failed operation.
+   * Trips circuit to OPEN when failureThreshold is reached or in HALF_OPEN.
+   *
+   * @param {number} [now=Date.now()]
+   */
   recordFailure(now = Date.now()) {
+    cbFailuresTotal.inc({ label: this.label });
     this.failures += 1;
+
     // In HALF_OPEN, any failure immediately trips back to OPEN.
     // In CLOSED, failureThreshold consecutive failures trip to OPEN.
     if (this.state === CircuitState.HALF_OPEN || this.failures >= this.failureThreshold) {
+      const fromState = this.state;
       this.state = CircuitState.OPEN;
       this.openedAt = now;
       this.halfOpenSuccesses = 0;
+
+      cbStateGauge.set({ label: this.label }, STATE_GAUGE_VALUE[CircuitState.OPEN]);
+      cbTransitionsTotal.inc({ label: this.label, from_state: fromState, to_state: CircuitState.OPEN });
+
       console.warn(
         `[${this.label}] Circuit breaker opened after ${this.failures} failures. DB writes suspended for ${this.resetTimeoutMs}ms.`,
       );
@@ -278,37 +252,113 @@ export class AuditCircuitBreaker {
   }
 
   /**
-   * Processes an incoming audit event payload through the sanitize → validate
-   * pipeline and then runs `handler` if the circuit is CLOSED or HALF_OPEN.
-   *
-   * @param {object}   rawPayload - Raw event payload (untrusted).
-   * @param {Function} handler    - Async function to call with the clean payload.
-   * @returns {Promise<unknown>}  Result of `handler`, or null if circuit is OPEN.
-   * @throws {ValidationError}   When the payload fails validation.
+   * Forcefully reset to CLOSED (useful for tests and manual recovery).
    */
-  async process(rawPayload, handler) {
-    // Apply sanitize → validate pipeline at the entry point
-    const clean = sanitizePayload(rawPayload);
-    validatePayload(clean);
-
-    if (this.isOpen()) {
-      return null; // Circuit is open; drop the event
-    }
-
-    try {
-      const result = await handler(clean);
-      this.recordSuccess();
-      return result;
-    } catch (err) {
-      this.recordFailure();
-      throw err;
-    }
-  }
-
   reset() {
     this.state = CircuitState.CLOSED;
     this.failures = 0;
     this.openedAt = null;
     this.halfOpenSuccesses = 0;
+
+    cbStateGauge.set({ label: this.label }, STATE_GAUGE_VALUE[CircuitState.CLOSED]);
   }
+
+  // ── execute() with exponential backoff (Issue #1434) ─────────────────────
+
+  /**
+   * Execute an async function with circuit-breaker protection and automatic
+   * exponential-backoff retries.
+   *
+   * Retry formula:  delay = retryBaseDelayMs * (2 ** attempt) + jitter(0–100ms)
+   *
+   * @param {Function} fn                         - Async function to execute
+   * @param {object}   [options={}]               - Per-call overrides
+   * @param {number}   [options.maxRetries]        - Override constructor maxRetries
+   * @param {number}   [options.baseDelayMs]       - Override constructor retryBaseDelayMs
+   * @param {string[]} [options.retryableErrors]   - Override constructor retryableErrors
+   * @returns {Promise<*>}
+   * @throws {CircuitOpenError} when the circuit is OPEN
+   * @throws {Error}            when all retries are exhausted
+   */
+  async execute(fn, options = {}) {
+    if (this.isOpen()) {
+      throw new CircuitOpenError(this.label);
+    }
+
+    const maxRetries = options.maxRetries ?? this.maxRetries;
+    const baseDelayMs = options.baseDelayMs ?? this.retryBaseDelayMs;
+    const retryableErrors = options.retryableErrors ?? this.retryableErrors;
+
+    let lastError;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await fn();
+        this.recordSuccess();
+        return result;
+      } catch (err) {
+        lastError = err;
+
+        // Decide whether this error is retryable.
+        const isRetryable = _isRetryable(err, retryableErrors);
+
+        if (!isRetryable || attempt >= maxRetries) {
+          // Either non-retryable or out of retries — record failure and throw.
+          this.recordFailure();
+          throw lastError;
+        }
+
+        // Emit retry metric and wait before the next attempt.
+        cbRetryAttemptTotal.inc({ label: this.label, attempt: String(attempt + 1) });
+
+        const jitter = Math.floor(Math.random() * 101); // 0–100 ms
+        const delayMs = baseDelayMs * (2 ** attempt) + jitter;
+
+        await _sleep(delayMs);
+
+        // Re-check circuit state between retries (another caller might have
+        // tripped it while we were waiting).
+        if (this.isOpen()) {
+          throw new CircuitOpenError(this.label);
+        }
+      }
+    }
+
+    // Should not be reachable, but guard anyway.
+    this.recordFailure();
+    throw lastError;
+  }
+
+  // ── Static helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Returns the prom-client Registry containing only the circuit-breaker
+   * metrics defined in this module.
+   *
+   * @returns {import("prom-client").Registry}
+   */
+  static getMetrics() {
+    return _cbRegistry;
+  }
+}
+
+// ── Internal helpers ─────────────────────────────────────────────────────────
+
+function _sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Returns true if the error should be retried.
+ *
+ * @param {Error}    err
+ * @param {string[]|null} retryableErrors - substrings to match; null means all retried
+ * @returns {boolean}
+ */
+function _isRetryable(err, retryableErrors) {
+  if (!retryableErrors || retryableErrors.length === 0) {
+    return true;
+  }
+  const msg = err?.message ?? "";
+  return retryableErrors.some((substr) => msg.includes(substr));
 }

@@ -30,6 +30,10 @@ vi.mock("stellar-sdk", () => {
 
   return {
     Asset: MockAsset,
+    Networks: {
+      PUBLIC: "Public Global Stellar Network ; September 2015",
+      TESTNET: "Test SDF Network ; September 2015",
+    },
     StrKey: {
       isValidEd25519PublicKey: (value) =>
         typeof value === "string" && value.startsWith("G") && value.length === 56,
@@ -121,5 +125,32 @@ describe("findStrictReceivePaths", () => {
       status: 502,
       message: "Horizon returned an invalid path payment quote",
     });
+  });
+
+  it("does not throw a null pointer error when Horizon omits `path` on the record (issue #1308)", async () => {
+    mockStrictReceivePaths.mockResolvedValueOnce({
+      records: [
+        {
+          source_amount: "60.1250000",
+          source_asset_type: "native",
+          source_asset_issuer: null,
+          destination_amount: "25.0000000",
+          // No `path` field at all — a shape Horizon can return for a
+          // direct, hop-free route, and one none of the other tests here
+          // exercise (they all set path: [] explicitly).
+        },
+      ],
+    });
+
+    const result = await findStrictReceivePaths({
+      sourceAccount,
+      destAssetCode: "USDC",
+      destAssetIssuer: issuer,
+      destAmount: "25",
+      sourceAssetCode: "XLM",
+      sourceAssetIssuer: null,
+    });
+
+    expect(result.path).toEqual([]);
   });
 });

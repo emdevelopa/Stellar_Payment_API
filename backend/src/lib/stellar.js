@@ -206,7 +206,11 @@ export async function findStrictReceivePaths({
         best.source_asset_type === "native" ? "XLM" : best.source_asset_code,
       source_asset_issuer: best.source_asset_issuer || null,
       destination_amount: best.destination_amount,
-      path: best.path.map((p) => ({
+      // `path` is absent (not just empty) on some Horizon record shapes for
+      // a direct, hop-free route — `.map` on undefined threw a TypeError
+      // here uncaught by the try/catch's Horizon-error handling below, since
+      // it's a plain JS bug, not a rejected promise (issue #1308).
+      path: (best.path || []).map((p) => ({
         asset_code: p.asset_type === "native" ? "XLM" : p.asset_code,
         asset_issuer: p.asset_issuer || null,
       })),

@@ -57,6 +57,11 @@ playwright-report/
 **/e2e/*.spec.ts-snapshots/
 **/e2e/*.spec.tsx-snapshots/
 
+# Test snapshots (Jest / Vitest inline snapshots)
+**/__snapshots__/
+**/snap_*.js
+*.snap
+
 # ── Build / compile artifacts ─────────────────────────────────────
 # TypeScript incremental build cache — no value in version control
 tsconfig.tsbuildinfo
@@ -68,24 +73,22 @@ output.txt
 verify_output.txt
 **/verify_output.txt
 
-# ── Lock files (keep pnpm-lock.yaml, ignore others) ───────────────
-# Root-level package-lock from accidental npm installs
-package-lock.json
-!.env.sample
-
-# Test artifacts
-*.snap
-__snapshots__/
-
-# Output files
-backend/output.txt
-frontend/output.txt
-backend/src/output.txt
-backend/verify_output.txt
-
-# Logs
+# ── Logs ──────────────────────────────────────────────────────────
 backend/logs/
 *.log
 
-# Misc
-.codex
+# ── Lock files (keep pnpm-lock.yaml, ignore others) ───────────────
+# Root-level package-lock from accidental npm installs
+package-lock.json!.env.sample
+
+# ── Additional ignores ────────────────────────────────────────────
+**/__snapshots__/
+**/*.snap
+*.swp
+*.swo
+*.tmp
+*.temp
+logs/
+**/logs/
+.env.local
+.env.*.local

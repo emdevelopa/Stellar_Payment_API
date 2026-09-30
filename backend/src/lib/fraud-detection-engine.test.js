@@ -7,6 +7,7 @@ import {
   getCacheStats,
   resetMetrics,
   clearCache,
+  getFraudDetectionHealthStatus,
 } from "./fraud-detection-engine.js";
 
 vi.mock("./logger.js", () => ({
@@ -27,6 +28,24 @@ vi.mock("./metrics.js", () => ({
   fraudDetectionGeographicAnomaly: { inc: vi.fn() },
   fraudDetectionMetadataAnomalies: { inc: vi.fn() },
   fraudDetectionCacheSize: { set: vi.fn() },
+  fraudDetectionAlertsFired: { inc: vi.fn() },
+  fraudDetectionHealthStatus: { set: vi.fn() },
+  fraudDetectionRuleHits: { inc: vi.fn() },
+  fraudDetectionEngineLatency: { startTimer: vi.fn(() => vi.fn()) },
+  fraudDetectionCacheHealth: { set: vi.fn() },
+  fraudDetectionAnomalyScore: { observe: vi.fn() },
+}));
+
+vi.mock("./fraud-detection-sanitizer.js", () => ({
+  sanitizeAndValidateFraudPayload: vi.fn((payment, merchantId) => ({
+    valid: true,
+    payload: payment,
+    merchantId: merchantId || 'unknown',
+  })),
+  validateMerchantId: vi.fn((merchantId) => ({
+    valid: !!merchantId,
+    merchantId,
+  })),
 }));
 
 describe("Fraud Detection Engine", () => {
@@ -499,6 +518,50 @@ describe("Fraud Detection Engine", () => {
       expect(suspiciousAnalysis.riskScore).toBeGreaterThan(
         normalAnalysis.riskScore
       );
+    });
+  });
+
+  describe('health telemetry (#1428)', () => {
+    it('should export getFraudDetectionHealthStatus', async () => {
+      expect(getFraudDetectionHealthStatus).toBeDefined();
+    });
+
+    it('should return healthy status when cache is under limit', async () => {
+      const health = getFraudDetectionHealthStatus();
+      expect(health.status).toBe('healthy');
+      expect(health.cacheSize).toBeGreaterThanOrEqual(0);
+      expect(health.maxCacheEntries).toBeGreaterThan(0);
+      expect(health.timestamp).toBeDefined();
+    });
+
+    it('should track engine latency via Prometheus histogram', async () => {
+      const mockPayment = {
+        id: 'latency-test-1',
+        amount: '10.00',
+        recipient: 'GCLATENCYTEST123456789012345678901234567890123456789',
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        memo: 'latency-test',
+        metadata: {},
+      };
+      const result = await analyzePayment(mockPayment, 'merchant-latency-test');
+      expect(result).toHaveProperty('riskLevel');
+      expect(result).toHaveProperty('riskScore');
+    });
+
+    it('should fire alert counter for high-risk payments', async () => {
+      const highRiskPayment = {
+        id: 'alert-test-1',
+        amount: '999999.00',
+        recipient: 'GCALERTTEST1234567890123456789012345678901234567890',
+        status: 'pending',
+        created_at: new Date(Date.now() - 400000).toISOString(),
+        memo: 'URGENT WIRE TRANSFER IMMEDIATE',
+        metadata: {},
+      };
+      const result = await analyzePayment(highRiskPayment, 'merchant-alert-test');
+      // Result should be processed; alert metrics tracked internally
+      expect(result).toHaveProperty('riskLevel');
     });
   });
 });

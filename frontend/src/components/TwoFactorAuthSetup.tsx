@@ -17,6 +17,25 @@ interface TwoFactorAuthSetupProps {
   onVerifyCode?: (code: string) => Promise<void>;
 }
 
+// ── Network-failure detection ───────────────────────────────────────────────
+
+/**
+ * Distinguishes a network/connectivity failure (fetch couldn't reach the
+ * server at all) from a server-side rejection (e.g. wrong code). Only the
+ * former should roll back optimistically without discarding in-flight setup
+ * state (QR/manual key, entered code) — a rejected code is a normal retry,
+ * not a connectivity problem, and clearing the QR would force a needless
+ * re-scan.
+ */
+function isNetworkFailure(error: unknown): boolean {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  if (error instanceof TypeError) return true; // fetch's own connectivity failure signature
+  if (error instanceof Error) {
+    return /network|fetch|offline|connection/i.test(error.message);
+  }
+  return false;
+}
+
 // ── Skeleton helpers ─────────────────────────────────────────────────────────
 
 function QrSkeleton({ t }: { t: ReturnType<typeof useTranslations> }) {
@@ -77,6 +96,7 @@ export function TwoFactorAuthSetup({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [manualKey, setManualKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isNetworkError, setIsNetworkError] = useState(false);
 
   const isEnabling = step === "enabling";
   const isVerifying = step === "verifying";
@@ -87,6 +107,7 @@ export function TwoFactorAuthSetup({
   const handleEnable = async () => {
     setStep("enabling");
     setError(null);
+    setIsNetworkError(false);
     try {
       const generate = onGenerateSecret ?? defaultGenerateSecret;
       const result = await generate();
@@ -95,6 +116,9 @@ export function TwoFactorAuthSetup({
       setStep("scan");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.setupFailed"));
+      setIsNetworkError(isNetworkFailure(err));
+      // Nothing to roll back to yet at this step — no QR/manual key has been
+      // committed, so returning to idle is already the correct rollback.
       setStep("idle");
     }
   };
@@ -104,18 +128,39 @@ export function TwoFactorAuthSetup({
   const handleVerify = async () => {
     if (code.trim().length !== 6) {
       setError(t("error.codeLength"));
+      setIsNetworkError(false);
       return;
     }
     setStep("verifying");
     setError(null);
+    setIsNetworkError(false);
     try {
       const verify = onVerifyCode ?? defaultVerifyCode;
       await verify(code.trim());
       setStep("success");
       onComplete?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("error.invalidCode"));
+      const networkFailure = isNetworkFailure(err);
+      setError(networkFailure ? t("error.networkFailure") : err instanceof Error ? err.message : t("error.invalidCode"));
+      setIsNetworkError(networkFailure);
+      // Optimistic rollback: return to the scan step without discarding the
+      // QR/manual key already shown, or the code the user typed. A network
+      // failure means the request never reached the server — clearing state
+      // here would force a needless re-scan for a problem that has nothing
+      // to do with the code's validity. Only a confirmed-invalid code should
+      // prompt the user to re-enter it (handled by the input's own clear-on-edit).
       setStep("scan");
+      if (networkFailure) {
+        // Preserve the entered code so retrying doesn't require retyping it.
+      } else {
+        setCode("");
+      }
+    }
+  };
+
+  const handleRetryVerify = () => {
+    if (isNetworkError) {
+      void handleVerify();
     }
   };
 
@@ -144,6 +189,13 @@ export function TwoFactorAuthSetup({
           <StepDot active={isDone} done={isDone} label="3" />
         </div>
       </div>
+      {/* Announces step transitions to screen reader / keyboard-only users,
+          who otherwise have no cue the flow advanced since the step dots
+          themselves aren't focusable (there is no valid "jump back" action —
+          each step is driven by an async call, not freely navigable). */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {t("stepAnnouncement", { current: isDone ? "3" : scanVisible ? "2" : "1", total: "3" })}
+      </p>
 
       {/* ── Idle / Enabling ──────────────────────────────────────────── */}
       {(step === "idle" || step === "enabling") && (
@@ -229,6 +281,18 @@ export function TwoFactorAuthSetup({
               onChange={(e) => {
                 setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
                 setError(null);
+                setIsNetworkError(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isVerifying && code.length === 6) {
+                  e.preventDefault();
+                  void handleVerify();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setCode("");
+                  setError(null);
+                  setIsNetworkError(false);
+                }
               }}
               disabled={isVerifying}
               aria-busy={isVerifying}
@@ -244,22 +308,33 @@ export function TwoFactorAuthSetup({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={handleVerify}
-            disabled={isVerifying || code.length !== 6}
-            aria-busy={isVerifying}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-mint py-3 text-sm font-bold text-black transition-all hover:scale-[1.01] hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
-          >
-            {isVerifying ? (
-              <>
-                <Spinner size="sm" aria-hidden="true" />
-                <span>{t("verifying")}</span>
-              </>
-            ) : (
-              t("verifyButton")
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={handleVerify}
+              disabled={isVerifying || code.length !== 6}
+              aria-busy={isVerifying}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-mint py-3 text-sm font-bold text-black transition-all hover:scale-[1.01] hover:bg-mint/90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+            >
+              {isVerifying ? (
+                <>
+                  <Spinner size="sm" aria-hidden="true" />
+                  <span>{t("verifying")}</span>
+                </>
+              ) : (
+                t("verifyButton")
+              )}
+            </button>
+            {isNetworkError && !isVerifying && (
+              <button
+                type="button"
+                onClick={handleRetryVerify}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 py-3 text-sm font-bold text-white transition-all hover:bg-white/10 sm:w-auto sm:px-6"
+              >
+                {t("retryButton")}
+              </button>
             )}
-          </button>
+          </div>
         </div>
       )}
 

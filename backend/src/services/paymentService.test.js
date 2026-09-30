@@ -54,6 +54,8 @@ vi.mock("../lib/stellar.js", () => ({
   withHorizonRetry: vi.fn().mockResolvedValue(undefined),
   isValidAssetCode: vi.fn().mockReturnValue(true),
   isValidStellarAccountId: vi.fn().mockReturnValue(true),
+  isValidTransactionHash: (value) =>
+    typeof value === "string" && /^[0-9a-fA-F]{64}$/.test(value),
 }));
 
 vi.mock("../lib/branding.js", () => ({
@@ -88,6 +90,22 @@ vi.mock("../lib/metrics.js", () => ({
   paymentConfirmedCounter: { inc: vi.fn() },
   paymentConfirmationLatency: { observe: vi.fn() },
   paymentFailedCounter: { inc: vi.fn() },
+}));
+
+const { mockHorizonTransaction } = vi.hoisted(() => ({
+  mockHorizonTransaction: vi.fn(),
+}));
+
+vi.mock("stellar-sdk", () => ({
+  Horizon: {
+    Server: vi.fn(() => ({
+      transactions: () => ({
+        transaction: (hash) => ({
+          call: () => mockHorizonTransaction(hash),
+        }),
+      }),
+    })),
+  },
 }));
 
 import { paymentService } from "./paymentService.js";
@@ -408,5 +426,291 @@ describe("paymentService", () => {
 
     expect(result).toEqual({ status: "pending" });
     expect(mockVerifyTransactionSignature).toHaveBeenCalledWith("tx-invalid");
+  });
+
+  describe("getPaymentStatus cache scoping (issue #1311)", () => {
+    beforeEach(() => {
+      mockGetCachedPayment.mockResolvedValue(null);
+      mockSetCachedPayment.mockResolvedValue(undefined);
+      mockConnectRedisClient.mockResolvedValue({});
+    });
+
+    it("reads and writes the cache scoped to the merchantId this call was made with", async () => {
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: {
+          id: "payment-1",
+          amount: "10",
+          asset: "XLM",
+          asset_issuer: null,
+          recipient: "GDEST",
+          description: null,
+          memo: null,
+          memo_type: null,
+          status: "confirmed",
+          tx_id: "tx-1",
+          metadata: {},
+          created_at: new Date().toISOString(),
+          merchants: { branding_config: null },
+        },
+        error: null,
+      });
+      mockSupabaseFrom.mockReturnValue({
+        select: vi.fn(() => ({
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle,
+        })),
+      });
+
+      await paymentService.getPaymentStatus("payment-1", "merchant-1");
+
+      expect(mockGetCachedPayment).toHaveBeenCalledWith(
+        expect.anything(),
+        "payment-1",
+        "merchant-1",
+      );
+      expect(mockSetCachedPayment).toHaveBeenCalledWith(
+        expect.anything(),
+        "payment-1",
+        expect.objectContaining({ id: "payment-1" }),
+        "merchant-1",
+      );
+    });
+
+    it("passes undefined merchant scope through as null when called without one (public payment_link lookup)", async () => {
+      const maybeSingle = vi.fn().mockResolvedValue({
+        data: {
+          id: "payment-1",
+          amount: "10",
+          asset: "XLM",
+          asset_issuer: null,
+          recipient: "GDEST",
+          description: null,
+          memo: null,
+          memo_type: null,
+          status: "confirmed",
+          tx_id: "tx-1",
+          metadata: {},
+          created_at: new Date().toISOString(),
+          merchants: { branding_config: null },
+        },
+        error: null,
+      });
+      mockSupabaseFrom.mockReturnValue({
+        select: vi.fn(() => ({
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle,
+        })),
+      });
+
+      await paymentService.getPaymentStatus("payment-1");
+
+      expect(mockGetCachedPayment).toHaveBeenCalledWith(expect.anything(), "payment-1", null);
+    });
+  });
+
+  describe("verifyPayment concurrent confirmation (issue #1310)", () => {
+    const basePayment = {
+      id: "payment-1",
+      merchant_id: "merchant-1",
+      amount: "12.5",
+      asset: "USDC",
+      asset_issuer: "issuer-1",
+      recipient: "GDEST",
+      status: "pending",
+      tx_id: null,
+      memo: null,
+      memo_type: null,
+      webhook_url: "https://example.com/webhook",
+      created_at: "2026-04-24T10:00:00.000Z",
+      merchants: {
+        webhook_secret: "secret",
+        webhook_version: "v1",
+        notification_email: "merchant@example.com",
+        email: "merchant@example.com",
+      },
+    };
+
+    function mockSupabaseForVerify({ updatedRows }) {
+      const maybeSingle = vi.fn().mockResolvedValue({ data: basePayment, error: null });
+      const updateSelect = vi.fn().mockResolvedValue({ data: updatedRows, error: null });
+      const updateEqStatus = vi.fn(() => ({ select: updateSelect }));
+      const updateEqId = vi.fn(() => ({ eq: updateEqStatus }));
+      const update = vi.fn(() => ({ eq: updateEqId }));
+
+      mockSupabaseFrom.mockReturnValue({
+        select: vi.fn(() => ({
+          eq: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          maybeSingle,
+        })),
+        update,
+      });
+
+      return { update, updateEqId, updateEqStatus, updateSelect };
+    }
+
+    beforeEach(() => {
+      mockFindMatchingPayment.mockResolvedValue({ transaction_hash: "tx-1" });
+      mockVerifyTransactionSignature.mockResolvedValue({ valid: true });
+      mockConnectRedisClient.mockResolvedValue({});
+      mockInvalidatePaymentCache.mockResolvedValue(undefined);
+      mockGetPayloadForVersion.mockReturnValue({ event: "payment.confirmed" });
+      mockSendWebhook.mockResolvedValue({ delivered: true });
+    });
+
+    it("filters the confirming UPDATE on the status it read, so only one racing call wins", async () => {
+      const { updateEqId, updateEqStatus } = mockSupabaseForVerify({
+        updatedRows: [{ id: "payment-1" }],
+      });
+
+      await paymentService.verifyPayment("payment-1");
+
+      expect(updateEqId).toHaveBeenCalledWith("id", "payment-1");
+      expect(updateEqStatus).toHaveBeenCalledWith("status", "pending");
+    });
+
+    it("fires webhooks/metrics when this call's UPDATE actually matched a row", async () => {
+      mockSupabaseForVerify({ updatedRows: [{ id: "payment-1" }] });
+
+      const result = await paymentService.verifyPayment("payment-1");
+
+      expect(result.status).toBe("confirmed");
+      expect(mockSendWebhook).toHaveBeenCalledTimes(1);
+      expect(mockInvalidatePaymentCache).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not re-fire webhooks/emails when a concurrent call already confirmed the payment", async () => {
+      // The UPDATE ... WHERE status = 'pending' matched zero rows: another
+      // concurrent verifyPayment() call for the same payment won the race
+      // and already flipped the status.
+      mockSupabaseForVerify({ updatedRows: [] });
+
+      const result = await paymentService.verifyPayment("payment-1");
+
+      expect(result).toEqual({
+        status: "confirmed",
+        tx_id: "tx-1",
+        ledger_url: "https://stellar.expert/explorer/testnet/tx/tx-1",
+      });
+      expect(mockSendWebhook).not.toHaveBeenCalled();
+      expect(mockInvalidatePaymentCache).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("confirmRefundTx verification (issue #1309)", () => {
+    function mockSupabaseForConfirm(payment) {
+      const maybeSingle = vi.fn().mockResolvedValue({ data: payment, error: null });
+      const update = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }));
+
+      mockSupabaseFrom.mockReturnValue({
+        select: vi.fn(() => ({
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle,
+        })),
+        update,
+      });
+
+      return { update };
+    }
+
+    const validHash =
+      "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+
+    it("rejects a malformed transaction hash before touching the database write", async () => {
+      mockSupabaseForConfirm({
+        id: "payment-1",
+        metadata: { refund_tx_hash_expected: validHash },
+      });
+
+      await expect(
+        paymentService.confirmRefundTx("payment-1", "merchant-1", "not-a-hash"),
+      ).rejects.toMatchObject({ status: 400, message: "Invalid transaction hash" });
+    });
+
+    it("rejects when no refund was ever generated for this payment", async () => {
+      mockSupabaseForConfirm({ id: "payment-1", metadata: {} });
+
+      await expect(
+        paymentService.confirmRefundTx("payment-1", "merchant-1", validHash),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(mockHorizonTransaction).not.toHaveBeenCalled();
+    });
+
+    it("rejects a tx_hash that does not match the generated refund transaction", async () => {
+      mockSupabaseForConfirm({
+        id: "payment-1",
+        metadata: { refund_tx_hash_expected: validHash },
+      });
+      const wrongHash = "f".repeat(64);
+
+      await expect(
+        paymentService.confirmRefundTx("payment-1", "merchant-1", wrongHash),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining("does not match"),
+      });
+      expect(mockHorizonTransaction).not.toHaveBeenCalled();
+    });
+
+    it("rejects when the matching transaction cannot be found on Stellar", async () => {
+      mockSupabaseForConfirm({
+        id: "payment-1",
+        metadata: { refund_tx_hash_expected: validHash },
+      });
+      mockHorizonTransaction.mockRejectedValue(new Error("404 Not Found"));
+
+      await expect(
+        paymentService.confirmRefundTx("payment-1", "merchant-1", validHash),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it("rejects when the transaction exists but failed on-chain", async () => {
+      mockSupabaseForConfirm({
+        id: "payment-1",
+        metadata: { refund_tx_hash_expected: validHash },
+      });
+      mockHorizonTransaction.mockResolvedValue({ successful: false });
+
+      await expect(
+        paymentService.confirmRefundTx("payment-1", "merchant-1", validHash),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: "Refund transaction failed on the Stellar network",
+      });
+    });
+
+    it("confirms the refund once the hash matches and the transaction succeeded on-chain", async () => {
+      const { update } = mockSupabaseForConfirm({
+        id: "payment-1",
+        metadata: { refund_tx_hash_expected: validHash, refund_status: "pending" },
+      });
+      mockHorizonTransaction.mockResolvedValue({ successful: true });
+
+      const result = await paymentService.confirmRefundTx("payment-1", "merchant-1", validHash);
+
+      expect(result).toEqual({ message: "Refund confirmed successfully" });
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            refund_status: "refunded",
+            refund_tx_hash: validHash,
+          }),
+        }),
+      );
+    });
+
+    it("accepts the hash comparison case-insensitively", async () => {
+      mockSupabaseForConfirm({
+        id: "payment-1",
+        metadata: { refund_tx_hash_expected: validHash.toUpperCase() },
+      });
+      mockHorizonTransaction.mockResolvedValue({ successful: true });
+
+      await expect(
+        paymentService.confirmRefundTx("payment-1", "merchant-1", validHash),
+      ).resolves.toEqual({ message: "Refund confirmed successfully" });
+    });
   });
 });

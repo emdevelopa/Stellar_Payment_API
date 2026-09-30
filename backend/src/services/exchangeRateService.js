@@ -15,6 +15,10 @@
  *     client, that load is further coordinated across instances by a
  *     distributed lock + shared quote store (exchange-rate-coordinator.js).
  *     Coordination fails open to a direct Horizon query.
+ *   - The Horizon read itself is retried with full-jitter exponential backoff
+ *     (issue #1444). Retries stay inside the single-flight loader, so a burst
+ *     shares one retry loop. Missing paths and other deterministic failures
+ *     are not retried.
  *
  * The route handler calls getExchangeRateQuote() and only handles HTTP concerns;
  * all exchange-rate logic lives here.
@@ -26,6 +30,7 @@ import {
   generateRateCacheKey,
 } from '../lib/exchange-rate-cache.js';
 import { ExchangeRateCoordinator } from '../lib/exchange-rate-coordinator.js';
+import { withOracleRetry } from '../lib/exchange-rate-oracle-retry.js';
 import { logger } from '../lib/logger.js';
 
 const DEFAULT_SLIPPAGE = parseFloat(process.env.PATH_PAYMENT_SLIPPAGE ?? '0.01');
@@ -108,15 +113,18 @@ export async function getExchangeRateQuote({
     destAssetIssuer,
   );
 
-  const fetchFromHorizon = () => fetchQuoteFromHorizon({
-    sourceAssetCode,
-    sourceAssetIssuer,
-    destAssetCode,
-    destAssetIssuer,
-    destAmount,
-    sourceAccount,
-    slippage,
-  });
+  const fetchFromHorizon = () => withOracleRetry(
+    () => fetchQuoteFromHorizon({
+      sourceAssetCode,
+      sourceAssetIssuer,
+      destAssetCode,
+      destAssetIssuer,
+      destAmount,
+      sourceAccount,
+      slippage,
+    }),
+    { label: 'exchange-rate-oracle-fetch' },
+  );
 
   // Captured per call so a later reconfiguration cannot change an in-flight load.
   const activeCoordinator = coordinator;

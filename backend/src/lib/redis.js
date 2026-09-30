@@ -99,19 +99,32 @@ export function resetRedisClientForTests() {
 /** TTL in seconds for payment-status cache entries. */
 export const PAYMENT_STATUS_TTL = 2;
 
-/** Consistent cache key for a payment-status entry. */
-export function paymentCacheKey(id) {
-  return `payment:status:${id}`;
+/**
+ * Consistent cache key for a payment-status entry.
+ *
+ * Scoped by `merchantId` as well as `id` (issue #1311): getPaymentStatus()
+ * is called both without a merchant scope (the public payment_link tracking
+ * page) and with one (an authenticated merchant lookup) for the same
+ * payment id. A key that ignored merchantId meant whichever caller reached
+ * the cache first decided what every later caller saw for that id,
+ * regardless of whether their own `merchant_id` filter would have matched
+ * the row at all — a cache hit bypassed the authorization check the
+ * uncached path enforces. `merchantId` defaults to a fixed "public" bucket
+ * so the unscoped, link-based lookup path still gets its own cache entry.
+ */
+export function paymentCacheKey(id, merchantId = null) {
+  return `payment:status:${merchantId || "public"}:${id}`;
 }
 
 /**
  * Return the cached payment object, or null on miss / Redis unavailable.
  * @param {import("redis").RedisClientType} client
  * @param {string} id  payment UUID
+ * @param {string|null} merchantId  merchant scope this lookup was made under
  */
-export async function getCachedPayment(client, id) {
+export async function getCachedPayment(client, id, merchantId = null) {
   try {
-    const raw = await client.get(paymentCacheKey(id));
+    const raw = await client.get(paymentCacheKey(id, merchantId));
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
     // Never let a cache failure block the request
@@ -125,10 +138,11 @@ export async function getCachedPayment(client, id) {
  * @param {import("redis").RedisClientType} client
  * @param {string} id  payment UUID
  * @param {object} data  the payment row to cache
+ * @param {string|null} merchantId  merchant scope this lookup was made under
  */
-export async function setCachedPayment(client, id, data) {
+export async function setCachedPayment(client, id, data, merchantId = null) {
   try {
-    await client.set(paymentCacheKey(id), JSON.stringify(data), {
+    await client.set(paymentCacheKey(id, merchantId), JSON.stringify(data), {
       EX: PAYMENT_STATUS_TTL,
     });
   } catch (err) {
@@ -137,13 +151,22 @@ export async function setCachedPayment(client, id, data) {
 }
 
 /**
- * Invalidate the cache entry for a payment (call after any write).
+ * Invalidate the cache entries for a payment (call after any write).
+ *
+ * Invalidates both the public (unscoped) entry and, when a merchantId is
+ * supplied, that merchant's scoped entry — a write may be followed by reads
+ * from either lookup path.
  * @param {import("redis").RedisClientType} client
  * @param {string} id  payment UUID
+ * @param {string|null} merchantId  merchant scope to also invalidate, if known
  */
-export async function invalidatePaymentCache(client, id) {
+export async function invalidatePaymentCache(client, id, merchantId = null) {
   try {
-    await client.del(paymentCacheKey(id));
+    const keys = [paymentCacheKey(id, null)];
+    if (merchantId) {
+      keys.push(paymentCacheKey(id, merchantId));
+    }
+    await Promise.all(keys.map((key) => client.del(key)));
   } catch (err) {
     console.error("Redis DEL error:", err.message);
   }

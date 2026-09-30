@@ -15,6 +15,7 @@ import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
 import { createVerifyPaymentRateLimit } from "../lib/rate-limit.js";
 import { createPathPaymentQuoteRateLimit } from "../lib/path-payment-quote-rate-limit.js";
+import { requireApiKeyAuth } from "../lib/auth.js";
 import { recaptchaMiddleware } from "../lib/recaptcha.js";
 import { sendWebhook, isEventSubscribed } from "../lib/webhooks.js";
 import { sendReceiptEmail } from "../lib/email.js";
@@ -297,32 +298,6 @@ function createPaymentsRouter({
       logger.error({ err, merchantId: req.merchant?.id }, "DEBUG: createSession error");
       if (err.status === 400 && err.details) {
         return res.status(400).json({ error: err.message, ...err.details });
-      const supabase = await getSupabaseClient();
-      logger.info({ merchantId: req.merchant?.id, amount: req.body?.amount, asset: req.body?.asset }, "DEBUG: createSession started");
-
-      // Sanitization, strict payload checks and shared business rules
-      // (issues #1087, #1447) with validator metrics/health (#1448).
-      const validation = validatePaymentSession({
-        body: req.body,
-        merchant: req.merchant,
-        source: "http",
-      });
-      if (!validation.ok) {
-        const { rejection } = validation;
-        const assetLabel = req.body?.asset;
-        paymentFailedCounter.inc({
-          asset: assetLabel,
-          reason: rejection.reason === "issuer_not_allowed" ? "invalid_issuer" : rejection.reason,
-        });
-        paymentProcessorSessionsTotal.inc({ asset: assetLabel, outcome: "validation_failed" });
-        paymentProcessorSessionDuration.observe(
-          { asset: assetLabel, outcome: "validation_failed" },
-          (Date.now() - sessionStart) / 1000,
-        );
-        return res.status(400).json({
-          error: rejection.message,
-          ...(rejection.rule === "limits" ? rejection.details : {}),
-        });
       }
       next(err);
     }
@@ -331,63 +306,34 @@ function createPaymentsRouter({
   async function createSessionUnlocked(req, res) {
     const sessionStart = Date.now();
     const supabase = await getSupabaseClient();
-    const body = req.body;
-    const asset = body.asset?.toUpperCase();
-    logger.info({ merchantId: req.merchant?.id, amount: body.amount, asset: body.asset }, "DEBUG: createSession started");
+    logger.info({ merchantId: req.merchant?.id, amount: req.body?.amount, asset: req.body?.asset }, "DEBUG: createSession started");
 
-    // Shared business-rule validation (issue #1087) — issuer presence/format.
-    const { assetIssuer, rejection: issuerRejection } = resolveAndValidateIssuer(
-      asset,
-      body.asset_issuer,
-    );
-    if (issuerRejection) {
-      paymentFailedCounter.inc({ asset: body.asset, reason: issuerRejection.reason });
-      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
-      paymentProcessorSessionDuration.observe(
-        { asset: body.asset, outcome: "validation_failed" },
-        (Date.now() - sessionStart) / 1000,
-      );
-      return res.status(400).json({ error: issuerRejection.message });
-    }
-      const body = validation.payload;
-      const { asset, assetIssuer } = validation;
-
-    // Shared business-rule validation (issue #1087) — per-asset limits (#153).
-    const limitRejection = validatePerAssetLimits({
-      rawAsset: body.asset,
-      amount: body.amount,
-      paymentLimits: req.merchant.payment_limits,
+    // Sanitization, strict payload checks and shared business rules
+    // (issues #1087, #1447) with validator metrics/health (#1448).
+    const validation = validatePaymentSession({
+      body: req.body,
+      merchant: req.merchant,
+      source: "http",
     });
-    if (limitRejection) {
-      paymentFailedCounter.inc({ asset: body.asset, reason: limitRejection.reason });
-      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
+    if (!validation.ok) {
+      const { rejection } = validation;
+      const assetLabel = req.body?.asset;
+      paymentFailedCounter.inc({
+        asset: assetLabel,
+        reason: rejection.reason === "issuer_not_allowed" ? "invalid_issuer" : rejection.reason,
+      });
+      paymentProcessorSessionsTotal.inc({ asset: assetLabel, outcome: "validation_failed" });
       paymentProcessorSessionDuration.observe(
-        { asset: body.asset, outcome: "validation_failed" },
+        { asset: assetLabel, outcome: "validation_failed" },
         (Date.now() - sessionStart) / 1000,
       );
       return res.status(400).json({
-        error: limitRejection.message,
-        ...limitRejection.details,
+        error: rejection.message,
+        ...(rejection.rule === "limits" ? rejection.details : {}),
       });
     }
-
-    // Shared business-rule validation (issue #1087) — allowed-issuers check:
-    // if the merchant has configured a non-empty allowlist, only those
-    // issuer addresses may be used.
-    const allowedIssuerRejection = validateAllowedIssuers({
-      asset,
-      assetIssuer,
-      allowedIssuers: req.merchant.allowed_issuers,
-    });
-    if (allowedIssuerRejection) {
-      paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
-      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "validation_failed" });
-      paymentProcessorSessionDuration.observe(
-        { asset: body.asset, outcome: "validation_failed" },
-        (Date.now() - sessionStart) / 1000,
-      );
-      return res.status(400).json({ error: allowedIssuerRejection.message });
-    }
+    const body = validation.payload;
+    const { asset, assetIssuer } = validation;
 
     const isSandbox = body.sandbox === true;
     const baseId = randomUUID();
@@ -497,8 +443,15 @@ function createPaymentsRouter({
       try {
         const supabase = await getSupabaseClient();
         // --- Redis read-through cache ---
+        // Scoped by req.merchant?.id (issue #1311): this route is reachable
+        // both anonymously (a customer following their payment_link) and by
+        // an authenticated merchant, and a cache hit must reflect the same
+        // merchant_id scoping the uncached query below applies — otherwise
+        // whichever caller populates the cache first decides what every
+        // later caller for that payment id sees, bypassing the scoping
+        // entirely on a cache hit.
         const redis = await connectRedisClient();
-        const cached = await getCachedPayment(redis, req.params.id);
+        const cached = await getCachedPayment(redis, req.params.id, req.merchant?.id);
         if (cached) {
           paymentProcessorStatusCacheHits.inc();
           return res.json({ payment: cached });
@@ -583,7 +536,7 @@ function createPaymentsRouter({
         // Only cache confirmed/completed payments — never cache pending
         // so status changes are immediately visible to pollers
         if (data.status === "confirmed" || data.status === "completed") {
-          await setCachedPayment(redis, req.params.id, response);
+          await setCachedPayment(redis, req.params.id, response, req.merchant?.id);
         }
 
         // Prevent HTTP-level caching so 304 responses never mask status changes
@@ -737,21 +690,38 @@ function createPaymentsRouter({
             const diff = received - expected;
 
             if (diff < -0.0000001) {
-              // Underpayment — mark as failed with details
-              await supabase.from("payments").update({
-                status: "failed",
-                tx_id: anyPayment.transaction_hash,
-                metadata: {
-                  ...(data.metadata || {}),
-                  failure_reason: "underpayment",
-                  expected_amount: expected,
-                  received_amount: received,
-                  shortfall: Number((expected - received).toFixed(7)),
-                },
-              }).eq("id", data.id);
+              // Underpayment — mark as failed with details.
+              // Conditional on status = "pending" (issue #1310, same class
+              // of race as the exact-match path below): two concurrent
+              // verify calls both reading "pending" before either writes
+              // must not both apply a terminal transition and both report
+              // success — only the call whose UPDATE actually matched a row
+              // proceeds past this point.
+              const { data: underpaymentUpdated } = await supabase
+                .from("payments")
+                .update({
+                  status: "failed",
+                  tx_id: anyPayment.transaction_hash,
+                  metadata: {
+                    ...(data.metadata || {}),
+                    failure_reason: "underpayment",
+                    expected_amount: expected,
+                    received_amount: received,
+                    shortfall: Number((expected - received).toFixed(7)),
+                  },
+                })
+                .eq("id", data.id)
+                .eq("status", "pending")
+                .select("id")
+                .maybeSingle();
+
+              if (!underpaymentUpdated) {
+                recordVerificationOutcome("tx_claim_conflict", data.asset);
+                return res.json({ status: "pending" }); // already processed concurrently
+              }
 
               const redis = await connectRedisClient();
-              await invalidatePaymentCache(redis, data.id);
+              await invalidatePaymentCache(redis, data.id, data.merchant_id);
 
               recordVerificationOutcome("underpayment", data.asset);
               return res.status(402).json({
@@ -766,25 +736,37 @@ function createPaymentsRouter({
             }
 
             if (diff > 0.0000001) {
-              // Overpayment — still confirm but flag it
+              // Overpayment — still confirm but flag it. Same conditional-
+              // update guard as underpayment above (issue #1310).
               const createdAt = new Date(data.created_at);
               const latencySeconds = (new Date() - createdAt) / 1000;
 
-              await supabase.from("payments").update({
-                status: "confirmed",
-                tx_id: anyPayment.transaction_hash,
-                completion_duration_seconds: Math.floor(latencySeconds),
-                metadata: {
-                  ...(data.metadata || {}),
-                  overpayment: true,
-                  expected_amount: expected,
-                  received_amount: received,
-                  excess: Number((received - expected).toFixed(7)),
-                },
-              }).eq("id", data.id);
+              const { data: overpaymentUpdated } = await supabase
+                .from("payments")
+                .update({
+                  status: "confirmed",
+                  tx_id: anyPayment.transaction_hash,
+                  completion_duration_seconds: Math.floor(latencySeconds),
+                  metadata: {
+                    ...(data.metadata || {}),
+                    overpayment: true,
+                    expected_amount: expected,
+                    received_amount: received,
+                    excess: Number((received - expected).toFixed(7)),
+                  },
+                })
+                .eq("id", data.id)
+                .eq("status", "pending")
+                .select("id")
+                .maybeSingle();
+
+              if (!overpaymentUpdated) {
+                recordVerificationOutcome("tx_claim_conflict", data.asset);
+                return res.json({ status: "pending" }); // already processed concurrently
+              }
 
               const redis = await connectRedisClient();
-              await invalidatePaymentCache(redis, data.id);
+              await invalidatePaymentCache(redis, data.id, data.merchant_id);
 
               recordVerificationOutcome("overpayment", data.asset);
               return res.json({
@@ -852,7 +834,7 @@ function createPaymentsRouter({
 
         // --- Invalidate cache so next poll sees confirmed status immediately ---
         const redis = await connectRedisClient();
-        await invalidatePaymentCache(redis, data.id);
+        await invalidatePaymentCache(redis, data.id, data.merchant_id);
         // Record metrics for confirmation
         paymentConfirmedCounter.inc({ asset: data.asset });
         paymentConfirmationLatency.observe({ asset: data.asset }, latencySeconds);
@@ -1157,37 +1139,13 @@ function createPaymentsRouter({
     async (req, res, next) => {
       try {
         const { tx_hash } = req.body;
-        const supabase = await getSupabaseClient();
 
-        const { data: payment, error } = await supabase
-          .from("payments")
-          .select("id, metadata")
-          .eq("id", req.params.id)
-          .eq("merchant_id", req.merchant.id)
-          .maybeSingle();
-
-        if (error) {
-          error.status = 500;
-          throw error;
-        }
-
-        if (!payment) {
-          return res.status(404).json({ error: "Payment not found" });
-        }
-
-        await supabase
-          .from("payments")
-          .update({
-            metadata: {
-              ...payment.metadata,
-              refund_status: "refunded",
-              refund_tx_hash: tx_hash,
-              refund_confirmed_at: new Date().toISOString(),
-            },
-          })
-          .eq("id", payment.id);
-
-        paymentProcessorRefundsTotal.inc({ stage: "confirm", outcome: "success" });
+        // Delegates to paymentService.confirmRefundTx, which verifies
+        // tx_hash against the refund transaction generateRefundTx produced
+        // and confirms it landed on-chain before marking the payment
+        // refunded (issue #1309) — this route previously duplicated an
+        // older, unverified version of this logic inline.
+        await paymentService.confirmRefundTx(req.params.id, req.merchant.id, tx_hash);
 
         res.json({
           status: "refunded",
@@ -1262,6 +1220,12 @@ function createPaymentsRouter({
    */
   router.get(
     "/path-payment-quote/:id",
+    // This route sits outside the `/api/payments` prefix that app.js gates
+    // with requireApiKeyAuth(), so without its own auth here it was
+    // completely unauthenticated: any caller could read another merchant's
+    // payment amount/asset/recipient by id, and generate live Horizon quotes
+    // against it for free (issue #1309).
+    requireApiKeyAuth(),
     pathPaymentQuoteRateLimit,
     validateUuidParam(),
     validateRequest({ query: pathPaymentQuoteQuerySchema }),
@@ -1275,16 +1239,11 @@ function createPaymentsRouter({
         const supabase = await getSupabaseClient();
         const sourceAccount = req.query.source_account;
 
-        let query = supabase
+        const { data, error } = await supabase
           .from("payments")
-          .select("id, amount, asset, asset_issuer, recipient, status");
-
-        if (req.merchant?.id) {
-          query = query.eq("merchant_id", req.merchant.id);
-        }
-
-        const { data, error } = await query
+          .select("id, amount, asset, asset_issuer, recipient, status")
           .eq("id", req.params.id)
+          .eq("merchant_id", req.merchant.id)
           .is("deleted_at", null)
           .maybeSingle();
 

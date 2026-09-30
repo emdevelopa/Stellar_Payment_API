@@ -13,12 +13,15 @@ vi.hoisted(() => {
   process.env.PATH_PAYMENT_QUOTE_RATE_LIMIT_MAX = '100000';
   // Wide enough that every request in a burst joins the load before it times out.
   process.env.EXCHANGE_RATE_LOAD_TIMEOUT_MS = '1000';
+  process.env.EXCHANGE_RATE_ORACLE_RETRY_BASE_DELAY_MS = '0';
+  process.env.EXCHANGE_RATE_ORACLE_RETRY_MAX_DELAY_MS = '0';
 });
 
 import { createApp } from '../../src/app.js';
 import { closePool } from '../../src/lib/db.js';
 import { findStrictReceivePaths } from '../../src/lib/stellar.js';
 import { resetExchangeRateCache, generateRateCacheKey } from '../../src/lib/exchange-rate-cache.js';
+import { resetExchangeRateOracleHealth } from '../../src/lib/exchange-rate-oracle-telemetry.js';
 import {
   configureExchangeRateCoordination,
   resetExchangeRateCoordination,
@@ -150,6 +153,7 @@ describe('Exchange Rate Oracle Cache — HTTP integration', () => {
     for (let i = 1; i <= 5; i++) seedPayment(i, `${i}.0000000`);
     resetExchangeRateCache();
     resetExchangeRateCoordination();
+    resetExchangeRateOracleHealth();
     findStrictReceivePaths.mockReset();
     findStrictReceivePaths.mockImplementation(async ({ destAmount }) => horizonPath(destAmount));
   });
@@ -208,11 +212,11 @@ describe('Exchange Rate Oracle Cache — HTTP integration', () => {
   });
 
   it('fails every waiter on a Horizon error without caching it', async () => {
-    const horizon = gatedHorizon();
-    const burst = await burstJoined(app, horizon, 10);
-    horizon.failAll(Object.assign(new Error('Horizon 503'), { status: 502 }));
-    const responses = await Promise.all(burst);
+    findStrictReceivePaths.mockRejectedValue(Object.assign(new Error('Horizon 503'), { status: 502 }));
+    const responses = await Promise.all(Array.from({ length: 10 }, () => quote(app)));
     expect(responses.every((r) => r.status === 502)).toBe(true);
+    // One single-flight load, retried to the attempt ceiling — not once per waiter.
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(3);
 
     findStrictReceivePaths.mockImplementation(async ({ destAmount }) => horizonPath(destAmount));
     expect((await quote(app)).status).toBe(200);
@@ -254,6 +258,21 @@ describe('Exchange Rate Oracle Cache — HTTP integration', () => {
     expect(res.text).toContain('exchange_rate_cache_inflight_loads');
     expect(res.text).toContain('exchange_rate_lock_acquisitions_total');
     expect(res.text).toContain('exchange_rate_coordination_fallbacks_total');
+    expect(res.text).toContain('exchange_rate_oracle_cache_health_state');
+    expect(res.text).toContain('exchange_rate_oracle_cache_loads_total');
+  });
+
+  it('reports oracle cache health without quote or account data', async () => {
+    expect((await quote(app)).status).toBe(200);
+    const res = await request(app).get('/health/exchange-rate-oracle-cache');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'healthy', success: 1, errors: 0 });
+    expect(res.body.thresholds.min_samples).toBeGreaterThan(0);
+    expect(JSON.stringify(res.body)).not.toContain(SOURCE_ACCOUNT);
+    expect(JSON.stringify(res.body)).not.toContain('USDC');
+
+    const health = await request(app).get('/health');
+    expect(health.body.services.exchange_rate_oracle_cache).toBe('healthy');
   });
 
   describe('with Redis coordination', () => {

@@ -42,13 +42,15 @@ function createSupabaseSelectMock(payment) {
   return chain;
 }
 
-function getPathPaymentQuoteHandler() {
+function getPathPaymentQuoteRoute() {
   const router = createPaymentsRouter();
-  const layer = router.stack.find(
+  return router.stack.find(
     (entry) => entry.route?.path === "/path-payment-quote/:id",
-  );
+  ).route;
+}
 
-  return layer.route.stack.at(-1).handle;
+function getPathPaymentQuoteHandler() {
+  return getPathPaymentQuoteRoute().stack.at(-1).handle;
 }
 
 function createMockResponse() {
@@ -65,6 +67,22 @@ function createMockResponse() {
     },
   };
 }
+
+describe("GET /api/path-payment-quote/:id — authentication (issue #1309)", () => {
+  it("is protected by requireApiKeyAuth, not left unauthenticated", () => {
+    // This route sits outside the `/api/payments` prefix that app.js gates
+    // with requireApiKeyAuth() at the mount level, so it needs its own
+    // per-route auth middleware or it is reachable by anyone. Assert the
+    // middleware stack actually contains an auth layer rather than relying
+    // only on behavioral tests, so a future refactor that silently drops it
+    // fails immediately here instead of shipping an unauthenticated route
+    // again.
+    const route = getPathPaymentQuoteRoute();
+    const middlewareNames = route.stack.map((layer) => layer.name);
+
+    expect(middlewareNames).toContain("requireApiKeyAuth");
+  });
+});
 
 describe("GET /api/path-payment-quote/:id", () => {
   const paymentId = "9f927a2c-02d4-4f76-914c-62cf44d9525e";

@@ -41,6 +41,7 @@ import {
   paymentProcessorRefundsTotal,
   paymentProcessorListRequestsTotal,
 } from "../lib/payment-processor-metrics.js";
+import { withPaymentProcessorLock } from "../lib/payment-processor-lock.js";
 
 const SAFE_METADATA_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
@@ -627,7 +628,16 @@ export const paymentService = {
     return { payment: response };
   },
 
-  async verifyPayment(paymentId, merchantId = null, io = null) {
+  async verifyPayment(paymentId, merchantId = null, io = null, lockHeld = false) {
+    if (!lockHeld) {
+      const redis = await connectRedisClient();
+      return withPaymentProcessorLock(
+        "verify",
+        `${merchantId || "public"}:${paymentId}`,
+        () => paymentService.verifyPayment(paymentId, merchantId, io, true),
+        { redisClient: redis, requireDistributed: Boolean(process.env.REDIS_URL) },
+      );
+    }
     const verifyStart = Date.now();
     const recordVerificationOutcome = (outcome) => {
       paymentProcessorVerificationsTotal.inc({ asset: "unknown", outcome });
@@ -844,7 +854,16 @@ export const paymentService = {
     }
   },
 
-  async generateRefundTx(paymentId, merchantId) {
+  async generateRefundTx(paymentId, merchantId, lockHeld = false) {
+    if (!lockHeld) {
+      const redis = await connectRedisClient();
+      return withPaymentProcessorLock(
+        "refund",
+        `${merchantId}:${paymentId}`,
+        () => paymentService.generateRefundTx(paymentId, merchantId, true),
+        { redisClient: redis, requireDistributed: Boolean(process.env.REDIS_URL) },
+      );
+    }
     const supabase = await getSupabaseClient();
     const { data: payment, error } = await supabase
       .from("payments")
@@ -930,7 +949,16 @@ export const paymentService = {
     };
   },
 
-  async confirmRefundTx(paymentId, merchantId, txHash) {
+  async confirmRefundTx(paymentId, merchantId, txHash, lockHeld = false) {
+    if (!lockHeld) {
+      const redis = await connectRedisClient();
+      return withPaymentProcessorLock(
+        "refund",
+        `${merchantId}:${paymentId}`,
+        () => paymentService.confirmRefundTx(paymentId, merchantId, txHash, true),
+        { redisClient: redis, requireDistributed: Boolean(process.env.REDIS_URL) },
+      );
+    }
     const supabase = await getSupabaseClient();
     const { data: payment, error } = await supabase
       .from("payments")

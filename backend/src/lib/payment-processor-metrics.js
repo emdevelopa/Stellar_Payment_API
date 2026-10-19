@@ -92,6 +92,20 @@ export const paymentProcessorListRequestsTotal = new client.Counter({
   labelNames: ["outcome"],
 });
 
+/** Distributed state-transition lock health (fixed, server-owned labels). */
+export const paymentProcessorLockAcquisitions = new client.Counter({
+  name: "payment_processor_lock_acquisitions_total",
+  help: "Payment processor lock attempts, by operation and outcome",
+  labelNames: ["operation", "outcome"],
+});
+
+export const paymentProcessorLockWaitDuration = new client.Histogram({
+  name: "payment_processor_lock_wait_duration_seconds",
+  help: "Time spent waiting for a payment processor lock",
+  labelNames: ["operation", "outcome"],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2],
+});
+
 register.registerMetric(paymentProcessorSessionsTotal);
 register.registerMetric(paymentProcessorSessionDuration);
 register.registerMetric(paymentProcessorVerificationsTotal);
@@ -100,5 +114,7 @@ register.registerMetric(paymentProcessorStatusCacheHits);
 register.registerMetric(paymentProcessorStatusCacheMisses);
 register.registerMetric(paymentProcessorRefundsTotal);
 register.registerMetric(paymentProcessorListRequestsTotal);
+register.registerMetric(paymentProcessorLockAcquisitions);
+register.registerMetric(paymentProcessorLockWaitDuration);
 
 export { register as paymentProcessorRegister };

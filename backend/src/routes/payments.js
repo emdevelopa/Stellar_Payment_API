@@ -49,6 +49,7 @@ import {
   PAYMENT_SESSION_IN_PROGRESS,
 } from "../lib/payment-session-lock.js";
 import { lookupIdempotentResponse } from "../lib/idempotency.js";
+import { withPaymentProcessorLock } from "../lib/payment-processor-lock.js";
 import {
   paymentProcessorSessionsTotal,
   paymentProcessorSessionDuration,
@@ -87,6 +88,34 @@ function isSignatureVerificationAccepted(result) {
   }
 
   return Boolean(result && typeof result === "object" && result.valid === true);
+}
+
+function paymentProcessorLockMiddleware(operation) {
+  return async (req, res, next) => {
+    try {
+      const redisClient = await connectRedisClient();
+      await withPaymentProcessorLock(
+        operation,
+        `${req.merchant?.id || "public"}:${req.params.id}`,
+        () => new Promise((resolve) => {
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            res.off("finish", done);
+            res.off("close", done);
+            resolve();
+          };
+          res.once("finish", done);
+          res.once("close", done);
+          next();
+        }),
+        { redisClient, requireDistributed: Boolean(process.env.REDIS_URL) },
+      );
+    } catch (err) {
+      next(err);
+    }
+  };
 }
 
 async function verifyTransactionSignatureIfAvailable(txHash) {
@@ -603,6 +632,7 @@ function createPaymentsRouter({
     "/verify-payment/:id",
     verifyPaymentRateLimit,
     validateUuidParam(),
+    paymentProcessorLockMiddleware("verify"),
     async (req, res, next) => {
       const verifyStart = Date.now();
       // Records the granular verification outcome exactly once per attempt

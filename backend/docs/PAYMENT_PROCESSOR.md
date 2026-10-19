@@ -58,6 +58,8 @@ Exposed on `GET /metrics` (merged into the core registry output).
 | `payment_processor_status_cache_misses_total` | counter | – | ” |
 | `payment_processor_refunds_total` | counter | `stage`, `outcome` | generate/confirm funnel incl. rejections |
 | `payment_processor_list_requests_total` | counter | `outcome` | list endpoint health incl. pool fallback |
+| `payment_processor_lock_acquisitions_total` | counter | `operation`, `outcome` | distributed lock acquisition, contention, and infrastructure errors |
+| `payment_processor_lock_wait_duration_seconds` | histogram | `operation`, `outcome` | time spent waiting for verification/refund leases |
 
 Useful queries:
 
@@ -117,4 +119,12 @@ Include the printed percentile tables in PRs touching the processor.
 - Refunds require a confirmed payment and are single-use (`refund_status`)
 - Verification uses a DB-level conditional update so a `tx_hash` can only be
   claimed once even under concurrent confirmation attempts
+- Verification and refund state transitions use per-payment Redis leases across
+  API instances. Keys contain SHA-256 digests instead of merchant/payment IDs;
+  random owner tokens plus atomic compare-and-renew/release scripts prevent a
+  stale worker from extending or deleting a successor's lease. Locks expire
+  after `PAYMENT_PROCESSOR_LOCK_TTL_MS` and contention is bounded by
+  `PAYMENT_PROCESSOR_LOCK_WAIT_MS`. Redis command failures fail closed for
+  mutating operations; an intentionally unconfigured Redis client falls back
+  to same-process locking while database conditional writes remain authoritative.
 - Signature verification failure keeps payments pending (fail-closed)

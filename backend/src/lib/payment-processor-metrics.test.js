@@ -8,6 +8,8 @@ import {
   paymentProcessorStatusCacheMisses,
   paymentProcessorRefundsTotal,
   paymentProcessorListRequestsTotal,
+  paymentProcessorLockAcquisitions,
+  paymentProcessorLockWaitDuration,
   paymentProcessorRegister,
 } from "./payment-processor-metrics.js";
 
@@ -25,6 +27,8 @@ describe("payment-processor-metrics (issue #1088)", () => {
     paymentProcessorStatusCacheMisses.reset();
     paymentProcessorRefundsTotal.reset();
     paymentProcessorListRequestsTotal.reset();
+    paymentProcessorLockAcquisitions.reset();
+    paymentProcessorLockWaitDuration.reset();
   });
 
   it("registers every granular series on its own registry", async () => {
@@ -38,6 +42,8 @@ describe("payment-processor-metrics (issue #1088)", () => {
       "payment_processor_status_cache_misses_total",
       "payment_processor_refunds_total",
       "payment_processor_list_requests_total",
+      "payment_processor_lock_acquisitions_total",
+      "payment_processor_lock_wait_duration_seconds",
     ]) {
       expect(text).toContain(name);
     }
@@ -88,8 +94,8 @@ describe("payment-processor-metrics (issue #1088)", () => {
     paymentProcessorStatusCacheMisses.inc();
 
     const text = await metricText();
-    const hits = text.match(/payment_processor_status_cache_hits_total (\d+)/);
-    const misses = text.match(/payment_processor_status_cache_misses_total (\d+)/);
+    const hits = text.match(/payment_processor_status_cache_hits_total(?:\{[^}]*\})? (\d+)/);
+    const misses = text.match(/payment_processor_status_cache_misses_total(?:\{[^}]*\})? (\d+)/);
     expect(Number(hits[1])).toBe(2);
     expect(Number(misses[1])).toBe(1);
   });

@@ -21,6 +21,8 @@ import {
   queryCacheSize,
 } from "./metrics.js";
 
+const _inFlightQueries = new Map();
+
 const DEFAULT_MAX_ENTRIES = Number.parseInt(
   process.env.DB_QUERY_CACHE_MAX_ENTRIES || "500",
   10,
@@ -35,6 +37,13 @@ const DEFAULT_TTL_MS = Number.parseInt(
  * Uses SHA-256 to produce a fixed-length key regardless of input size.
  */
 export function generateCacheKey(text, values = []) {
+  // Issue #1318: `text` was assumed to always be a string and dereferenced
+  // directly, so a null/undefined query text (e.g. a caller building the
+  // query dynamically and forgetting a branch) threw a null pointer
+  // exception here instead of a clear, catchable error.
+  if (typeof text !== "string" || text.length === 0) {
+    throw new TypeError("generateCacheKey requires a non-empty query string");
+  }
   const normalized = text.replace(/\s+/g, " ").trim();
   const payload = JSON.stringify({ q: normalized, v: values });
   return createHash("sha256").update(payload).digest("hex");
@@ -78,7 +87,7 @@ export class QueryCache {
     this.cache.set(key, entry);
     queryCacheHitTotal.inc();
 
-    return entry.result;
+    return structuredClone(entry.result);
   }
 
   /**
@@ -99,7 +108,7 @@ export class QueryCache {
     }
 
     this.cache.set(key, {
-      result,
+      result: structuredClone(result),
       insertedAt: Date.now(),
     });
 
@@ -169,6 +178,14 @@ export async function cachedQuery(
   queryFn,
   { useCache = true, ttlMs } = {},
 ) {
+  // Issue #1318: guard against a null/undefined `text` before calling
+  // String.prototype methods on it, which previously threw a null pointer
+  // exception ("Cannot read properties of undefined") instead of a
+  // descriptive error.
+  if (typeof text !== "string" || text.length === 0) {
+    throw new TypeError("cachedQuery requires a non-empty query string");
+  }
+
   // Only cache SELECT queries
   if (!useCache || !text.trimStart().toUpperCase().startsWith("SELECT")) {
     return queryFn(text, values, options);
@@ -182,10 +199,25 @@ export async function cachedQuery(
     return cached;
   }
 
-  const result = await queryFn(text, values, options);
-  queryCache.set(cacheKey, result);
+  if (_inFlightQueries.has(cacheKey)) {
+    logger.debug({ label: options.label, cacheKey }, "Query cache hit (in-flight)");
+    return _inFlightQueries.get(cacheKey).then((res) => structuredClone(res));
+  }
 
-  return result;
+  const promise = queryFn(text, values, options)
+    .then((result) => {
+      queryCache.set(cacheKey, result);
+      _inFlightQueries.delete(cacheKey);
+      return structuredClone(result);
+    })
+    .catch((err) => {
+      _inFlightQueries.delete(cacheKey);
+      throw err;
+    });
+
+  _inFlightQueries.set(cacheKey, promise);
+
+  return promise;
 }
 
 /**

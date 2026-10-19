@@ -1,0 +1,78 @@
+# Prometheus alerting rules for the Audit Circuit Breaker (issue #1433).
+#
+# Load with:   rule_files: ["docs/alerts/audit-circuit-breaker.rules.yml"]
+# Validate:    promtool check rules docs/alerts/audit-circuit-breaker.rules.yml
+#
+# Metric reference:
+#   audit_circuit_breaker_state             - Gauge: 0=CLOSED, 1=OPEN, 2=HALF_OPEN
+#   audit_circuit_breaker_transitions_total - Counter (label, from_state, to_state)
+#   audit_circuit_breaker_failures_total    - Counter (label)
+#
+# These metrics are emitted by AuditCircuitBreaker (src/lib/audit-circuit-breaker.js)
+# and are registered on the module-local _cbRegistry (also available via the
+# default prom-client default registry if the host application merges it).
+
+groups:
+  - name: audit-circuit-breaker
+    rules:
+      # ── AuditCircuitBreakerOpen ───────────────────────────────────────────
+      # Fires when any labeled circuit breaker has been in the OPEN state
+      # (gauge value == 1) for more than 2 continuous minutes.  An OPEN
+      # circuit means audit writes are being dropped to the fallback log.
+      - alert: AuditCircuitBreakerOpen
+        expr: audit_circuit_breaker_state == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            Audit circuit breaker '{{ $labels.label }}' has been OPEN for
+            over 2 minutes
+          description: >
+            The audit circuit breaker for label '{{ $labels.label }}' entered
+            the OPEN state and has not recovered. All DB audit writes are
+            being redirected to the fallback file log. Investigate database
+            connectivity and check the audit_fallback.log for queued entries.
+
+      # ── AuditCircuitBreakerFlapping ───────────────────────────────────────
+      # Fires when the circuit transitions more than 5 times in any 10-minute
+      # rolling window.  Excessive flapping usually indicates an unstable DB
+      # connection or misconfigured failure threshold.
+      - alert: AuditCircuitBreakerFlapping
+        expr: >
+          sum by (label) (
+            increase(audit_circuit_breaker_transitions_total[10m])
+          ) > 5
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            Audit circuit breaker '{{ $labels.label }}' is flapping
+            ({{ $value | humanize }} transitions in 10 min)
+          description: >
+            The circuit breaker transitions more than 5 times per 10-minute
+            window, suggesting unstable database connectivity or a failure
+            threshold that is set too low.  Review AUDIT_CIRCUIT_FAILURE_THRESHOLD
+            and AUDIT_CIRCUIT_RESET_MS environment variables.
+
+      # ── AuditCircuitBreakerHighFailureRate ────────────────────────────────
+      # Fires when more than 10 failures are recorded in any 5-minute window.
+      # This can precede the circuit opening and gives an early warning signal
+      # while the circuit is still in the CLOSED state.
+      - alert: AuditCircuitBreakerHighFailureRate
+        expr: >
+          sum by (label) (
+            increase(audit_circuit_breaker_failures_total[5m])
+          ) > 10
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            Audit circuit breaker '{{ $labels.label }}' recorded high failure
+            rate ({{ $value | humanize }} failures in 5 min)
+          description: >
+            More than 10 failures in the last 5 minutes for circuit breaker
+            '{{ $labels.label }}'.  The circuit may open soon if the failure
+            rate is not addressed.  Check database health and audit-writer logs.

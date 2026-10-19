@@ -6,6 +6,9 @@ import {
   exchangeRateHorizonCalls,
   exchangeRateSourceAccountValidation,
   exchangeRateSlippageApplied,
+  dashboardMetricsRequestsTotal,
+  dashboardMetricsRequestDuration,
+  dashboardMetricsErrorsTotal,
 } from "./metrics.js";
 
 describe("Exchange Rate Metrics", () => {
@@ -79,5 +82,48 @@ describe("Exchange Rate Metrics", () => {
     expect(metricsOutput).toContain("exchange_rate_horizon_calls_total");
     expect(metricsOutput).toContain("exchange_rate_source_account_validation_total");
     expect(metricsOutput).toContain("exchange_rate_slippage_applied_total");
+  });
+});
+
+describe("Admin Dashboard Service Metrics", () => {
+  beforeEach(() => {
+    dashboardMetricsRequestsTotal.reset();
+    dashboardMetricsRequestDuration.reset();
+    dashboardMetricsErrorsTotal.reset();
+  });
+
+  it("dashboardMetricsRequestsTotal tracks per-endpoint request/status counts", () => {
+    dashboardMetricsRequestsTotal.inc({ endpoint: "summary", status_code: "200" });
+    dashboardMetricsRequestsTotal.inc({ endpoint: "volume", status_code: "500" });
+
+    expect(dashboardMetricsRequestsTotal.name).toBe("dashboard_metrics_requests_total");
+    expect(dashboardMetricsRequestsTotal.labelNames).toEqual(["endpoint", "status_code"]);
+  });
+
+  it("dashboardMetricsRequestDuration records per-endpoint latency observations", () => {
+    dashboardMetricsRequestDuration.observe({ endpoint: "revenue" }, 0.08);
+
+    expect(dashboardMetricsRequestDuration.name).toBe("dashboard_metrics_request_duration_seconds");
+    expect(dashboardMetricsRequestDuration.labelNames).toEqual(["endpoint"]);
+  });
+
+  it("dashboardMetricsErrorsTotal tracks per-endpoint error counts", () => {
+    dashboardMetricsErrorsTotal.inc({ endpoint: "summary", error_type: "internal" });
+
+    expect(dashboardMetricsErrorsTotal.name).toBe("dashboard_metrics_errors_total");
+    expect(dashboardMetricsErrorsTotal.labelNames).toEqual(["endpoint", "error_type"]);
+  });
+
+  it("dashboard metrics are registered and exposed via /metrics output", async () => {
+    dashboardMetricsRequestsTotal.inc({ endpoint: "summary", status_code: "200" });
+    dashboardMetricsRequestDuration.observe({ endpoint: "summary" }, 0.05);
+    dashboardMetricsErrorsTotal.inc({ endpoint: "summary", error_type: "internal" });
+
+    const { register } = await import("./metrics.js");
+    const metricsOutput = await register.metrics();
+
+    expect(metricsOutput).toContain("dashboard_metrics_requests_total");
+    expect(metricsOutput).toContain("dashboard_metrics_request_duration_seconds");
+    expect(metricsOutput).toContain("dashboard_metrics_errors_total");
   });
 });

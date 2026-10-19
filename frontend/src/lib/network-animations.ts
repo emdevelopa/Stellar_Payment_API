@@ -421,14 +421,14 @@ export const latencyBarVariants: Variants = {
 };
 
 // Animation utility functions
-export const getLatencyVariant = (latency: number | null): keyof typeof latencyVariants => {
+export const getLatencyVariant = (latency: number | null): "good" | "warning" | "bad" => {
   if (latency === null) return "good";
   if (latency < 100) return "good";
   if (latency < 300) return "warning";
   return "bad";
 };
 
-export const getConnectionQualityVariant = (latency: number | null): keyof typeof connectionQualityVariants => {
+export const getConnectionQualityVariant = (latency: number | null): "excellent" | "good" | "fair" | "poor" => {
   if (latency === null) return "poor";
   if (latency < 50) return "excellent";
   if (latency < 150) return "good";
@@ -436,9 +436,9 @@ export const getConnectionQualityVariant = (latency: number | null): keyof typeo
   return "poor";
 };
 
-export const getStatusDotVariant = (status: string): keyof typeof statusDotVariants => {
-  const validStatuses = ["online", "offline", "slow", "checking"];
-  return validStatuses.includes(status) ? status as keyof typeof statusDotVariants : "checking";
+export const getStatusDotVariant = (status: string): "online" | "offline" | "slow" | "checking" => {
+  const validStatuses = ["online", "offline", "slow", "checking"] as const;
+  return validStatuses.includes(status as typeof validStatuses[number]) ? status as "online" | "offline" | "slow" | "checking" : "checking";
 };
 
 // Animation hooks for reduced motion support
@@ -448,8 +448,9 @@ export const useReducedMotion = () => {
 };
 
 // Adaptive transition configuration
-export const getAdaptiveTransition = (baseTransition: Transition): Transition => {
-  if (useReducedMotion()) {
+export const getAdaptiveTransition = (baseTransition: Transition, reducedMotion?: boolean): Transition => {
+  const shouldReduce = reducedMotion ?? (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  if (shouldReduce) {
     return {
       ...baseTransition,
       duration: 0.1,

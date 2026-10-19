@@ -248,16 +248,18 @@ describe("Payment Processor Security Audit", () => {
         },
         error: null,
       });
-      const update = vi.fn().mockResolvedValue({ error: null });
       mockSupabaseFrom.mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnThis(),
           is: vi.fn().mockReturnThis(),
           maybeSingle,
         }),
+        // update().eq(id).eq(status).select() — the conditional-update guard
+        // from issue #1310. Resolving with a non-empty array simulates this
+        // call being the one that won the race.
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnThis(),
-          is: vi.fn().mockReturnThis(),
+          select: vi.fn().mockResolvedValue({ data: [{ id: "pay_1" }], error: null }),
         }),
       });
 

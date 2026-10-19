@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import Skeleton from "react-loading-skeleton";
@@ -39,6 +39,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
   const { step, isBusy, interactiveUrl, start, reset: resetFlow } = useSep24AnchorFlow({
     networkPassphrase: NETWORK_PASSPHRASE,
   });
+  const descriptionId = useId();
   const [amount, setAmount] = useState("");
   const [anchorDomain, setAnchorDomain] = useState(DEFAULT_ANCHOR);
   const [selectedAsset, setSelectedAsset] = useState(SUPPORTED_ASSETS[0]);
@@ -73,7 +74,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
   }, [start, anchorDomain, amount, selectedAsset, t]);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={t("title")}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={t("title")} descriptionId={descriptionId}>
       <AnimatePresence mode="wait">
         {step === "IDLE" && (
           <motion.div
@@ -84,7 +85,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
             transition={{ duration: 0.18 }}
             className="flex flex-col gap-6"
           >
-            <p className="text-sm text-slate-400">{t("description")}</p>
+            <p id={descriptionId} className="text-sm text-slate-400">{t("description")}</p>
 
             {error && (
               <div
@@ -99,14 +100,29 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 {t("selectAsset")}
               </label>
-              <div className="grid grid-cols-2 gap-4">
-                {SUPPORTED_ASSETS.map((asset) => (
+              <div
+                role="group"
+                aria-label={t("selectAsset")}
+                className="grid grid-cols-2 gap-4"
+              >
+                {SUPPORTED_ASSETS.map((asset, idx) => (
                   <button
                     key={asset.code}
                     type="button"
                     onClick={() => setSelectedAsset(asset)}
                     disabled={isBusy}
                     aria-pressed={selectedAsset.code === asset.code}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSelectedAsset(SUPPORTED_ASSETS[(idx + 1) % SUPPORTED_ASSETS.length]);
+                      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSelectedAsset(
+                          SUPPORTED_ASSETS[(idx - 1 + SUPPORTED_ASSETS.length) % SUPPORTED_ASSETS.length],
+                        );
+                      }
+                    }}
                     className={`flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                       selectedAsset.code === asset.code
                         ? "border-mint bg-mint/5 ring-1 ring-mint"
@@ -157,6 +173,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
               type="button"
               onClick={handleStartDeposit}
               disabled={isBusy}
+              aria-busy={isBusy}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-mint py-4 text-sm font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             >
               {isBusy ? (

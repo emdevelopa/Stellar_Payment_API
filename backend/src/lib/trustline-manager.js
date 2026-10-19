@@ -8,7 +8,7 @@
  * - Task #596: Optimized SQL queries for trustline data
  */
 
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import * as StellarSdk from "stellar-sdk";
 import { queryWithRetry } from "./db.js";
 import {
@@ -22,6 +22,16 @@ import {
   RATE_LIMIT_REDIS_PREFIX,
 } from "./rate-limit.js";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { logger } from "./logger.js";
+import {
+  recordTrustlineCacheHit as recordTrustlineSignatureCacheHit,
+  recordTrustlineDeadLetterEntry,
+  recordTrustlineRateLimitRejection,
+  recordTrustlineRecoveryOutcome,
+  recordTrustlineSignatureVerification,
+  setTrustlineCircuitBreakerState,
+  setTrustlineDeadLetterQueueDepth,
+} from "./trustline-manager-metrics.js";
 
 // Rate limiting constants for trustline operations
 export const TRUSTLINE_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -46,6 +56,10 @@ const CIRCUIT_BREAKER_HALF_OPEN_PROBE_MS = 5 * 1000; // time before allowing pro
 const OPERATION_TIMEOUT_MS = 15 * 1000; // default per-operation timeout
 const DLQ_MAX_SIZE = 100; // maximum dead-letter queue entries
 const ERROR_RECOVERY_METRICS_WINDOW_MS = 60 * 1000; // 1 minute window for recovery metrics
+
+// Bounds for in-memory stores keyed by caller-influenced values (tx hashes, IPs)
+const VERIFICATION_CACHE_MAX_ENTRIES = 1000;
+const RATE_LIMIT_VIOLATIONS_MAX_KEYS = 10000;
 
 /**
  * Per-key rate limit violation tracking.
@@ -94,6 +108,7 @@ export class TrustlineSignatureVerifier {
    * Verify trustline operation signature with enhanced security
    */
   async verifyTrustlineSignature(txHash, options = {}) {
+    const verificationStart = Date.now();
     try {
       if (!txHash || typeof txHash !== "string") {
         throw new Error(
@@ -113,14 +128,20 @@ export class TrustlineSignatureVerifier {
       if (!skipCache) {
         const cached = this.verificationCache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+          recordTrustlineSignatureCacheHit();
           return cached.result;
         }
+        if (cached) this.verificationCache.delete(cacheKey);
       }
 
       // Step 1: Basic signature verification
       const basicVerification = await verifyTransactionSignature(txHash);
 
       if (!basicVerification.valid) {
+        recordTrustlineSignatureVerification(
+          "invalid",
+          (Date.now() - verificationStart) / 1000,
+        );
         return {
           ...basicVerification,
           valid: false,
@@ -148,8 +169,14 @@ export class TrustlineSignatureVerifier {
         limit: trustlineVerification.limit,
       };
 
+      recordTrustlineSignatureVerification(
+        result.valid ? "valid" : "invalid",
+        (Date.now() - verificationStart) / 1000,
+      );
+
       // Cache the result
       if (!skipCache) {
+        this._pruneCache();
         this.verificationCache.set(cacheKey, {
           result,
           timestamp: Date.now(),
@@ -158,6 +185,10 @@ export class TrustlineSignatureVerifier {
 
       return result;
     } catch (error) {
+      recordTrustlineSignatureVerification(
+        "error",
+        (Date.now() - verificationStart) / 1000,
+      );
       return {
         valid: false,
         reason: `Trustline signature verification error: ${error.message}`,
@@ -293,6 +324,22 @@ export class TrustlineSignatureVerifier {
   }
 
   /**
+   * Drop expired entries and evict the oldest ones so the cache stays bounded.
+   */
+  _pruneCache() {
+    const now = Date.now();
+    for (const [key, entry] of this.verificationCache) {
+      if (now - entry.timestamp >= this.cacheTimeout) {
+        this.verificationCache.delete(key);
+      }
+    }
+    while (this.verificationCache.size >= VERIFICATION_CACHE_MAX_ENTRIES) {
+      const oldest = this.verificationCache.keys().next().value;
+      this.verificationCache.delete(oldest);
+    }
+  }
+
+  /**
    * Clear verification cache
    */
   clearCache() {
@@ -358,9 +405,17 @@ export class TrustlineRateLimiter {
   static isInternalService(req) {
     const internalToken = req?.headers?.["x-internal-service-token"];
     const configuredToken = process.env.INTERNAL_SERVICE_TOKEN;
-    return Boolean(
-      configuredToken && internalToken && internalToken === configuredToken,
-    );
+    if (
+      !configuredToken ||
+      typeof internalToken !== "string" ||
+      internalToken.length === 0
+    ) {
+      return false;
+    }
+    // Compare fixed-length digests in constant time to avoid timing leaks.
+    const provided = createHash("sha256").update(internalToken).digest();
+    const expected = createHash("sha256").update(configuredToken).digest();
+    return timingSafeEqual(provided, expected);
   }
 
   /**
@@ -372,6 +427,13 @@ export class TrustlineRateLimiter {
       count: 0,
       lastSeen: null,
     };
+    if (
+      !rateLimitViolations.has(key) &&
+      rateLimitViolations.size >= RATE_LIMIT_VIOLATIONS_MAX_KEYS
+    ) {
+      // Evict the oldest tracked key so attacker-controlled keys cannot grow the map unbounded.
+      rateLimitViolations.delete(rateLimitViolations.keys().next().value);
+    }
     rateLimitViolations.set(key, {
       count: current.count + 1,
       lastSeen: new Date().toISOString(),
@@ -422,6 +484,7 @@ export class TrustlineRateLimiter {
       handler: (req, res, _next, options) => {
         const key = this.getTrustlineOperationKey(req);
         this.recordViolation(key);
+        recordTrustlineRateLimitRejection("burst");
         res.status(options.statusCode).json(options.message);
       },
       store,
@@ -454,6 +517,7 @@ export class TrustlineRateLimiter {
       handler: (req, res, _next, options) => {
         const key = this.getTrustlineOperationKey(req);
         this.recordViolation(key);
+        recordTrustlineRateLimitRejection("operations");
         res.status(options.statusCode).json(options.message);
       },
       requestWasSuccessful: (_req, res) => res.statusCode < 400,
@@ -491,6 +555,7 @@ export class TrustlineRateLimiter {
       handler: (req, res, _next, options) => {
         const key = this.getTrustlineVerificationKey(req);
         this.recordViolation(key);
+        recordTrustlineRateLimitRejection("verifications");
         res.status(options.statusCode).json(options.message);
       },
       requestWasSuccessful: (_req, res) => res.statusCode < 400,
@@ -524,6 +589,8 @@ export class TrustlineErrorRecovery {
         // States: 'closed' | 'open' | 'half-open'
         state: "closed",
         successAfterHalfOpen: 0,
+        // True while a half-open probe is running; prevents concurrent probes
+        probeInFlight: false,
         metrics: {
           totalFailures: 0,
           totalRecoveries: 0,
@@ -553,6 +620,7 @@ export class TrustlineErrorRecovery {
         // Transition to half-open: allow a single probe
         s.state = "half-open";
         s.successAfterHalfOpen = 0;
+        s.probeInFlight = false;
         return "probe";
       }
       // Still within the open window
@@ -571,6 +639,7 @@ export class TrustlineErrorRecovery {
   static _recordFailure(context, error) {
     const s = this._getState(context);
     s.failures++;
+    s.probeInFlight = false;
     s.lastFailureTime = Date.now();
     s.metrics.totalFailures++;
     s.metrics.lastErrorMessage = error?.message ?? String(error);
@@ -583,21 +652,29 @@ export class TrustlineErrorRecovery {
       s.state = "open";
     }
 
+    setTrustlineCircuitBreakerState(context, s.state === "open", s.failures);
+    recordTrustlineRecoveryOutcome(context, false);
+
     // Update recovery metrics (Task #880 - Enhanced monitoring)
     this._updateRecoveryMetrics(context, false);
   }
 
   static _recordSuccess(context) {
     const s = this._getState(context);
+    s.probeInFlight = false;
     if (s.state === "half-open") {
       // Probe succeeded – close the circuit
       s.state = "closed";
       s.failures = 0;
       s.metrics.totalRecoveries++;
     } else {
+      // Only a success after prior failures counts as a recovery
+      if (s.failures > 0) s.metrics.totalRecoveries++;
       s.failures = 0;
-      s.metrics.totalRecoveries++;
     }
+
+    setTrustlineCircuitBreakerState(context, s.state === "open", s.failures);
+    recordTrustlineRecoveryOutcome(context, true);
 
     // Update recovery metrics (Task #880 - Enhanced monitoring)
     this._updateRecoveryMetrics(context, true);
@@ -690,6 +767,10 @@ export class TrustlineErrorRecovery {
     };
 
     deadLetterQueue.push(enhancedEntry);
+    recordTrustlineDeadLetterEntry(
+      deadLetterQueue.length,
+      enhancedEntry.errorType,
+    );
   }
 
   /**
@@ -745,7 +826,9 @@ export class TrustlineErrorRecovery {
 
   /** Drain (clear) the dead-letter queue and return its contents. */
   static drainDeadLetterQueue() {
-    return deadLetterQueue.splice(0, deadLetterQueue.length);
+    const drained = deadLetterQueue.splice(0, deadLetterQueue.length);
+    setTrustlineDeadLetterQueueDepth(0);
+    return drained;
   }
 
   // ─── Timeout Wrapper ─────────────────────────────────────────────────────────
@@ -786,7 +869,17 @@ export class TrustlineErrorRecovery {
       maxAttempts = MAX_RETRY_ATTEMPTS,
     } = {},
   ) {
-    const disposition = this._circuitBreakerDisposition(context);
+    let disposition = this._circuitBreakerDisposition(context);
+
+    if (disposition === "probe") {
+      // Half-open allows a single in-flight probe; concurrent callers are rejected
+      const breaker = this._getState(context);
+      if (breaker.probeInFlight) {
+        disposition = "reject";
+      } else {
+        breaker.probeInFlight = true;
+      }
+    }
 
     if (disposition === "reject") {
       const cbError = new Error(
@@ -839,7 +932,7 @@ export class TrustlineErrorRecovery {
             this._pushToDeadLetterQueue({
               context,
               errorType: errorClass.type,
-              errorMessage: error.message,
+              errorMessage: error?.message,
               attempts: attempt,
             });
           }
@@ -890,11 +983,11 @@ export class TrustlineErrorRecovery {
    * Classify errors for appropriate recovery strategy.
    */
   static classifyError(error) {
-    const message = error.message?.toLowerCase() || "";
-    const status = error.status || error.response?.status;
+    const message = error?.message?.toLowerCase() || "";
+    const status = error?.status || error?.response?.status;
 
     // Timeout errors - retryable
-    if (error.isTimeout || message.includes("timed out")) {
+    if (error?.isTimeout || message.includes("timed out")) {
       return {
         type: "timeout",
         retryable: true,
@@ -1023,13 +1116,13 @@ export class TrustlineErrorRecovery {
 
   static enhanceError(originalError, context, attempts, errorClass) {
     const enhanced = new Error(
-      `${context} failed after ${attempts} attempt${attempts !== 1 ? "s" : ""}: ${originalError.message} (${errorClass.reason})`,
+      `${context} failed after ${attempts} attempt${attempts !== 1 ? "s" : ""}: ${originalError?.message ?? String(originalError)} (${errorClass.reason})`,
     );
     enhanced.originalError = originalError;
     enhanced.context = context;
     enhanced.attempts = attempts;
     enhanced.errorClass = errorClass;
-    enhanced.status = originalError.status || 500;
+    enhanced.status = originalError?.status || 500;
     enhanced.recoverable = errorClass.retryable;
     return enhanced;
   }
@@ -1051,9 +1144,14 @@ export class TrustlineErrorRecovery {
   static resetCircuitBreaker(context = null) {
     if (context) {
       circuitBreakerRegistry.delete(context);
+      setTrustlineCircuitBreakerState(context, false, 0);
     } else {
       // Legacy behaviour: reset all breakers
+      const contexts = [...circuitBreakerRegistry.keys()];
       circuitBreakerRegistry.clear();
+      for (const ctx of contexts) {
+        setTrustlineCircuitBreakerState(ctx, false, 0);
+      }
     }
   }
 
@@ -1485,13 +1583,16 @@ export class TrustlineManager {
   async initialize() {
     try {
       const indexResults = await this.queryOptimizer.createOptimizedIndexes();
-      console.log(
-        "Trustline Manager initialized with database optimizations:",
-        indexResults,
+      logger.info(
+        { indexResults },
+        "Trustline Manager initialized with database optimizations",
       );
       return { success: true, indexResults };
     } catch (error) {
-      console.error("Failed to initialize Trustline Manager:", error);
+      logger.error(
+        { err: error, context: "trustline-manager.initialize" },
+        "Failed to initialize Trustline Manager",
+      );
       return { success: false, error: error.message };
     }
   }

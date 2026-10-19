@@ -13,23 +13,28 @@ import {
   getHomeDomain,
   getNetworkPassphrase,
   lookupMerchantByStellarAddress,
+  releaseChallengeNonce,
   Sep10AuthError,
   validateChallengeXdr,
 } from "../lib/sep10-auth.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { logLoginAttempt } from "../lib/audit.js";
+import { logger } from "../lib/logger.js";
 import { validateRequest } from "../lib/validation.js";
 import { authChallengeSchema, authVerifySchema } from "../lib/request-schemas.js";
 import {
   createSep10ChallengeRateLimit,
+  createSep10ChallengeIpRateLimit,
   createSep10VerifyRateLimit,
 } from "../lib/rate-limit.js";
 
 const defaultSep10ChallengeRateLimit = createSep10ChallengeRateLimit();
+const defaultSep10ChallengeIpRateLimit = createSep10ChallengeIpRateLimit();
 const defaultSep10VerifyRateLimit = createSep10VerifyRateLimit();
 
 export default function createAuthRouter({
   sep10ChallengeRateLimit = defaultSep10ChallengeRateLimit,
+  sep10ChallengeIpRateLimit = defaultSep10ChallengeIpRateLimit,
   sep10VerifyRateLimit = defaultSep10VerifyRateLimit,
 } = {}) {
   const router = express.Router();
@@ -82,13 +87,25 @@ export default function createAuthRouter({
       }
 
       if (!merchant || !merchant.password_hash) {
-        await logLoginAttempt({ merchantId: null, ipAddress, userAgent, status: "failure" });
+        await logLoginAttempt({
+          merchantId: null,
+          ipAddress,
+          userAgent,
+          status: "failure",
+          reason: "invalid_credentials",
+        });
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
       const valid = await verifyPassword(password, merchant.password_hash);
       if (!valid) {
-        await logLoginAttempt({ merchantId: merchant.id, ipAddress, userAgent, status: "failure" });
+        await logLoginAttempt({
+          merchantId: merchant.id,
+          ipAddress,
+          userAgent,
+          status: "failure",
+          reason: "invalid_credentials",
+        });
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
@@ -115,6 +132,9 @@ export default function createAuthRouter({
 
   router.post(
     "/auth/challenge",
+    // Per-IP ceiling first, so rotating `account` can't bypass the
+    // per-account+IP limiter below (#584).
+    sep10ChallengeIpRateLimit,
     sep10ChallengeRateLimit,
     validateRequest({ body: authChallengeSchema }),
     async (req, res, next) => {
@@ -122,14 +142,13 @@ export default function createAuthRouter({
         const { account } = req.body;
 
         const challengeXdr = generateChallenge(account);
-        const networkPassphrase =
-          process.env.STELLAR_NETWORK === "public"
-            ? "Public Global Stellar Network ; September 2015"
-            : "Test SDF Network ; September 2015";
 
+        // Advertise the exact passphrase the challenge was built with. The old
+        // case-sensitive check told wallets "testnet" when STELLAR_NETWORK was
+        // e.g. "PUBLIC", so they signed for the wrong network (#1294).
         res.json({
           transaction: challengeXdr,
-          network_passphrase: networkPassphrase,
+          network_passphrase: getNetworkPassphrase(),
         });
       } catch (err) {
         next(err);
@@ -144,6 +163,7 @@ export default function createAuthRouter({
     async (req, res, next) => {
       const ipAddress = req.ip ?? null;
       const userAgent = req.get("user-agent") ?? null;
+      let claimedNonce = null;
 
       try {
         const { transaction } = req.body;
@@ -174,12 +194,15 @@ export default function createAuthRouter({
             ipAddress,
             userAgent,
             status: "failure",
+            reason: verification.code,
           });
           return res.status(401).json({
             error: verification.error,
             code: verification.code,
           });
         }
+
+        claimedNonce = verification.nonce;
 
         const merchant = await lookupMerchantByStellarAddress(clientAccount, supabase);
 
@@ -189,6 +212,7 @@ export default function createAuthRouter({
             ipAddress,
             userAgent,
             status: "failure",
+            reason: "no_merchant_for_account",
           });
           return res.status(401).json({
             error: "No merchant account found for this Stellar address",
@@ -214,6 +238,13 @@ export default function createAuthRouter({
           },
         });
       } catch (err) {
+        // No token was issued for this challenge, so hand the nonce back and
+        // let the client retry the same signed challenge (#1295).
+        if (claimedNonce && !res.headersSent) {
+          releaseChallengeNonce(claimedNonce);
+          logger.info({ code: err?.code }, "sep10 nonce released after failed token issuance");
+        }
+
         if (err instanceof Sep10AuthError) {
           return res.status(err.httpStatus).json({
             error: err.code,

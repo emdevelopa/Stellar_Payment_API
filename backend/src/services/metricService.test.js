@@ -45,7 +45,7 @@ describe("metricService.getMonthlySummary", () => {
       ],
     });
 
-    const result = await metricService.getMonthlySummary(null, "merchant-1");
+    const result = await metricService.getMonthlySummary("merchant-1");
 
     expect(mockClientQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockClientQuery.mock.calls[0];
@@ -76,7 +76,7 @@ describe("metricService.getMonthlySummary", () => {
       ],
     });
 
-    const result = await metricService.getMonthlySummary(null, "merchant-1");
+    const result = await metricService.getMonthlySummary("merchant-1");
 
     expect(result.last_month.by_asset).toEqual([]);
     expect(result.current_month.by_asset).toEqual([
@@ -90,7 +90,7 @@ describe("metricService.getMonthlySummary", () => {
       .mockRejectedValueOnce(Object.assign(new Error("connection terminated"), { code: "08006" }))
       .mockResolvedValueOnce({ rows: [] });
 
-    const result = await metricService.getMonthlySummary(null, "merchant-1");
+    const result = await metricService.getMonthlySummary("merchant-1");
 
     expect(mockClientQuery).toHaveBeenCalledTimes(2);
     expect(mockCircuitExecute).toHaveBeenCalledTimes(1);
@@ -101,7 +101,7 @@ describe("metricService.getMonthlySummary", () => {
     mockIsRetryablePoolError.mockReturnValueOnce(false);
     mockClientQuery.mockRejectedValueOnce(new Error("syntax error"));
 
-    await expect(metricService.getMonthlySummary(null, "merchant-1")).rejects.toThrow(
+    await expect(metricService.getMonthlySummary("merchant-1")).rejects.toThrow(
       "syntax error",
     );
     expect(mockClientQuery).toHaveBeenCalledTimes(1);
@@ -118,7 +118,7 @@ describe("metricService.getRevenueByAsset", () => {
       rows: [{ asset: "USDC", asset_issuer: "GISSUER", total: "10", count: "3" }],
     });
 
-    const result = await metricService.getRevenueByAsset(null, "merchant-1");
+    const result = await metricService.getRevenueByAsset("merchant-1");
 
     expect(result.revenue).toEqual([
       { asset: "USDC", asset_issuer: "GISSUER", total: "10", count: 3 },
@@ -133,7 +133,7 @@ describe("metricService.getVolumeOverTime", () => {
 
   it("rejects an invalid range before querying", async () => {
     await expect(
-      metricService.getVolumeOverTime(null, "merchant-1", "BOGUS"),
+      metricService.getVolumeOverTime("merchant-1", "BOGUS"),
     ).rejects.toThrow("Invalid range");
     expect(mockPoolQuery).not.toHaveBeenCalled();
   });
@@ -145,7 +145,7 @@ describe("metricService.getVolumeOverTime", () => {
       ],
     });
 
-    const result = await metricService.getVolumeOverTime(null, "merchant-1", "7D");
+    const result = await metricService.getVolumeOverTime("merchant-1", "7D");
 
     expect(result.range).toBe("7D");
     expect(result.assets).toEqual(["USDC"]);

@@ -54,6 +54,10 @@ vi.mock('stellar-sdk', () => ({
   Transaction: mockStellarTransaction,
 }));
 vi.mock('express-rate-limit', () => ({ default: mockRateLimit, ipKeyGenerator: mockIpKeyGenerator }));
+const mockLogger = vi.hoisted(() => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+vi.mock('./logger.js', () => mockLogger);
 
 // Now import the modules
 import {
@@ -639,6 +643,40 @@ describe('Trustline Manager - Task #746: Enhanced Error Recovery', () => {
     });
   });
 
+  describe('TrustlineErrorRecovery – probe concurrency and null errors', () => {
+    test('should allow only one concurrent half-open probe', async () => {
+      const ctx = 'half-open-concurrent-ctx';
+      const state = TrustlineErrorRecovery._getState(ctx);
+      state.state = 'half-open';
+
+      let release;
+      const slowOp = vi.fn(() => new Promise((resolve) => { release = resolve; }));
+      const probe = TrustlineErrorRecovery.executeWithRecovery(slowOp, ctx);
+
+      await expect(
+        TrustlineErrorRecovery.executeWithRecovery(vi.fn(), ctx),
+      ).rejects.toThrow(/Circuit breaker is open/);
+
+      release('ok');
+      await expect(probe).resolves.toBe('ok');
+      expect(state.state).toBe('closed');
+      expect(state.probeInFlight).toBe(false);
+    });
+
+    test('should only count recoveries after prior failures', async () => {
+      const ctx = 'recovery-count-ctx';
+      await TrustlineErrorRecovery.executeWithRecovery(async () => 'ok', ctx);
+      expect(TrustlineErrorRecovery._getState(ctx).metrics.totalRecoveries).toBe(0);
+    });
+
+    test('should classify and enhance null errors without throwing', () => {
+      const errorClass = TrustlineErrorRecovery.classifyError(null);
+      expect(errorClass.type).toBe('unknown');
+      const enhanced = TrustlineErrorRecovery.enhanceError(null, 'ctx', 1, errorClass);
+      expect(enhanced.status).toBe(500);
+    });
+  });
+
   describe('TrustlineErrorRecovery – operation timeout', () => {
     test('withTimeout rejects after the specified delay', async () => {
       const neverResolves = new Promise(() => {});
@@ -995,6 +1033,27 @@ describe('Trustline Manager - Integration Tests', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('Database connection failed');
   });
+
+  test('initialization logs through the structured logger instead of console', async () => {
+    const { logger } = await import('./logger.js');
+    vi.clearAllMocks();
+
+    queryWithRetry.mockResolvedValue({ rows: [] });
+    const ok = await manager.initialize();
+    expect(ok.success).toBe(true);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ indexResults: expect.any(Array) }),
+      'Trustline Manager initialized with database optimizations',
+    );
+
+    queryWithRetry.mockRejectedValue(new Error('Database connection failed'));
+    const failed = await manager.initialize();
+    expect(failed.success).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ context: 'trustline-manager.initialize' }),
+      'Failed to initialize Trustline Manager',
+    );
+  });
 });
 
 describe('Trustline Manager - Singleton Instance', () => {
@@ -1093,6 +1152,45 @@ describe('TrustlineRateLimiter – Violation Metrics', () => {
     // Mutating the snapshot should not affect stored metrics
     snapshot['copy-key'].count = 9999;
     expect(TrustlineRateLimiter.getRateLimitViolationMetrics()['copy-key'].count).toBe(1);
+  });
+
+  test('violation tracking stays bounded under many unique keys', () => {
+    for (let i = 0; i < 10050; i++) {
+      TrustlineRateLimiter.recordViolation(`flood-${i}`);
+    }
+    const metrics = TrustlineRateLimiter.getRateLimitViolationMetrics();
+    expect(Object.keys(metrics).length).toBe(10000);
+    expect(metrics['flood-0']).toBeUndefined();
+    expect(metrics['flood-10049']).toBeDefined();
+  });
+});
+
+describe('TrustlineSignatureVerifier - cache bounds', () => {
+  test('evicts oldest and expired entries to stay bounded', () => {
+    const verifier = new TrustlineSignatureVerifier();
+    const now = Date.now();
+    verifier.verificationCache.set('expired', { result: {}, timestamp: now - verifier.cacheTimeout - 1 });
+    for (let i = 0; i < 1000; i++) {
+      verifier.verificationCache.set(`k${i}`, { result: {}, timestamp: now });
+    }
+    verifier._pruneCache();
+    expect(verifier.verificationCache.has('expired')).toBe(false);
+    expect(verifier.verificationCache.size).toBeLessThan(1000);
+    expect(verifier.verificationCache.has('k0')).toBe(false);
+    expect(verifier.verificationCache.has('k999')).toBe(true);
+  });
+});
+
+describe('TrustlineRateLimiter - internal token comparison', () => {
+  afterEach(() => {
+    delete process.env.INTERNAL_SERVICE_TOKEN;
+  });
+
+  test('rejects tokens of a different length and non-string values', () => {
+    process.env.INTERNAL_SERVICE_TOKEN = 'secret-token';
+    expect(TrustlineRateLimiter.isInternalService({ headers: { 'x-internal-service-token': 'secret' } })).toBe(false);
+    expect(TrustlineRateLimiter.isInternalService({ headers: { 'x-internal-service-token': ['secret-token'] } })).toBe(false);
+    expect(TrustlineRateLimiter.isInternalService({ headers: { 'x-internal-service-token': 'secret-token' } })).toBe(true);
   });
 });
 
@@ -1390,5 +1488,56 @@ describe('TrustlineRateLimiter – Key Generation Edge Cases', () => {
     const hashPart = key.replace('trustline:ops:api:', '');
     expect(hashPart).toHaveLength(16);
     expect(hashPart).toMatch(/^[a-f0-9]+$/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Granular Metrics Integration (issue #1043)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TrustlineManager – granular metrics integration', () => {
+  let trustlineManagerRegister;
+
+  beforeEach(async () => {
+    const metrics = await import('./trustline-manager-metrics.js');
+    trustlineManagerRegister = metrics.trustlineManagerRegister;
+    metrics.resetTrustlineManagerMetrics();
+    TrustlineErrorRecovery.resetCircuitBreaker();
+    vi.clearAllMocks();
+  });
+
+  test('records invalid signature verification outcome', async () => {
+    mockVerifyTransactionSignature.mockResolvedValue({
+      valid: false,
+      reason: 'Invalid signature',
+      isMultiSig: false,
+      signatureCount: 0,
+      thresholdMet: false,
+    });
+
+    const verifier = new TrustlineSignatureVerifier();
+    const result = await verifier.verifyTrustlineSignature('bad_tx_hash');
+
+    expect(result.valid).toBe(false);
+    const text = await trustlineManagerRegister.metrics();
+    expect(text).toContain('trustline_signature_verifications_total{outcome="invalid"} 1');
+  });
+
+  test('publishes circuit breaker state after failures', async () => {
+    const failingOp = vi.fn().mockRejectedValue(new Error('network error'));
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        TrustlineErrorRecovery.executeWithRecovery(failingOp, 'metrics-cb-ctx', {
+          maxAttempts: 1,
+        }),
+      ).rejects.toThrow();
+    }
+
+    const text = await trustlineManagerRegister.metrics();
+    expect(text).toContain('trustline_circuit_breaker_open{context="metrics-cb-ctx"} 1');
+    expect(text).toContain(
+      'trustline_error_recovery_total{context="metrics-cb-ctx",outcome="failure"} 5',
+    );
   });
 });

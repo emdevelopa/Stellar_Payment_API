@@ -9,6 +9,9 @@
  *
  * This module wraps the base db.js pool with additional layers
  * of optimization, protection, and integrity verification.
+ *
+ * Issue #1057: the open-circuit path degrades straight to the raw pool
+ * instead of re-entering optimizedQuery.
  */
 
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
@@ -19,6 +22,15 @@ import {
   dbPoolerRateLimitExceeded,
   dbPoolerQueryTotal,
   dbPoolerSignatureVerified,
+  dbPoolerQueryDuration,
+  dbPoolerCircuitBreakerState,
+  dbPoolerFallbackModeActive,
+  dbPoolerActiveMerchantWindows,
+  dbPoolerRateLimitUtilizationPercent,
+  dbPoolerStatsCacheHits,
+  dbPoolerStatsCacheMisses,
+  dbPoolerStatsCacheSize,
+  dbPoolerStatsCacheEvictions,
 } from "./metrics.js";
 
 // Error recovery #895: Circuit breaker for database pool failures
@@ -47,6 +59,15 @@ const RATE_LIMIT_MAX_MERCHANT_QUERIES = Number.parseInt(
   process.env.DB_POOLER_RATE_LIMIT_MAX_MERCHANT_QUERIES || "50",
   10,
 );
+// Issue #1317: hard upper bound on tracked merchant windows.
+const MAX_MERCHANT_WINDOWS = 10000;
+
+// Issue #1055: bounds and TTL for the pooler stats snapshot cache.
+const STATS_CACHE_TTL_MS = Number.parseInt(
+  process.env.DB_POOLER_STATS_CACHE_TTL_MS || "1000",
+  10,
+);
+const STATS_CACHE_MAX_ENTRIES = 4;
 
 // ── Query Rate Limiting (Issue #758) ───────────────────────────────────────────
 
@@ -105,8 +126,8 @@ class QueryRateLimiter {
     }
 
     // Periodic cleanup of stale windows to prevent memory exhaustion
-    if (this.merchantWindows.size > 10000) {
-      this._cleanupStaleWindows(now);
+    if (this.merchantWindows.size > MAX_MERCHANT_WINDOWS) {
+      this._cleanupStaleWindows(now, merchantId);
     }
 
     return window;
@@ -116,13 +137,37 @@ class QueryRateLimiter {
    * Cleanup stale merchant windows to prevent memory exhaustion attacks.
    * Removes windows that haven't been accessed within 2x the rate limit window.
    */
-  _cleanupStaleWindows(now) {
+  _cleanupStaleWindows(now, keepId = null) {
     const staleThreshold = this.windowMs * 2;
     for (const [id, window] of this.merchantWindows.entries()) {
       if (now - window.windowStart > staleThreshold) {
         this.merchantWindows.delete(id);
       }
     }
+    // Issue #1317: stale-window cleanup alone never bounds the map when many
+    // distinct merchant IDs are seen within the retention period, so evict
+    // the oldest entries (Map insertion order) until back under the cap.
+    for (const id of this.merchantWindows.keys()) {
+      if (this.merchantWindows.size <= MAX_MERCHANT_WINDOWS) {
+        break;
+      }
+      if (id !== keepId) {
+        this.merchantWindows.delete(id);
+      }
+    }
+    dbPoolerActiveMerchantWindows.set(this.merchantWindows.size);
+  }
+
+  /**
+   * Publish granular gauges for the current rate-limiter state (Issue #1058).
+   * Cardinality-safe: aggregates across merchants rather than labeling by
+   * merchant ID, which would be unbounded.
+   */
+  _publishGauges() {
+    dbPoolerRateLimitUtilizationPercent.set(
+      this.maxQueries > 0 ? (this.globalCount / this.maxQueries) * 100 : 0,
+    );
+    dbPoolerActiveMerchantWindows.set(this.merchantWindows.size);
   }
 
   /**
@@ -133,6 +178,7 @@ class QueryRateLimiter {
    */
   checkLimit(merchantId = null) {
     this._resetGlobalWindowIfNeeded();
+    this._publishGauges();
 
     // Check global limit
     if (this.globalCount >= this.maxQueries) {
@@ -168,6 +214,8 @@ class QueryRateLimiter {
       const merchantWindow = this._getMerchantWindow(merchantId);
       merchantWindow.count++;
     }
+
+    this._publishGauges();
   }
 
   /**
@@ -194,6 +242,8 @@ export function _resetDbPoolerCircuitBreakerForTests() {
   _dbPoolerCircuitBreakerOpen = false;
   _useFallbackMode = false;
   _fallbackModeExpiry = 0;
+  dbPoolerCircuitBreakerState.set(0);
+  dbPoolerFallbackModeActive.set(0);
 }
 
 function _isDbPoolerCircuitBreakerOpen(now = Date.now()) {
@@ -205,6 +255,7 @@ function _isDbPoolerCircuitBreakerOpen(now = Date.now()) {
   if (now - _dbPoolerCircuitBreakerLastFailureTime > DB_POOLER_CIRCUIT_BREAKER_RESET_MS) {
     _dbPoolerCircuitBreakerOpen = false;
     _dbPoolerCircuitBreakerFailures = 0;
+    dbPoolerCircuitBreakerState.set(0);
     logger.info("Database pooler circuit breaker reset");
     return false;
   }
@@ -218,6 +269,7 @@ function _recordDbPoolerCircuitBreakerFailure(now = Date.now()) {
 
   if (_dbPoolerCircuitBreakerFailures >= DB_POOLER_CIRCUIT_BREAKER_THRESHOLD) {
     _dbPoolerCircuitBreakerOpen = true;
+    dbPoolerCircuitBreakerState.set(1);
     logger.error(
       { failures: _dbPoolerCircuitBreakerFailures },
       "Database pooler circuit breaker opened due to repeated failures"
@@ -234,6 +286,7 @@ function _recordDbPoolerCircuitBreakerSuccess() {
 function _enableFallbackMode(durationMs = 300000, now = Date.now()) {
   _useFallbackMode = true;
   _fallbackModeExpiry = now + durationMs;
+  dbPoolerFallbackModeActive.set(1);
   logger.warn({ durationMs }, "Database pooler fallback mode enabled");
 }
 
@@ -245,6 +298,7 @@ function _isFallbackModeActive(now = Date.now()) {
   if (now > _fallbackModeExpiry) {
     _useFallbackMode = false;
     _fallbackModeExpiry = 0;
+    dbPoolerFallbackModeActive.set(0);
     logger.info("Database pooler fallback mode expired");
     return false;
   }
@@ -385,46 +439,33 @@ export async function optimizedQuery(
     signature = null,
   } = {},
 ) {
-  const now = Date.now();
-
-  // Error recovery #895: Check if fallback mode is active
-  if (_isFallbackModeActive(now)) {
-    logger.debug({ label }, "Using fallback mode for query execution");
-    try {
-      const result = await pool.query(text, values);
-      dbPoolerQueryTotal.inc({ label, status: "fallback_success" });
-      return result;
-    } catch (fallbackErr) {
-      dbPoolerQueryTotal.inc({ label, status: "fallback_error" });
-      logger.error({ err: fallbackErr, label }, "Fallback mode query execution failed");
-      throw fallbackErr;
-    }
-  }
-
-  // Error recovery #895: Check circuit breaker
-  if (_isDbPoolerCircuitBreakerOpen(now)) {
-    logger.warn("Database pooler circuit breaker is open, enabling fallback mode");
-    _enableFallbackMode();
-    // Retry with fallback mode
-    return optimizedQuery(text, values, { label, retryAttempts, retryDelayMs, merchantId, useCache, signature });
-  }
-
-  // ── Step 1: Rate limiting check (Issue #758) ─────────────────────────────
-  const rateLimitResult = queryRateLimiter.checkLimit(merchantId);
-  if (!rateLimitResult.allowed) {
-    dbPoolerQueryTotal.inc({ label, status: "rate_limited" });
-    const error = new Error(rateLimitResult.reason);
-    error.status = 429;
-    error.code = "DB_POOLER_RATE_LIMITED";
+  // Issue #1318: fail fast with a clear validation error instead of letting
+  // a null/undefined query text propagate into generateCacheKey()/
+  // cachedQuery(), where it previously surfaced as an unguarded null
+  // pointer exception several stack frames away from the actual mistake.
+  if (typeof text !== "string" || text.length === 0) {
+    const error = new Error("optimizedQuery requires a non-empty query string");
+    error.status = 400;
+    error.code = "DB_POOLER_INVALID_QUERY";
     throw error;
   }
 
-  // ── Step 2: Signature verification (Issue #759) ──────────────────────────
+  const now = Date.now();
+  const startedAt = process.hrtime.bigint();
+  const observeDuration = (status) => {
+    const seconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+    dbPoolerQueryDuration.observe({ label, status }, seconds);
+  };
+
+  // Issue #1319: verify the signature before any execution path, including
+  // fallback mode, which previously ran the query without verification and
+  // let a tampered query through.
   if (signature) {
     const isValid = verifyQuerySignature(text, values, signature);
     dbPoolerSignatureVerified.inc({ result: isValid ? "valid" : "invalid" });
 
     if (!isValid) {
+      observeDuration("signature_invalid");
       const error = new Error("Query signature verification failed - possible tampering detected");
       error.status = 400;
       error.code = "DB_POOLER_SIGNATURE_INVALID";
@@ -436,7 +477,65 @@ export async function optimizedQuery(
     dbPoolerSignatureVerified.inc({ result: "skipped" });
   }
 
-  // ── Step 3: Execute with caching (Issue #760) ────────────────────────────
+  // Error recovery #895: Check if fallback mode is active
+  if (_isFallbackModeActive(now)) {
+    logger.debug({ label }, "Using fallback mode for query execution");
+    try {
+      const result = await pool.query(text, values);
+      dbPoolerQueryTotal.inc({ label, status: "fallback_success" });
+      observeDuration("fallback_success");
+      return result;
+    } catch (fallbackErr) {
+      dbPoolerQueryTotal.inc({ label, status: "fallback_error" });
+      observeDuration("fallback_error");
+      logger.error({ err: fallbackErr, label }, "Fallback mode query execution failed");
+      throw fallbackErr;
+    }
+  }
+
+  // Error recovery #895: Check circuit breaker
+  if (_isDbPoolerCircuitBreakerOpen(now)) {
+    logger.warn("Database pooler circuit breaker is open, enabling fallback mode");
+    _enableFallbackMode();
+
+    // Issue #1057: this used to re-enter `optimizedQuery` recursively. If
+    // fallback mode expired between the enable and the re-entry, the retry
+    // hit the open circuit again and recursed once more — unbounded stack
+    // growth for as long as the database stayed down. Fall back directly to
+    // the raw pool instead, which is exactly what fallback mode does.
+    try {
+      const result = await pool.query(text, values);
+      dbPoolerQueryTotal.inc({ label, status: "fallback_success" });
+      observeDuration("fallback_success");
+      return result;
+    } catch (fallbackErr) {
+      dbPoolerQueryTotal.inc({ label, status: "fallback_error" });
+      observeDuration("fallback_error");
+      logger.error({ err: fallbackErr, label }, "Fallback mode query execution failed");
+      throw fallbackErr;
+    }
+  }
+
+  // ── Step 1: Rate limiting check (Issue #758) ─────────────────────────────
+  // Reserve the slot synchronously, in the same tick as the check (issue
+  // #1059 load testing): recording only after the DB call resolved left a
+  // check-then-act race where a concurrent burst could see the pre-query
+  // count for every request and blow straight through the limit before any
+  // of them had a chance to record. Counting the attempt at admission time
+  // (rather than at completion) closes that gap and matches how the
+  // per-request rate limit is meant to behave under concurrency.
+  const rateLimitResult = queryRateLimiter.checkLimit(merchantId);
+  if (!rateLimitResult.allowed) {
+    dbPoolerQueryTotal.inc({ label, status: "rate_limited" });
+    observeDuration("rate_limited");
+    const error = new Error(rateLimitResult.reason);
+    error.status = 429;
+    error.code = "DB_POOLER_RATE_LIMITED";
+    throw error;
+  }
+  queryRateLimiter.recordQuery(merchantId);
+
+  // ── Step 2: Execute with caching (Issue #760) ────────────────────────────
   try {
     const result = await cachedQuery(
       text,
@@ -446,14 +545,14 @@ export async function optimizedQuery(
       { useCache },
     );
 
-    // Record successful query
-    queryRateLimiter.recordQuery(merchantId);
     dbPoolerQueryTotal.inc({ label, status: "success" });
+    observeDuration("success");
     _recordDbPoolerCircuitBreakerSuccess();
 
     return result;
   } catch (err) {
     dbPoolerQueryTotal.inc({ label, status: "error" });
+    observeDuration("error");
     _recordDbPoolerCircuitBreakerFailure(now);
 
     // Error recovery #895: Enable fallback mode on repeated failures
@@ -493,6 +592,12 @@ export async function optimizedWrite(text, values = [], options = {}) {
 
     return result;
   } catch (err) {
+    // Issue #1319: rate-limit, signature and validation rejections are
+    // deliberate; retrying them through the raw pool would bypass those
+    // protections entirely.
+    if (typeof err?.code === "string" && err.code.startsWith("DB_POOLER_")) {
+      throw err;
+    }
     // Error recovery #895: Attempt fallback mode on write failures
     if (!_isFallbackModeActive()) {
       logger.warn({ err, label: options.label }, "Write query failed, attempting fallback mode");
@@ -514,6 +619,12 @@ export async function optimizedWrite(text, values = [], options = {}) {
  * Extract the primary table name from a SQL query for cache invalidation.
  */
 function extractTableName(sql) {
+  // Issue #1318: a falsy/non-string `sql` (e.g. a write helper called with
+  // no query text) used to throw a null pointer exception on `.trim()`
+  // instead of simply reporting "no table name found".
+  if (typeof sql !== "string" || sql.length === 0) {
+    return null;
+  }
   const normalized = sql.trim().toUpperCase();
 
   // Match INSERT INTO, UPDATE, DELETE FROM patterns
@@ -564,7 +675,137 @@ export function clearQueryCache() {
   return queryCache.clear();
 }
 
+// ── Stats Cache (Issue #1055) ────────────────────────────────────────────────
+
+/**
+ * Bounded TTL cache for the pooler stats snapshot.
+ *
+ * `getPoolerStats()` walks the pg pool, the query cache and the rate-limiter
+ * window map on every call, so a metrics scrape hitting it at the standard
+ * interval turns one cheap read into a full state walk per scrape. This is a
+ * plain Map with a short TTL rather than an LRU: the key space is fixed (a
+ * handful of scopes), and entries are single snapshots, so ordering buys
+ * nothing here. The cap is still enforced so a future caller passing
+ * unbounded scope keys cannot grow it without limit.
+ */
+class StatsCache {
+  constructor({ ttlMs = STATS_CACHE_TTL_MS, maxEntries = STATS_CACHE_MAX_ENTRIES } = {}) {
+    this.ttlMs = ttlMs;
+    this.maxEntries = maxEntries;
+    this.entries = new Map();
+    this.stats = { hits: 0, misses: 0, evictions: 0, expirations: 0, invalidations: 0 };
+  }
+
+  get(key) {
+    const entry = this.entries.get(key);
+    if (!entry) {
+      this.stats.misses++;
+      dbPoolerStatsCacheMisses.inc();
+      return undefined;
+    }
+    if (Date.now() - entry.timestamp >= this.ttlMs) {
+      this.entries.delete(key);
+      this.stats.expirations++;
+      this.stats.misses++;
+      dbPoolerStatsCacheEvictions.inc();
+      dbPoolerStatsCacheMisses.inc();
+      this._publishSize();
+      return undefined;
+    }
+    this.stats.hits++;
+    dbPoolerStatsCacheHits.inc();
+    return entry.value;
+  }
+
+  set(key, value) {
+    if (this.entries.has(key)) {
+      this.entries.delete(key);
+    }
+    while (this.entries.size >= this.maxEntries) {
+      this.entries.delete(this.entries.keys().next().value);
+      this.stats.evictions++;
+      dbPoolerStatsCacheEvictions.inc();
+    }
+    this.entries.set(key, { value, timestamp: Date.now() });
+    this._publishSize();
+  }
+
+  delete(key) {
+    const removed = this.entries.delete(key);
+    if (removed) {
+      this.stats.invalidations++;
+      this._publishSize();
+    }
+    return removed;
+  }
+
+  clear() {
+    this.entries.clear();
+    this._publishSize();
+  }
+
+  _publishSize() {
+    dbPoolerStatsCacheSize.set(this.entries.size);
+  }
+
+  getStats() {
+    return {
+      size: this.entries.size,
+      ttlMs: this.ttlMs,
+      maxEntries: this.maxEntries,
+      ...this.stats,
+    };
+  }
+}
+
+const statsCache = new StatsCache();
+
+/**
+ * Get pooler statistics through a short-lived cache.
+ *
+ * Use this for high-frequency callers (metrics scrapes, health probes).
+ * `getPoolerStats()` remains the uncached accessor for callers that need a
+ * value guaranteed to reflect the current instant, such as a test or a
+ * circuit-breaker decision.
+ *
+ * @param {Object} options - Cache options
+ * @param {string} options.scope - Cache scope; distinct scopes are cached independently
+ * @param {boolean} options.skipCache - Bypass the cache and recompute
+ * @returns {Object} Pooler statistics
+ */
+export function getCachedPoolerStats({ scope = "default", skipCache = false } = {}) {
+  if (!skipCache) {
+    const cached = statsCache.get(scope);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+
+  const snapshot = getPoolerStats();
+
+  if (!skipCache) {
+    statsCache.set(scope, snapshot);
+  }
+
+  return snapshot;
+}
+
+/** Drop a cached stats snapshot, or the whole cache when called with no scope. */
+export function invalidatePoolerStatsCache(scope) {
+  if (scope === undefined) {
+    statsCache.clear();
+    return;
+  }
+  statsCache.delete(scope);
+}
+
+/** Cache bookkeeping for tests and diagnostics. */
+export function getPoolerStatsCacheStats() {
+  return statsCache.getStats();
+}
+
 export {
   queryRateLimiter,
   queryCache,
+  statsCache,
 };

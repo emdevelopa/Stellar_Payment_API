@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import axe from "axe-core";
 import { RealTimeBalanceSync } from "./RealTimeBalanceSync";
 
 vi.mock("next-intl", () => {
@@ -40,7 +41,7 @@ vi.mock("framer-motion", async () => {
     motion: {
       section: ({ children, variants, initial, animate, exit, layout, whileTap, ...props }: any) =>
         React.createElement("section", props, children),
-      button: ({ children, whileTap, ...props }: any) =>
+      button: ({ children, whileTap, whileHover, ...props }: any) =>
         React.createElement("button", props, children),
       p: ({ children, variants, initial, animate, exit, ...props }: any) =>
         React.createElement("p", props, children),
@@ -50,6 +51,10 @@ vi.mock("framer-motion", async () => {
         React.createElement("li", props, children),
       span: ({ children, variants, initial, animate, transition, ...props }: any) =>
         React.createElement("span", props, children),
+      div: ({ children, variants, initial, animate, exit, transition, whileHover, ...props }: any) =>
+        React.createElement("div", props, children),
+      svg: ({ children, variants, initial, animate, exit, transition, ...props }: any) =>
+        React.createElement("svg", props, children),
     },
     AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, null, children),
     useReducedMotion: () => false,
@@ -209,5 +214,106 @@ describe("RealTimeBalanceSync", () => {
 
     const section = screen.getByLabelText("Real-time balance information");
     expect(section).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("does not clip long balance values on narrow layouts", async () => {
+    // A balance formatted to 7 decimal places (the component's max) is long
+    // enough to overflow a narrow row if it isn't allowed to wrap — the
+    // parent list has overflow-hidden, so a fixed-width, non-wrapping value
+    // would be silently cut off rather than visibly reflowing.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        balances: [{ code: "XLM", balance: "1234567.1234567" }],
+      }),
+    });
+
+    render(
+      <RealTimeBalanceSync merchantId="m1" apiKey="k1" pollingInterval={0} />
+    );
+
+    const balanceValue = await screen.findByText("1,234,567.1234567");
+    expect(balanceValue.className).toEqual(
+      expect.stringContaining("break-all"),
+    );
+    expect(balanceValue.className).not.toEqual(
+      expect.stringContaining("truncate"),
+    );
+
+    const row = balanceValue.closest("li");
+    expect(row?.className).toEqual(expect.stringContaining("flex-wrap"));
+  });
+
+  describe("accessibility (axe-core)", () => {
+    // color-contrast requires real CSS layout/paint, which jsdom does not
+    // perform — Tailwind classes are present but never resolved to computed
+    // styles, so axe can only report false positives/negatives for that
+    // rule here. Every other rule operates on markup/ARIA semantics, which
+    // jsdom does support faithfully.
+    const axeOptions = {
+      rules: { "color-contrast": { enabled: false } },
+    };
+
+    it("has no axe violations in the loaded (with balances) state", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ balances: mockBalances }),
+      });
+
+      const { container } = render(
+        <RealTimeBalanceSync merchantId="m1" apiKey="k1" pollingInterval={0} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("XLM")).toBeInTheDocument();
+      });
+
+      const results = await axe.run(container, axeOptions);
+      expect(results.violations).toEqual([]);
+    });
+
+    it("has no axe violations in the empty state", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ balances: [] }),
+      });
+
+      const { container } = render(
+        <RealTimeBalanceSync merchantId="m1" apiKey="k1" pollingInterval={0} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("No balances available.")).toBeInTheDocument();
+      });
+
+      const results = await axe.run(container, axeOptions);
+      expect(results.violations).toEqual([]);
+    });
+
+    it("has no axe violations in the error state", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
+
+      const { container } = render(
+        <RealTimeBalanceSync merchantId="m1" apiKey="k1" pollingInterval={0} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toBeInTheDocument();
+      });
+
+      const results = await axe.run(container, axeOptions);
+      expect(results.violations).toEqual([]);
+    });
+
+    it("has no axe violations in the loading (skeleton) state", async () => {
+      global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+      const { container } = render(
+        <RealTimeBalanceSync merchantId="m1" apiKey="k1" pollingInterval={0} />
+      );
+
+      const results = await axe.run(container, axeOptions);
+      expect(results.violations).toEqual([]);
+    });
   });
 });

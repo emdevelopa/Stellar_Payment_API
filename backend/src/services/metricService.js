@@ -15,6 +15,11 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Format a Date as a YYYY-MM-DD string in UTC. */
+function toDateStr(date) {
+  return date.toISOString().split("T")[0];
+}
+
 /**
  * Run an RLS-scoped query (via withMerchantContext) with retry + the shared
  * circuit breaker. A statement can't be retried mid-transaction once the
@@ -56,7 +61,7 @@ export const metricService = {
    * so they are merged into one query using conditional aggregation —
    * halving DB round trips for this endpoint (issue #929).
    */
-  async getMonthlySummary(pool, merchantId) {
+  async getMonthlySummary(merchantId) {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-indexed (0 = January)
@@ -144,7 +149,7 @@ export const metricService = {
     };
   },
 
-  async getRevenueByAsset(pool, merchantId) {
+  async getRevenueByAsset(merchantId) {
     const query = `
       SELECT
         asset,
@@ -171,7 +176,7 @@ export const metricService = {
     };
   },
 
-  async getVolumeOverTime(pool, merchantId, range) {
+  async getVolumeOverTime(merchantId, range) {
     const days = VALID_VOLUME_RANGES[range];
 
     if (!days) {
@@ -203,7 +208,7 @@ export const metricService = {
     // Build a date-keyed map
     const byDate = {};
     for (const row of rows) {
-      const dateStr = row.date.toISOString().split("T")[0];
+      const dateStr = toDateStr(row.date);
       if (!byDate[dateStr]) {
         byDate[dateStr] = { date: dateStr, count: 0 };
       }
@@ -217,7 +222,7 @@ export const metricService = {
     for (let i = days - 1; i >= 0; i -= 1) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = toDateStr(d);
       const entry = byDate[dateStr] || { date: dateStr, count: 0 };
       for (const asset of assets) {
         if (entry[asset] === undefined) entry[asset] = 0;

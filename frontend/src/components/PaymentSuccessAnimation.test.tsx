@@ -35,11 +35,16 @@ vi.mock("motion/react", () => ({
   motion: {
     div: mkMotion("div"),
     button: mkMotion("button"),
-    h1: mkMotion("h1"),
+    h2: mkMotion("h2"),
     p: mkMotion("p"),
     path: mkMotion("path"),
   },
-  AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  // Wrapped in a marker element (rather than a bare fragment) so tests can
+  // assert AnimatePresence itself stays mounted across a show->false toggle,
+  // which is what lets its real (unmocked) exit transition run (#1390).
+  AnimatePresence: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="animate-presence-boundary">{children}</div>
+  ),
 }));
 
 // The component reads the OS "prefers reduced motion" setting via
@@ -91,6 +96,15 @@ describe("PaymentSuccessAnimation", () => {
   it("uses default amount and asset when not provided", () => {
     render(<PaymentSuccessAnimation show />);
     expect(screen.getByText("0 XLM")).toBeInTheDocument();
+  });
+
+  it("keeps AnimatePresence mounted when show flips to false, so its exit transition can run (#1390)", () => {
+    const { rerender } = render(<PaymentSuccessAnimation show />);
+    expect(screen.getByTestId("animate-presence-boundary")).toBeInTheDocument();
+
+    rerender(<PaymentSuccessAnimation show={false} />);
+    expect(screen.getByTestId("animate-presence-boundary")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   // ── Optimistic updates (#981) ──────────────────────────────────────────────
@@ -285,10 +299,11 @@ describe("PaymentSuccessAnimation", () => {
 
   it("renders an assertive live region with the success announcement", () => {
     render(<PaymentSuccessAnimation show amount="20" asset="USDC" />);
-    const status = screen.getByRole("status");
-    expect(status).toHaveAttribute("aria-live", "assertive");
-    expect(status).toHaveAttribute("aria-atomic", "true");
-    expect(status).toHaveTextContent("payment.successAnnounce");
+    // role="alert" is implicitly assertive, unlike role="status" (implicitly
+    // polite) which used to contradict its own explicit aria-live="assertive" (#1388)
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveAttribute("aria-atomic", "true");
+    expect(alert).toHaveTextContent("payment.successAnnounce");
   });
 
   it("renders dynamic announcement region with data-testid", () => {

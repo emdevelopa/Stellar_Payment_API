@@ -26,4 +26,15 @@ describe("PaymentSuccessAnimation (Server Component boundary)", () => {
     render(<PaymentSuccessAnimation show amount="10" asset="XLM" />);
     expect(screen.getByTestId("payment-success-skeleton")).toBeInTheDocument();
   });
+
+  it("keeps the client component mounted after show flips back to false, once it has been shown (#1390)", () => {
+    // Unmounting the whole boundary the instant `show` goes false — instead of
+    // just toggling the dialog's own `show` prop — skipped the client
+    // component's AnimatePresence exit transition entirely.
+    const { rerender } = render(<PaymentSuccessAnimation show amount="10" asset="XLM" />);
+    expect(screen.getByTestId("payment-success-skeleton")).toBeInTheDocument();
+
+    rerender(<PaymentSuccessAnimation show={false} amount="10" asset="XLM" />);
+    expect(screen.getByTestId("payment-success-skeleton")).toBeInTheDocument();
+  });
 });

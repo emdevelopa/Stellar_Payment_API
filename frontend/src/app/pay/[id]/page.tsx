@@ -25,9 +25,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { localeToLanguageTag } from "@/i18n/config";
 import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
 import { Modal } from "@/components/ui/Modal";
-// PaymentSuccessAnimation is a Server Component boundary that code-splits its
-// own client bundle (framer-motion, canvas-confetti) via next/dynamic and
-// renders PaymentSuccessSkeleton while it loads. (#1179)
+import { NetworkFeeEstimation } from "@/components/NetworkFeeEstimation";
 import { PaymentSuccessAnimation } from "@/components/PaymentSuccessAnimation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -59,10 +57,6 @@ interface PathQuote {
   destination_amount: string; path: Array<{ asset_code: string; asset_issuer: string | null }>;
   slippage: number;
 }
-interface NetworkFeeResponse {
-  network_fee: { network: string; horizon_url: string; operation_count: number; stroops: number; xlm: string; last_ledger_base_fee: number; };
-}
-
 const DEFAULT_THEME = { primary_color: "#00F5D4", secondary_color: "#6C5CE7", background_color: "#0B0F1A" };
 
 function resolveBranding(config: BrandingConfig | null | undefined) {
@@ -170,9 +164,6 @@ export default function PaymentPage() {
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-  const [networkFee, setNetworkFee] = useState<NetworkFeeResponse["network_fee"] | null>(null);
-  const [networkFeeLoading, setNetworkFeeLoading] = useState(false);
-  const [networkFeeError, setNetworkFeeError] = useState<string | null>(null);
   const [usePathPayment, setUsePathPayment] = useState(false);
   const [pathQuote, setPathQuote] = useState<PathQuote | null>(null);
   const [pathQuoteLoading, setPathQuoteLoading] = useState(false);
@@ -316,24 +307,6 @@ export default function PaymentPage() {
     })();
     return () => { cancelled = true; };
   }, [payment, activeProvider, paymentId, sourceAsset, assetMetadata, walletPublicKey]);
-
-  useEffect(() => {
-    if (!isPayModalOpen) return;
-    const controller = new AbortController();
-    (async () => {
-      setNetworkFeeLoading(true); setNetworkFeeError(null);
-      try {
-        const res = await fetch(`${API_URL}/api/network-fee`, { signal: controller.signal });
-        if (!res.ok) throw new Error(t("networkFeeUnavailable"));
-        const data = await res.json() as NetworkFeeResponse;
-        setNetworkFee(data.network_fee);
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setNetworkFee(null); setNetworkFeeError(t("networkFeeUnavailable"));
-      } finally { setNetworkFeeLoading(false); }
-    })();
-    return () => controller.abort();
-  }, [isPayModalOpen, t]);
 
   const handleConfirmPay = async () => {
     if (!payment) return;
@@ -696,9 +669,10 @@ export default function PaymentPage() {
             <p className="text-3xl font-bold text-[#0A0A0A]">
               {usePathPayment && pathQuote ? `${pathQuote.send_max} ${pathQuote.source_asset}` : `${payment.amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 7 })} ${payment.asset.toUpperCase()}`}
             </p>
-            <p className="mt-3 text-sm text-[#6B6B6B]">
-              {networkFeeLoading ? t("loadingNetworkFee") : networkFee ? t("networkFeeLabel", { amount: networkFee.xlm }) : networkFeeError ?? t("networkFeeUnavailable")}
-            </p>
+            <div className="mt-3 flex items-center gap-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B]">Network Fee:</p>
+              <NetworkFeeEstimation enabled={isPayModalOpen} />
+            </div>
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={() => setIsPayModalOpen(false)} className="flex h-12 flex-1 items-center justify-center rounded-xl border border-[#E8E8E8] bg-white text-sm font-bold text-[#6B6B6B] hover:bg-[#F5F5F5] transition-all">{t("cancel")}</button>

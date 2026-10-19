@@ -189,12 +189,12 @@ describe("Multi-sig optimistic updates (#797)", () => {
 
       // Optimistic: a pending tx hash is set
       await waitFor(() => {
-        expect(screen.getByTestId("tx-hash")).toMatch(/^tx_pending_/);
+        expect(screen.getByTestId("tx-hash").textContent).toMatch(/^tx_pending_/);
       });
 
       // Settled: a real tx hash replaces the pending one
       await waitFor(
-        () => expect(screen.getByTestId("tx-hash")).toMatch(/^tx_(?!pending_)/),
+        () => expect(screen.getByTestId("tx-hash").textContent).toMatch(/^tx_(?!pending_)/),
         { timeout: 3000 },
       );
     });

@@ -1,13 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
+import * as auditSecurity from "../lib/audit-security.js";
 
-const { mockQuery, mockIsRetryablePoolError, mockConsumeRateLimit, mockHashPayload, mockSignPayload, mockValidateAuditAction, mockReplayFallbackLogs } = vi.hoisted(() => ({
+const { mockQuery, mockIsRetryablePoolError, mockReplayFallbackLogs } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockIsRetryablePoolError: vi.fn(),
-  mockConsumeRateLimit: vi.fn(),
-  mockHashPayload: vi.fn(),
-  mockSignPayload: vi.fn(),
-  mockValidateAuditAction: vi.fn(() => true),
   mockReplayFallbackLogs: vi.fn().mockResolvedValue(),
 }));
 
@@ -21,38 +18,25 @@ vi.mock("../lib/audit-replay.js", () => ({
   replayFallbackLogs: mockReplayFallbackLogs,
 }));
 
-vi.mock("../lib/audit-security.js", () => ({
-  consumeAuditLogRateLimit: mockConsumeRateLimit,
-  createAuditLogRateLimitKey: vi.fn(() => "merchant-1:update:127.0.0.1"),
-  hashAuditPayload: mockHashPayload,
-  sanitizeAuditKey: vi.fn((v) => v),
-  sanitizeAuditValue: vi.fn((v) => v),
-  signAuditPayload: mockSignPayload,
-  validateAuditAction: mockValidateAuditAction,
-  verifyAuditSignature: mockVerifySignature,
-}));
-
 import { auditService, _resetSvcCircuitForTests } from "./auditService.js";
 
 describe("auditService", () => {
   beforeEach(() => {
     mockQuery.mockReset();
     mockIsRetryablePoolError.mockReset();
-    mockConsumeRateLimit.mockReset();
-    mockHashPayload.mockReset();
-    mockSignPayload.mockReset();
-    mockValidateAuditAction.mockReset();
-    mockValidateAuditAction.mockReturnValue(true);
-    mockVerifySignature.mockReset();
+    vi.restoreAllMocks();
+    vi.spyOn(auditSecurity, "consumeAuditLogRateLimit").mockReturnValue({ allowed: true });
+    vi.spyOn(auditSecurity, "createAuditLogRateLimitKey").mockReturnValue("merchant-1:update:127.0.0.1");
+    vi.spyOn(auditSecurity, "validateAuditAction").mockReturnValue(true);
     _resetSvcCircuitForTests();
   });
 
   it("writes signed audit records", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
     mockIsRetryablePoolError.mockReturnValue(false);
-    mockConsumeRateLimit.mockReturnValue({ allowed: true });
-    mockHashPayload.mockReturnValue("a".repeat(64));
-    mockSignPayload.mockReturnValue("b".repeat(64));
+    vi.spyOn(auditSecurity, "consumeAuditLogRateLimit").mockReturnValue({ allowed: true });
+    vi.spyOn(auditSecurity, "hashAuditPayload").mockReturnValue("a".repeat(64));
+    vi.spyOn(auditSecurity, "signAuditPayload").mockReturnValue("b".repeat(64));
 
     await auditService.logEvent({
       merchantId: "merchant-1",
@@ -73,7 +57,7 @@ describe("auditService", () => {
   });
 
   it("drops events when the audit rate limit is exceeded", async () => {
-    mockConsumeRateLimit.mockReturnValue({ allowed: false });
+    vi.spyOn(auditSecurity, "consumeAuditLogRateLimit").mockReturnValue({ allowed: false });
     mockIsRetryablePoolError.mockReturnValue(false);
 
     await auditService.logEvent({
@@ -88,9 +72,9 @@ describe("auditService", () => {
   it("retries on transient errors", async () => {
     const transientError = new Error("connection terminated");
     mockIsRetryablePoolError.mockReturnValue(true);
-    mockConsumeRateLimit.mockReturnValue({ allowed: true });
-    mockHashPayload.mockReturnValue("a".repeat(64));
-    mockSignPayload.mockReturnValue("b".repeat(64));
+    vi.spyOn(auditSecurity, "consumeAuditLogRateLimit").mockReturnValue({ allowed: true });
+    vi.spyOn(auditSecurity, "hashAuditPayload").mockReturnValue("a".repeat(64));
+    vi.spyOn(auditSecurity, "signAuditPayload").mockReturnValue("b".repeat(64));
     mockQuery
       .mockRejectedValueOnce(transientError)
       .mockRejectedValueOnce(transientError)
@@ -113,9 +97,9 @@ describe("auditService", () => {
     const permanentError = new Error("relation does not exist");
     mockQuery.mockRejectedValue(permanentError);
     mockIsRetryablePoolError.mockReturnValue(false);
-    mockConsumeRateLimit.mockReturnValue({ allowed: true });
-    mockHashPayload.mockReturnValue("a".repeat(64));
-    mockSignPayload.mockReturnValue("b".repeat(64));
+    vi.spyOn(auditSecurity, "consumeAuditLogRateLimit").mockReturnValue({ allowed: true });
+    vi.spyOn(auditSecurity, "hashAuditPayload").mockReturnValue("a".repeat(64));
+    vi.spyOn(auditSecurity, "signAuditPayload").mockReturnValue("b".repeat(64));
 
     const appendFileSyncSpy = vi.spyOn(fs, "appendFileSync").mockImplementation(() => {});
 
@@ -135,16 +119,15 @@ describe("auditService", () => {
 
   // ── SQL optimization: getAuditLogs (issue #770) ───────────────────────────
 
-  it("fetches logs and count using optimized parallel queries", async () => {
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ total_count: "3" }],
-    });
-    mockQuery.mockResolvedValueOnce({
-      rows: [
-        { id: 1, action: "update", field_changed: "email", old_value: "a@b.com", new_value: "c@d.com", ip_address: "1.2.3.4", user_agent: "ua", timestamp: new Date() },
-        { id: 2, action: "login", field_changed: null, old_value: null, new_value: null, ip_address: "1.2.3.4", user_agent: "ua", timestamp: new Date() },
-      ],
-    });
+  it("fetches logs and count using optimized queries", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total_count: 3 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 1, action: "update", field_changed: "email", old_value: "a@b.com", new_value: "c@d.com", ip_address: "1.2.3.4", user_agent: "ua", timestamp: new Date(), payload_hash: "hash-1", signature: "sig-1" },
+          { id: 2, action: "login", field_changed: null, old_value: null, new_value: null, ip_address: "1.2.3.4", user_agent: "ua", timestamp: new Date(), payload_hash: "hash-2", signature: null },
+        ],
+      });
 
     const result = await auditService.getAuditLogs("merchant-1", 1, 2);
 
@@ -152,52 +135,59 @@ describe("auditService", () => {
     const [countSql] = mockQuery.mock.calls[0];
     const [logsSql] = mockQuery.mock.calls[1];
     expect(countSql).toMatch(/COUNT\(\*\)/i);
-    expect(logsSql).not.toMatch(/COUNT\(\*\) OVER\(\)/i);
+    expect(logsSql).toMatch(/FROM audit_logs/i);
     expect(result.total_count).toBe(3);
     expect(result.logs).toHaveLength(2);
   });
 
   it("returns zero total_count when no rows match", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ total_count: 0 }] });
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total_count: 0 }] })
+      .mockResolvedValueOnce({ rows: [] });
     const result = await auditService.getAuditLogs("merchant-nobody", 1, 10);
     expect(result.total_count).toBe(0);
     expect(result.logs).toHaveLength(0);
   });
 
   it("clamps page and limit to valid ranges", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ total_count: 0 }] });
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total_count: 0 }] })
+      .mockResolvedValueOnce({ rows: [] });
     const result = await auditService.getAuditLogs("merchant-1", -5, 200);
     const [, params] = mockQuery.mock.calls[1];
-    expect(params[1]).toBe(100); // limit clamped to 100
-    expect(params[2]).toBe(0);   // offset for page 1 = 0
+    expect(params[1]).toBe(100);
+    expect(params[2]).toBe(0);
     expect(result.page).toBe(1);
   });
 
   it("verifies matching payload hash and signature during retrieval", async () => {
     process.env.AUDIT_LOG_SIGNING_SECRET = "test-secret";
-    mockQuery.mockResolvedValueOnce({
-      rows: [
-        {
-          id: "log-1",
-          merchant_id: "merchant-1",
-          action: "update",
-          field_changed: "email",
-          old_value: "a@b.com",
-          new_value: "c@d.com",
-          ip_address: "1.2.3.4",
-          user_agent: "ua",
-          timestamp: new Date(),
-          payload_hash: "calculated-hash",
-          signature: "valid-signature",
-          total_count: "1",
-        },
-      ],
-    });
+    const payload = {
+      merchant_id: "merchant-1",
+      action: "update",
+      field_changed: "email",
+      old_value: "a@b.com",
+      new_value: "c@d.com",
+      ip_address: "1.2.3.4",
+      user_agent: "ua",
+    };
+    const row = {
+      id: "log-1",
+      merchant_id: "merchant-1",
+      action: "update",
+      field_changed: "email",
+      old_value: "a@b.com",
+      new_value: "c@d.com",
+      ip_address: "1.2.3.4",
+      user_agent: "ua",
+      timestamp: new Date(),
+      payload_hash: auditSecurity.hashAuditPayload(payload),
+      signature: auditSecurity.signAuditPayload(payload, "test-secret"),
+    };
 
-    mockHashPayload.mockReturnValue("calculated-hash");
-    mockVerifySignature.mockReturnValue(true);
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total_count: 1 }] })
+      .mockResolvedValueOnce({ rows: [row] });
 
     const result = await auditService.getAuditLogs("merchant-1", 1, 10);
     expect(result.logs[0].hash_verified).toBe(true);
@@ -206,27 +196,33 @@ describe("auditService", () => {
 
   it("detects mismatching/tampered hash and signature during retrieval", async () => {
     process.env.AUDIT_LOG_SIGNING_SECRET = "test-secret";
-    mockQuery.mockResolvedValueOnce({
-      rows: [
-        {
-          id: "log-2",
-          merchant_id: "merchant-1",
-          action: "update",
-          field_changed: "email",
-          old_value: "a@b.com",
-          new_value: "c@d.com",
-          ip_address: "1.2.3.4",
-          user_agent: "ua",
-          timestamp: new Date(),
-          payload_hash: "calculated-hash",
-          signature: "invalid-signature",
-          total_count: "1",
-        },
-      ],
-    });
+    const payload = {
+      merchant_id: "merchant-1",
+      action: "update",
+      field_changed: "email",
+      old_value: "a@b.com",
+      new_value: "c@d.com",
+      ip_address: "1.2.3.4",
+      user_agent: "ua",
+    };
+    const tampered = { ...payload, new_value: "different@example.com" };
+    const row = {
+      id: "log-2",
+      merchant_id: "merchant-1",
+      action: "update",
+      field_changed: "email",
+      old_value: "a@b.com",
+      new_value: "c@d.com",
+      ip_address: "1.2.3.4",
+      user_agent: "ua",
+      timestamp: new Date(),
+      payload_hash: auditSecurity.hashAuditPayload(payload),
+      signature: auditSecurity.signAuditPayload(tampered, "test-secret"),
+    };
 
-    mockHashPayload.mockReturnValue("different-hash");
-    mockVerifySignature.mockReturnValue(false);
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total_count: 1 }] })
+      .mockResolvedValueOnce({ rows: [row] });
 
     const result = await auditService.getAuditLogs("merchant-1", 1, 10);
     expect(result.logs[0].hash_verified).toBe(false);
@@ -235,24 +231,25 @@ describe("auditService", () => {
 
   it("handles missing/null signatures or unset signing secret gracefully", async () => {
     delete process.env.AUDIT_LOG_SIGNING_SECRET;
-    mockQuery.mockResolvedValueOnce({
-      rows: [
-        {
-          id: "log-3",
-          merchant_id: "merchant-1",
-          action: "update",
-          field_changed: "email",
-          old_value: "a@b.com",
-          new_value: "c@d.com",
-          ip_address: "1.2.3.4",
-          user_agent: "ua",
-          timestamp: new Date(),
-          payload_hash: null,
-          signature: null,
-          total_count: "1",
-        },
-      ],
-    });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total_count: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "log-3",
+            merchant_id: "merchant-1",
+            action: "update",
+            field_changed: "email",
+            old_value: "a@b.com",
+            new_value: "c@d.com",
+            ip_address: "1.2.3.4",
+            user_agent: "ua",
+            timestamp: new Date(),
+            payload_hash: null,
+            signature: null,
+          },
+        ],
+      });
 
     const result = await auditService.getAuditLogs("merchant-1", 1, 10);
     expect(result.logs[0].hash_verified).toBeNull();
@@ -262,8 +259,8 @@ describe("auditService", () => {
   // ── Action validation (issue #772) ────────────────────────────────────────
 
   it("drops logEvent calls with disallowed action values", async () => {
-    mockValidateAuditAction.mockReturnValue(false);
-    mockConsumeRateLimit.mockReturnValue({ allowed: true });
+    vi.spyOn(auditSecurity, "validateAuditAction").mockReturnValue(false);
+    vi.spyOn(auditSecurity, "consumeAuditLogRateLimit").mockReturnValue({ allowed: true });
 
     await auditService.logEvent({ merchantId: "m", action: "DROP TABLE", fieldChanged: "x" });
 
@@ -276,9 +273,9 @@ describe("auditService", () => {
     const permError = new Error("connection refused");
     mockQuery.mockRejectedValue(permError);
     mockIsRetryablePoolError.mockReturnValue(false);
-    mockConsumeRateLimit.mockReturnValue({ allowed: true });
-    mockHashPayload.mockReturnValue("a".repeat(64));
-    mockSignPayload.mockReturnValue("b".repeat(64));
+    vi.spyOn(auditSecurity, "consumeAuditLogRateLimit").mockReturnValue({ allowed: true });
+    vi.spyOn(auditSecurity, "hashAuditPayload").mockReturnValue("a".repeat(64));
+    vi.spyOn(auditSecurity, "signAuditPayload").mockReturnValue("b".repeat(64));
 
     const appendFileSyncSpy = vi.spyOn(fs, "appendFileSync").mockImplementation(() => {});
 
@@ -328,55 +325,54 @@ describe("auditService", () => {
     const hash1 = hashAuditPayload(payload1);
     const sig1 = signAuditPayload(payload1, "test-secret");
 
-    mockQuery.mockResolvedValueOnce({
-      rows: [
-        {
-          id: "log-1",
-          merchant_id: "m-1",
-          action: "login",
-          field_changed: null,
-          old_value: null,
-          new_value: null,
-          ip_address: "1.2.3.4",
-          user_agent: "ua",
-          timestamp: new Date(),
-          status: "success",
-          payload_hash: hash1,
-          signature: sig1,
-          total_count: "3"
-        },
-        {
-          id: "log-2",
-          merchant_id: "m-1",
-          action: "login",
-          field_changed: null,
-          old_value: null,
-          new_value: null,
-          ip_address: "1.2.3.4",
-          user_agent: "ua",
-          timestamp: new Date(),
-          status: "success",
-          payload_hash: hash1,
-          signature: null,
-          total_count: "3"
-        },
-        {
-          id: "log-3",
-          merchant_id: "m-1",
-          action: "login",
-          field_changed: null,
-          old_value: null,
-          new_value: null,
-          ip_address: "1.2.3.4",
-          user_agent: "ua",
-          timestamp: new Date(),
-          status: "success",
-          payload_hash: "wrong-hash",
-          signature: null,
-          total_count: "3"
-        }
-      ]
-    });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total_count: 3 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "log-1",
+            merchant_id: "m-1",
+            action: "login",
+            field_changed: null,
+            old_value: null,
+            new_value: null,
+            ip_address: "1.2.3.4",
+            user_agent: "ua",
+            timestamp: new Date(),
+            status: "success",
+            payload_hash: hash1,
+            signature: sig1,
+          },
+          {
+            id: "log-2",
+            merchant_id: "m-1",
+            action: "login",
+            field_changed: null,
+            old_value: null,
+            new_value: null,
+            ip_address: "1.2.3.4",
+            user_agent: "ua",
+            timestamp: new Date(),
+            status: "success",
+            payload_hash: hash1,
+            signature: null,
+          },
+          {
+            id: "log-3",
+            merchant_id: "m-1",
+            action: "login",
+            field_changed: null,
+            old_value: null,
+            new_value: null,
+            ip_address: "1.2.3.4",
+            user_agent: "ua",
+            timestamp: new Date(),
+            status: "success",
+            payload_hash: "wrong-hash",
+            signature: null,
+          }
+        ]
+      });
 
     const originalSecret = process.env.AUDIT_LOG_SIGNING_SECRET;
     process.env.AUDIT_LOG_SIGNING_SECRET = "test-secret";

@@ -1,0 +1,81 @@
+# Prometheus alerting rules for the Database Row-Level Security Service (issue #1468).
+#
+# Load with:   rule_files: ["docs/alerts/database-row-level-security.rules.yml"]
+# Validate:    promtool check rules docs/alerts/database-row-level-security.rules.yml
+#
+# Metric reference: docs/DATABASE_ROW_LEVEL_SECURITY.md
+
+groups:
+  - name: database-row-level-security
+    rules:
+      - alert: DatabaseRlsUnhealthy
+        expr: max(database_rls_health_state) >= 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Database Row-Level Security service reports unhealthy
+          description: >
+            Rolling-window internal error ratio is above threshold —
+            connections or transactions are failing before commit. See
+            GET /health/database-row-level-security for counts and reasons.
+
+      - alert: DatabaseRlsHighErrorRatio
+        expr: |
+          (
+              sum(rate(database_rls_transactions_total{outcome="connection_error"}[10m]))
+            + sum(rate(database_rls_transactions_total{outcome="transaction_error"}[10m]))
+          )
+            /
+          clamp_min(sum(rate(database_rls_transactions_total[10m])), 1e-9)
+            > 0.05
+          and sum(increase(database_rls_transactions_total[10m])) >= 20
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of RLS transactions fail before completing
+          description: >
+            Check logs for "Failed to acquire pooled connection" or
+            "Failed to rollback transaction", and inspect Postgres
+            connection limits and transaction timeouts.
+
+      - alert: DatabaseRlsHighRollbackRatio
+        expr: |
+          sum(rate(database_rls_transactions_total{outcome="rolled_back"}[15m]))
+            /
+          clamp_min(sum(rate(database_rls_transactions_total[15m])), 1e-9)
+            > 0.5
+          and sum(increase(database_rls_transactions_total[15m])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Majority of RLS transactions are rolled back by failing callbacks
+          description: >
+            withMerchantContext is rolling back most transactions, which usually
+            means merchant-scoped queries are erroring (bad SQL, constraint
+            violations, or validation inside the callback).
+
+      - alert: DatabaseRlsInvalidInputSpike
+        expr: sum(increase(database_rls_transactions_total{outcome="invalid_input"}[10m])) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Spike of invalid merchant ids reaching the RLS service
+          description: >
+            Callers are passing merchant ids that fail sanitization/validation
+            (empty, too long, or illegal characters). Find the offending caller
+            in the logs ("Invalid merchantId provided to withMerchantContext").
+
+      - alert: DatabaseRlsNoTraffic
+        expr: sum(increase(database_rls_transactions_total[1h])) == 0
+        for: 2h
+        labels:
+          severity: info
+        annotations:
+          summary: No RLS transactions observed for two hours
+          description: >
+            The service may be unused in this environment, or the RLS path
+            has stopped being exercised. Confirm with deployment state.

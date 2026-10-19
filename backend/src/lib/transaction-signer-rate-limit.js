@@ -27,19 +27,20 @@ export const TRANSACTION_SIGNER_BURST_WINDOW_MS = 10 * 1000; // 10 seconds
 
 /**
  * Generate a rate limit key for transaction signer requests.
+ *
+ * Key is actor-only (merchant_id > api_key_hash > ip). The txHash is no
+ * longer included: per-txHash bucketing let attackers rotate through
+ * arbitrary hashes to create an effectively unlimited number of buckets,
+ * each with its own full rate-limit allowance (VULN-07). Actor-only keying
+ * ensures the per-actor limit is always enforced regardless of which hashes
+ * are submitted.
+ *
  * Priority order: merchant_id > api_key_hash > ip_address
- * 
+ *
  * @param {Object} req - Express request object
  * @returns {string} Rate limit key
  */
 export function getTransactionSignerRateLimitKey(req) {
-  const txHash =
-    typeof req?.params?.txHash === "string" && req.params.txHash.length > 0
-      ? req.params.txHash
-      : typeof req?.body?.txHash === "string" && req.body.txHash.length > 0
-      ? req.body.txHash
-      : "unknown-tx";
-
   const merchantId =
     typeof req?.merchant?.id === "string" && req.merchant.id.length > 0
       ? `merchant:${req.merchant.id}`
@@ -52,9 +53,7 @@ export function getTransactionSignerRateLimitKey(req) {
       : null;
 
   const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
-  const actor = merchantId ?? apiKey ?? `ip:${ipKey}`;
-
-  return `${txHash}:${actor}`;
+  return merchantId ?? apiKey ?? `ip:${ipKey}`;
 }
 
 /**
@@ -207,8 +206,10 @@ export function createTransactionSignerRateLimit({
       }, "Transaction signer rate limit reached");
     },
     store,
-    passOnStoreError: true, // Allow requests if Redis is unavailable
-    skipFailedRequests: true, // Don't count failed requests against the limit
+    passOnStoreError: true, // Allow requests through if Redis is temporarily unavailable
+    skipFailedRequests: false, // Count ALL requests (including 4xx) against the limit.
+    // Previously true, which let attackers probe with invalid hashes infinitely
+    // without consuming rate-limit budget (VULN-10).
     skipSuccessfulRequests: false, // Count successful requests
   });
 }
@@ -266,8 +267,8 @@ export function createTransactionSignerBurstRateLimit({
       res.status(429).json(options.message);
     },
     store,
-    passOnStoreError: true, // Allow requests if Redis is unavailable
-    skipFailedRequests: true,
+    passOnStoreError: true, // Allow requests through if Redis is temporarily unavailable
+    skipFailedRequests: false, // Count ALL requests against the burst limit (VULN-10).
     skipSuccessfulRequests: false,
   });
 }

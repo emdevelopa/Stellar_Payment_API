@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useId, useRef, useState, useCallback, useMemo, useReducer } from "react";
+import { useEffect, useId, useRef, useCallback, useMemo, useReducer } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import * as Recharts from "recharts";

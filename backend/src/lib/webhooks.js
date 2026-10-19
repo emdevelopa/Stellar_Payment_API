@@ -2,6 +2,13 @@ import 'dotenv/config';
 import { createHmac, timingSafeEqual } from "crypto";
 import { promises as dns } from "dns";
 import { isIP } from "net";
+import {
+  webhookDispatchAttemptsTotal,
+  webhookDispatchBlockedTotal,
+  webhookDispatchDuration,
+  webhookDispatchRetriesTotal,
+} from "./metrics.js";
+import { RESERVED_WEBHOOK_HEADERS } from "./merchant-payload-validation.js";
 
 let supabaseClientPromise;
 
@@ -84,6 +91,23 @@ export async function validateWebhookUrl(url) {
 }
 
 const RETRY_DELAYS_MS = [10_000, 30_000, 60_000]; // 10s, 30s, 60s
+
+function getWebhookEventType(payload) {
+  return String(payload?.type || payload?.event_type || payload?.event || "unknown");
+}
+
+function recordWebhookAttempt(eventType, result, statusCode, startedAt) {
+  webhookDispatchAttemptsTotal.inc({
+    event_type: eventType,
+    result,
+    status_code: String(statusCode),
+  });
+  webhookDispatchDuration.observe(
+    { event_type: eventType, result },
+    (Date.now() - startedAt) / 1000,
+  );
+}
+
 
 /**
  * Signs a serialized payload string with HMAC-SHA256 using the shared secret.
@@ -177,21 +201,36 @@ async function logWebhookDelivery(paymentId, statusCode, responseBody, requestPa
 }
 
 async function attempt(url, payload, headers, paymentId) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload)
-  });
+  const eventType = getWebhookEventType(payload);
+  const startedAt = Date.now();
 
-  const text = await response.text().catch(() => "");
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
 
-  // Log the delivery attempt with request details
-  await logWebhookDelivery(paymentId, response.status, text, payload, headers);
+    const text = await response.text().catch(() => "");
 
-  return { ok: response.ok, status: response.status, body: text };
+    // Log the delivery attempt with request details
+    await logWebhookDelivery(paymentId, response.status, text, payload, headers);
+    recordWebhookAttempt(
+      eventType,
+      response.ok ? "success" : "failure",
+      response.status,
+      startedAt,
+    );
+
+    return { ok: response.ok, status: response.status, body: text };
+  } catch (err) {
+    recordWebhookAttempt(eventType, "error", 0, startedAt);
+    throw err;
+  }
 }
 
 function scheduleRetries(url, payload, headers, paymentId) {
+  const eventType = getWebhookEventType(payload);
   let attemptIndex = 0;
 
   function retry() {
@@ -199,6 +238,7 @@ function scheduleRetries(url, payload, headers, paymentId) {
       if (!result.ok && attemptIndex < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[attemptIndex];
         attemptIndex++;
+        webhookDispatchRetriesTotal.inc({ event_type: eventType, reason: "status" });
         console.log(`Webhook retry ${attemptIndex} for ${url} in ${delay}ms`);
         setTimeout(retry, delay);
       }
@@ -206,6 +246,7 @@ function scheduleRetries(url, payload, headers, paymentId) {
       if (attemptIndex < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[attemptIndex];
         attemptIndex++;
+        webhookDispatchRetriesTotal.inc({ event_type: eventType, reason: "error" });
         console.warn(`Webhook retry ${attemptIndex} (error) for ${url} in ${delay}ms:`, err.message);
         setTimeout(retry, delay);
       }
@@ -220,8 +261,8 @@ function scheduleRetries(url, payload, headers, paymentId) {
  *
  * Accepted: plain object whose keys are safe ASCII header names and whose
  * values are non-empty strings.
- * Reserved system headers (Content-Type, User-Agent, PLUTO-Signature) are
- * silently dropped to prevent merchants from overriding security controls.
+ * Reserved system headers (see RESERVED_WEBHOOK_HEADERS) and values containing
+ * CR/LF/NUL are silently dropped to prevent merchants from overriding security controls.
  *
  * @param {unknown} raw  The value stored in merchants.webhook_custom_headers.
  * @returns {Record<string, string>} A safe subset of the supplied headers.
@@ -230,20 +271,15 @@ export function sanitizeCustomHeaders(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
 
   const SAFE_HEADER_NAME = /^[a-zA-Z0-9\-_]+$/;
-  const RESERVED = new Set([
-    "content-type",
-    "user-agent",
-    "pluto-signature",
-    "stellar-signature",
-    "pluto-timestamp",
-    "stellar-timestamp",
-  ]);
 
   const result = {};
   for (const [key, value] of Object.entries(raw)) {
     if (!SAFE_HEADER_NAME.test(key)) continue;
-    if (RESERVED.has(key.toLowerCase())) continue;
+    if (RESERVED_WEBHOOK_HEADERS.has(key.toLowerCase())) continue;
     if (typeof value !== "string" || value.trim() === "") continue;
+    // Values persisted before issue #1482 were not CR/LF checked; never let
+    // one reach the outbound request (header injection).
+    if (/[\r\n\0]/.test(value)) continue;
     result[key] = value;
   }
   return result;
@@ -275,7 +311,12 @@ export function isEventSubscribed(merchant, eventType) {
  * @param {object}  [customHeaders={}] Merchant-defined extra headers.
  */
 export async function sendWebhook(url, payload, secret, paymentId = null, customHeaders = {}) {
-  if (!url) return { ok: false, skipped: true };
+  const eventType = getWebhookEventType(payload);
+
+  if (!url) {
+    webhookDispatchBlockedTotal.inc({ event_type: eventType, reason: "missing_url" });
+    return { ok: false, skipped: true };
+  }
 
   const signingSecret = secret || process.env.WEBHOOK_SECRET || "";
   const rawBody = JSON.stringify(payload);
@@ -297,6 +338,7 @@ export async function sendWebhook(url, payload, secret, paymentId = null, custom
   const isValid = await validateWebhookUrl(url);
   if (!isValid) {
     console.warn(`Webhook to ${url} blocked: Private or invalid IP address detected (SSRF protection).`);
+    webhookDispatchBlockedTotal.inc({ event_type: eventType, reason: "ssrf_protection" });
     return { ok: false, error: "Forbidden: Internal network access is blocked", skipped: false };
   }
 

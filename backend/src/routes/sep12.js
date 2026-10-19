@@ -1,7 +1,7 @@
 /**
  * SEP-12 KYC routes.
  *
- *   GET    /sep12/customer            — fetch a customer's KYC status
+ *   GET    /sep12/customer            — fetch KYC status (signature-gated)
  *   PUT    /sep12/customer            — create/update KYC (signature-gated)
  *   DELETE /sep12/customer/:account   — delete a customer's KYC record
  *
@@ -36,7 +36,9 @@ export const SEP12_RATE_LIMIT_WRITE_MAX = Number(
 export function buildSep12RateLimitKey(req) {
   const rawAccount =
     req.query?.account ?? req.body?.account ?? req.params?.account ?? "unknown";
-  const account = Array.isArray(rawAccount) ? rawAccount[0] : String(rawAccount);
+  // Truncate to a Stellar account length so attacker-chosen values cannot
+  // inflate the limiter's in-memory key store.
+  const account = (Array.isArray(rawAccount) ? String(rawAccount[0]) : String(rawAccount)).slice(0, 56);
   const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || "unknown-ip");
   return `sep12:${account}:${ip}`;
 }
@@ -113,6 +115,8 @@ export default function createSep12Router({ redisClient, redisStore } = {}) {
       const data = await getCustomer({
         account: req.query.account,
         memo: req.query.memo ?? "",
+        timestamp: req.query.timestamp,
+        signature: req.query.signature,
       });
       res.json({
         id: data.id,

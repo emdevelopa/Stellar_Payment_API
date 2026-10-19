@@ -4,8 +4,48 @@ import { validateRequest } from "../lib/validation.js";
 import { metricsVolumeQuerySchema } from "../lib/request-schemas.js";
 import { metricService } from "../services/metricService.js";
 import { createDashboardMetricsRateLimit } from "../lib/rate-limit.js";
+import { connectRedisClient } from "../lib/redis.js";
+import {
+  dashboardMetricsCacheKey,
+  readThroughDashboardCache,
+} from "../lib/dashboard-metrics-cache.js";
+import {
+  dashboardMetricsRequestsTotal,
+  dashboardMetricsRequestDuration,
+  dashboardMetricsErrorsTotal,
+} from "../lib/metrics.js";
 
 const defaultDashboardMetricsRateLimit = createDashboardMetricsRateLimit();
+
+/**
+ * Wrap a dashboard endpoint handler with granular request/latency/error
+ * tracking (labeled by `endpoint`, not merchant_id - see the cardinality
+ * note on the metrics themselves) and centralize the try/catch that was
+ * previously duplicated across all three routes.
+ */
+function withDashboardMetrics(endpoint, handler) {
+  return async (req, res, next) => {
+    const start = process.hrtime.bigint();
+    const recordDuration = () => {
+      const seconds = Number(process.hrtime.bigint() - start) / 1e9;
+      dashboardMetricsRequestDuration.observe({ endpoint }, seconds);
+    };
+
+    try {
+      await handler(req, res);
+      recordDuration();
+      dashboardMetricsRequestsTotal.inc({
+        endpoint,
+        status_code: String(res.statusCode),
+      });
+    } catch (err) {
+      recordDuration();
+      dashboardMetricsErrorsTotal.inc({ endpoint, error_type: "internal" });
+      dashboardMetricsRequestsTotal.inc({ endpoint, status_code: "500" });
+      next(err);
+    }
+  };
+}
 
 /**
  * Admin Dashboard Service routes (revenue summary, revenue by asset, volume
@@ -15,6 +55,11 @@ const defaultDashboardMetricsRateLimit = createDashboardMetricsRateLimit();
  *    (issue #928).
  *  - dashboardMetricsRateLimit caps how often a merchant can poll these
  *    aggregate queries (issue #927).
+ *  - withDashboardMetrics records per-endpoint request counts, latency, and
+ *    error counts to Prometheus for operational visibility (issue #1093).
+ *  - readThroughDashboardCache serves a short-TTL Redis-cached response when
+ *    available, falling back to the DB (and re-caching) on a miss or when
+ *    Redis is unreachable (issue #1090).
  */
 function createMetricsRouter({
   dashboardMetricsRateLimit = defaultDashboardMetricsRateLimit,
@@ -37,15 +82,14 @@ function createMetricsRouter({
     "/metrics/summary",
     requireApiKeyAuth({ requireSignature: true }),
     dashboardMetricsRateLimit,
-    async (req, res, next) => {
-      try {
-        const pool = req.app.locals.pool;
-        const result = await metricService.getMonthlySummary(pool, req.merchant.id);
-        res.json(result);
-      } catch (err) {
-        next(err);
-      }
-    },
+    withDashboardMetrics("summary", async (req, res) => {
+      const redis = await connectRedisClient();
+      const key = dashboardMetricsCacheKey("summary", req.merchant.id);
+      const result = await readThroughDashboardCache(redis, "summary", key, () =>
+        metricService.getMonthlySummary(req.merchant.id),
+      );
+      res.json(result);
+    }),
   );
 
   /**
@@ -64,15 +108,14 @@ function createMetricsRouter({
     "/metrics/revenue",
     requireApiKeyAuth({ requireSignature: true }),
     dashboardMetricsRateLimit,
-    async (req, res, next) => {
-      try {
-        const pool = req.app.locals.pool;
-        const result = await metricService.getRevenueByAsset(pool, req.merchant.id);
-        res.json(result);
-      } catch (err) {
-        next(err);
-      }
-    },
+    withDashboardMetrics("revenue", async (req, res) => {
+      const redis = await connectRedisClient();
+      const key = dashboardMetricsCacheKey("revenue", req.merchant.id);
+      const result = await readThroughDashboardCache(redis, "revenue", key, () =>
+        metricService.getRevenueByAsset(req.merchant.id),
+      );
+      res.json(result);
+    }),
   );
 
   /**
@@ -92,22 +135,14 @@ function createMetricsRouter({
     requireApiKeyAuth({ requireSignature: true }),
     dashboardMetricsRateLimit,
     validateRequest({ query: metricsVolumeQuerySchema }),
-    async (req, res, next) => {
-      try {
-        const pool = req.app.locals.pool;
-        const result = await metricService.getVolumeOverTime(
-          pool,
-          req.merchant.id,
-          req.query.range,
-        );
-        res.json(result);
-      } catch (err) {
-        if (err.message.includes("Invalid range")) {
-          return res.status(400).json({ error: err.message });
-        }
-        next(err);
-      }
-    },
+    withDashboardMetrics("volume", async (req, res) => {
+      const redis = await connectRedisClient();
+      const key = dashboardMetricsCacheKey("volume", req.merchant.id, req.query.range);
+      const result = await readThroughDashboardCache(redis, "volume", key, () =>
+        metricService.getVolumeOverTime(req.merchant.id, req.query.range),
+      );
+      res.json(result);
+    }),
   );
 
   return router;

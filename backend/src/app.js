@@ -19,7 +19,10 @@ import createSep12Router from "./routes/sep12.js";
 import trustlinesRouter from "./routes/trustlines.js";
 import paymentDetailsRouter from "./routes/paymentDetails.js";
 import x402Router from "./routes/x402.js";
+import authRouter from "./routes/auth.js";
+import sep12KycRouter from "./routes/sep12-kyc.js";
 import createAuthRouter from "./routes/auth.js";
+import auditRouter from "./routes/audit.js";
 
 import { requireApiKeyAuth } from "./lib/auth.js";
 import { isHorizonReachable } from "./lib/stellar.js";
@@ -34,6 +37,7 @@ import {
   createVerifyPaymentRateLimit,
   createMerchantRegistrationRateLimit,
   createSep10ChallengeRateLimit,
+  createSep10ChallengeIpRateLimit,
   createSep10VerifyRateLimit,
   createDashboardMetricsRateLimit,
 } from "./lib/rate-limit.js";
@@ -43,10 +47,18 @@ import {
 } from "./lib/transaction-signer.js";
 import { versionDeprecationMiddleware } from "./lib/version-deprecation.js";
 import oracleRouter from "./routes/oracle.js";
+import { getPaymentSessionValidatorHealth } from "./lib/payment-session-validator.js";
+import { getExchangeRateOracleHealth } from "./lib/exchange-rate-oracle-telemetry.js";
+import { getDatabaseRowLevelSecurityHealth } from "./lib/db-rls-telemetry.js";
+import { configureExchangeRateCoordination } from "./services/exchangeRateService.js";
 
 export async function createApp({ redisClient }) {
   const app = express();
   const redisAvailable = Boolean(redisClient && redisClient.isOpen);
+
+  // Cross-instance exchange-rate quote coordination (issue #1445). Without
+  // Redis the cache still coalesces concurrent misses within this process.
+  configureExchangeRateCoordination({ redisClient: redisAvailable ? redisClient : null });
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -248,8 +260,85 @@ export async function createApp({ redisClient }) {
         database: dbOk ? "ok" : "unavailable",
         horizon: horizonOk ? "ok" : "unavailable",
         redis: redisAvailable ? "ok" : "unavailable",
+        // Informational only — does not affect `ok` / the status code.
+        payment_session_validator: getPaymentSessionValidatorHealth().status,
+        exchange_rate_oracle_cache: getExchangeRateOracleHealth().status,
+        database_row_level_security: getDatabaseRowLevelSecurityHealth().status,
       },
     });
+  });
+
+  /**
+   * @swagger
+   * /health/payment-session-validator:
+   *   get:
+   *     summary: Payment Session Validator health telemetry
+   *     description: >
+   *       Rolling-window counts, rejection / error ratios and derived status
+   *       for payment session validation (issue #1448). Returns 503 only when
+   *       the validator is unhealthy (internal error ratio above threshold);
+   *       a degraded status (high rejection ratio or suspicious payload spike)
+   *       still returns 200.
+   *     tags: [Health]
+   *     security: []
+   *     responses:
+   *       200:
+   *         description: Validator healthy or degraded
+   *       503:
+   *         description: Validator unhealthy
+   */
+  app.get("/health/payment-session-validator", (_req, res) => {
+    const health = getPaymentSessionValidatorHealth();
+    res.status(health.status === "unhealthy" ? 503 : 200).json(health);
+  });
+
+  /**
+   * @swagger
+   * /health/exchange-rate-oracle-cache:
+   *   get:
+   *     summary: Exchange Rate Oracle Cache health telemetry
+   *     description: >
+   *       Rolling-window load and lookup counts plus derived status for the
+   *       exchange-rate quote cache (issue #1443). Returns 503 only when the
+   *       cache is unhealthy (internal error ratio above threshold). A
+   *       degraded status (timeouts or stale lookups) still returns 200.
+   *       The body contains no quotes, asset codes, or account ids.
+   *     tags: [Health]
+   *     security: []
+   *     responses:
+   *       200:
+   *         description: Cache healthy or degraded
+   *       503:
+   *         description: Cache unhealthy
+   */
+  app.get("/health/exchange-rate-oracle-cache", (_req, res) => {
+    const health = getExchangeRateOracleHealth();
+    res.status(health.status === "unhealthy" ? 503 : 200).json(health);
+  });
+
+  /**
+   * @swagger
+   * /health/database-row-level-security:
+   *   get:
+   *     summary: Database Row-Level Security Service health telemetry
+   *     description: >
+   *       Rolling-window counts, error / rollback ratios and derived status
+   *       for transactions executed through withMerchantContext (issue #1468).
+   *       Returns 503 only when the service is unhealthy (internal error ratio
+   *       above threshold); a degraded status (high rollback ratio or an
+   *       invalid-input spike) still returns 200. The body contains no
+   *       merchant ids, query text or error strings.
+   *     tags: [Health]
+   *     security: []
+   *     responses:
+   *       200:
+   *         description: RLS service healthy or degraded
+   *       503:
+   *         description: RLS service unhealthy
+   */
+  app.get("/health/database-row-level-security", (_req, res) => {
+    const health = getDatabaseRowLevelSecurityHealth();
+    res.status(health.status === "unhealthy" ? 503 : 200).json(health);
   });
 
   const verifyPaymentRateLimit = createVerifyPaymentRateLimit({
@@ -266,6 +355,7 @@ export async function createApp({ redisClient }) {
 
   const authRouter = createAuthRouter({
     sep10ChallengeRateLimit: createSep10ChallengeRateLimit({ store: sep10RateLimitStore }),
+    sep10ChallengeIpRateLimit: createSep10ChallengeIpRateLimit({ store: sep10RateLimitStore }),
     sep10VerifyRateLimit: createSep10VerifyRateLimit({ store: sep10RateLimitStore }),
   });
 
@@ -315,13 +405,23 @@ export async function createApp({ redisClient }) {
   app.use("/api", authRouter);
   app.use("/api", metricsRouter);
   app.use("/api", webhooksRouter);
+  app.use("/api", auditRouter);
   app.use("/api/payments", paymentDetailsRouter); // NEW — GET /api/payments/:id
+  app.use("/api", sep12KycRouter); // SEP-12 KYC Integration
 
-  // Transaction Signer — rate-limited signature verification endpoint (#912)
+  // Transaction Signer — authenticated, rate-limited signature verification endpoint (#912)
+  // requireApiKeyAuth() is mandatory here: the endpoint triggers Horizon API calls and
+  // must not be reachable by unauthenticated parties. Rate limiters run after auth so
+  // that only authenticated actors consume budget.
   const transactionSignerMiddlewares = createTransactionSignerMiddlewares({
     redisClient: redisAvailable ? redisClient : undefined,
   });
-  app.post("/api/verify-signature", ...transactionSignerMiddlewares, handleVerifySignature);
+  app.post(
+    "/api/verify-signature",
+    requireApiKeyAuth(),
+    ...transactionSignerMiddlewares,
+    handleVerifySignature,
+  );
 
   // SEP-0001 stellar.toml endpoint (public, no auth required)
   app.use("/", sep0001Router);

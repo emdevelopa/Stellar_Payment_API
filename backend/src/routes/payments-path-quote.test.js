@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import createPaymentsRouter from "./payments.js";
+import { resetExchangeRateCache } from "../lib/exchange-rate-cache.js";
 
 const { findStrictReceivePaths, supabaseFrom } = vi.hoisted(() => ({
   findStrictReceivePaths: vi.fn(),
@@ -41,13 +42,15 @@ function createSupabaseSelectMock(payment) {
   return chain;
 }
 
-function getPathPaymentQuoteHandler() {
+function getPathPaymentQuoteRoute() {
   const router = createPaymentsRouter();
-  const layer = router.stack.find(
+  return router.stack.find(
     (entry) => entry.route?.path === "/path-payment-quote/:id",
-  );
+  ).route;
+}
 
-  return layer.route.stack.at(-1).handle;
+function getPathPaymentQuoteHandler() {
+  return getPathPaymentQuoteRoute().stack.at(-1).handle;
 }
 
 function createMockResponse() {
@@ -65,6 +68,22 @@ function createMockResponse() {
   };
 }
 
+describe("GET /api/path-payment-quote/:id — authentication (issue #1309)", () => {
+  it("is protected by requireApiKeyAuth, not left unauthenticated", () => {
+    // This route sits outside the `/api/payments` prefix that app.js gates
+    // with requireApiKeyAuth() at the mount level, so it needs its own
+    // per-route auth middleware or it is reachable by anyone. Assert the
+    // middleware stack actually contains an auth layer rather than relying
+    // only on behavioral tests, so a future refactor that silently drops it
+    // fails immediately here instead of shipping an unauthenticated route
+    // again.
+    const route = getPathPaymentQuoteRoute();
+    const middlewareNames = route.stack.map((layer) => layer.name);
+
+    expect(middlewareNames).toContain("requireApiKeyAuth");
+  });
+});
+
 describe("GET /api/path-payment-quote/:id", () => {
   const paymentId = "9f927a2c-02d4-4f76-914c-62cf44d9525e";
   const sourceAccount =
@@ -72,6 +91,7 @@ describe("GET /api/path-payment-quote/:id", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetExchangeRateCache();
   });
 
   it("returns an XLM quote for a USDC invoice", async () => {
@@ -198,5 +218,131 @@ describe("GET /api/path-payment-quote/:id", () => {
       status: "confirmed",
     });
     expect(findStrictReceivePaths).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/path-payment-quote/:id — quote cache (issue #1045)", () => {
+  const paymentId = "9f927a2c-02d4-4f76-914c-62cf44d9525e";
+  const sourceAccount =
+    "GBRPYHIL2C7Q7PGLUKSTPIY2KPJ7QMZ4ZWJHQ6GUSIW2LQAHOMK5N7BI";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetExchangeRateCache();
+    supabaseFrom.mockReturnValue(
+      createSupabaseSelectMock({
+        id: paymentId,
+        amount: 25,
+        asset: "USDC",
+        asset_issuer: "GDQOE23W4QK6WQ4R3BVCUO3PRA4VJ7A3M7MRWWX4V67WJYQ7QXKJQ4KJ",
+        recipient: "GB6REFUNDTESTRECIPIENTQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+        status: "pending",
+      }),
+    );
+    findStrictReceivePaths.mockResolvedValue({
+      source_amount: "60.1250000",
+      source_asset_code: "XLM",
+      source_asset_issuer: null,
+      destination_amount: "25",
+      path: [],
+    });
+  });
+
+  async function requestQuote(handler, res) {
+    await handler(
+      {
+        params: { id: paymentId },
+        query: {
+          source_asset: "XLM",
+          source_account: sourceAccount,
+        },
+        merchant: { id: "merchant-1" },
+      },
+      res,
+      vi.fn(),
+    );
+  }
+
+  it("serves identical quote requests from cache without re-querying Horizon", async () => {
+    const firstRes = createMockResponse();
+    await requestQuote(getPathPaymentQuoteHandler(), firstRes);
+    expect(firstRes.statusCode).toBe(200);
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(1);
+
+    const secondRes = createMockResponse();
+    await requestQuote(getPathPaymentQuoteHandler(), secondRes);
+
+    expect(secondRes.statusCode).toBe(200);
+    expect(secondRes.body).toEqual(firstRes.body);
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps different source assets in separate cache entries", async () => {
+    await requestQuote(getPathPaymentQuoteHandler(), createMockResponse());
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(1);
+
+    const handler = getPathPaymentQuoteHandler();
+    const res = createMockResponse();
+    await handler(
+      {
+        params: { id: paymentId },
+        query: {
+          source_asset: "EUR",
+          source_account: sourceAccount,
+        },
+        merchant: { id: "merchant-1" },
+      },
+      res,
+      vi.fn(),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.source_asset).toBe("XLM");
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops serving cached quotes once the payment is no longer pending", async () => {
+    await requestQuote(getPathPaymentQuoteHandler(), createMockResponse());
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(1);
+
+    supabaseFrom.mockReturnValue(
+      createSupabaseSelectMock({
+        id: paymentId,
+        amount: 25,
+        asset: "USDC",
+        asset_issuer: "GDQOE23W4QK6WQ4R3BVCUO3PRA4VJ7A3M7MRWWX4V67WJYQ7QXKJQ4KJ",
+        recipient: "GB6REFUNDTESTRECIPIENTQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+        status: "confirmed",
+      }),
+    );
+
+    const res = createMockResponse();
+    await requestQuote(getPathPaymentQuoteHandler(), res);
+
+    expect(res.statusCode).toBe(409);
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache the 404 response when no path is found", async () => {
+    findStrictReceivePaths.mockResolvedValue(null);
+
+    const firstRes = createMockResponse();
+    await requestQuote(getPathPaymentQuoteHandler(), firstRes);
+    expect(firstRes.statusCode).toBe(404);
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(1);
+
+    findStrictReceivePaths.mockResolvedValue({
+      source_amount: "60.1250000",
+      source_asset_code: "XLM",
+      source_asset_issuer: null,
+      destination_amount: "25",
+      path: [],
+    });
+
+    const secondRes = createMockResponse();
+    await requestQuote(getPathPaymentQuoteHandler(), secondRes);
+
+    expect(secondRes.statusCode).toBe(200);
+    expect(findStrictReceivePaths).toHaveBeenCalledTimes(2);
   });
 });

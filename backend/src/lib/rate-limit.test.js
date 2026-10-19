@@ -13,6 +13,7 @@ import {
   createMerchantSecurityActionRateLimit,
   createRedisRateLimitStore,
   createSep10ChallengeRateLimit,
+  createSep10ChallengeIpRateLimit,
   createSep10VerifyRateLimit,
   createVerifyPaymentRateLimit,
   DASHBOARD_METRICS_RATE_LIMIT_MAX,
@@ -20,12 +21,15 @@ import {
   getDashboardMetricsRateLimitKey,
   getMerchantSecurityActionRateLimitKey,
   getSep10ChallengeRateLimitKey,
+  getSep10ChallengeIpRateLimitKey,
   getSep10VerifyRateLimitKey,
   getVerifyPaymentRateLimitKey,
   MERCHANT_SECURITY_ACTION_RATE_LIMIT_MAX,
   MERCHANT_SECURITY_ACTION_RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_REDIS_PREFIX,
   SEP10_CHALLENGE_RATE_LIMIT_MAX,
+  SEP10_CHALLENGE_IP_RATE_LIMIT_MAX,
+  SEP10_CHALLENGE_IP_RATE_LIMIT_WINDOW_MS,
   SEP10_VERIFY_RATE_LIMIT_MAX,
   VERIFY_PAYMENT_RATE_LIMIT_MAX,
   VERIFY_PAYMENT_RATE_LIMIT_WINDOW_MS,
@@ -224,6 +228,25 @@ describe("SEP-10 rate limiters", () => {
       ip: "198.51.100.2",
     });
     expect(key).toBe("sep10:challenge:GABC:198.51.100.2");
+  });
+
+  it("builds challenge IP keys that ignore the account (#584)", () => {
+    const a = getSep10ChallengeIpRateLimitKey({ body: { account: "GAAA" }, ip: "198.51.100.2" });
+    const b = getSep10ChallengeIpRateLimitKey({ body: { account: "GBBB" }, ip: "198.51.100.2" });
+    expect(a).toBe("sep10:challenge-ip:198.51.100.2");
+    expect(b).toBe(a);
+  });
+
+  it("creates the challenge IP limiter with the configured policy (#584)", () => {
+    const rateLimitFactory = vi.fn((options) => options);
+    const options = createSep10ChallengeIpRateLimit({ rateLimitFactory });
+
+    expect(options.max).toBe(SEP10_CHALLENGE_IP_RATE_LIMIT_MAX);
+    expect(options.max).toBeGreaterThan(SEP10_CHALLENGE_RATE_LIMIT_MAX);
+    expect(options.windowMs).toBe(SEP10_CHALLENGE_IP_RATE_LIMIT_WINDOW_MS);
+    expect(options.keyGenerator).toBe(getSep10ChallengeIpRateLimitKey);
+    expect(options.message.code).toBe("SEP10_RATE_LIMITED");
+    expect(options.passOnStoreError).toBe(true);
   });
 
   it("builds verify keys scoped to client IP", () => {

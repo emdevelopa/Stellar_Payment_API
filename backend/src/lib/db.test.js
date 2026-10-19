@@ -31,7 +31,17 @@ vi.mock("./metrics.js", () => ({
   pgPoolUtilizationPercent: { set: vi.fn() },
 }));
 
+vi.mock("./logger.js", () => ({
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 import { isRetryablePoolError, queryWithRetry } from "./db.js";
+import { logger } from "./logger.js";
 
 describe("db pool retry helpers", () => {
   beforeEach(() => {
@@ -80,5 +90,60 @@ describe("db pool retry helpers", () => {
     ).rejects.toThrow("duplicate key");
 
     expect(mockPoolQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a structured warning with pool state when retrying (Issue #1057)", async () => {
+    vi.useFakeTimers();
+
+    const transient = new Error("connection terminated");
+    transient.code = "57P01";
+
+    mockPoolQuery
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({ rows: [{ ok: true }] });
+
+    const queryPromise = queryWithRetry("SELECT 1", [], {
+      label: "health-probe",
+      retryAttempts: 1,
+      retryDelayMs: 5,
+    });
+
+    await vi.runAllTimersAsync();
+    await queryPromise;
+    vi.useRealTimers();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "health-probe",
+        attempt: 1,
+        maxAttempts: 2,
+        err: "connection terminated",
+      }),
+      "pg pool query failed, retrying",
+    );
+  });
+
+  it("logs a structured error with pool and circuit breaker state on failure (Issue #1057)", async () => {
+    const nonRetryable = new Error("duplicate key");
+    nonRetryable.code = "23505";
+    nonRetryable.severity = "ERROR";
+    mockPoolQuery.mockRejectedValueOnce(nonRetryable);
+
+    await expect(
+      queryWithRetry("SELECT 1", [], { label: "insert-payment", retryAttempts: 1 }),
+    ).rejects.toThrow("duplicate key");
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: "duplicate key",
+        code: "23505",
+        severity: "ERROR",
+        label: "insert-payment",
+        retryable: false,
+        poolStats: expect.objectContaining({ maxConnections: 20 }),
+        circuitBreakerState: expect.objectContaining({ state: expect.any(String) }),
+      }),
+      "Database pool error",
+    );
   });
 });

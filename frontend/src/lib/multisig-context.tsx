@@ -7,7 +7,6 @@ import {
   useCallback,
   useMemo,
   useRef,
-  useState,
   ReactNode,
 } from "react";
 
@@ -76,6 +75,7 @@ type MultisigState = {
   transaction: MultisigTransaction | null;
   currentStep: MultisigStep;
   isLoading: boolean;
+  isPendingConfirmation: boolean;
   error: string | null;
   isMounted: boolean;
   isVisible: boolean;
@@ -85,6 +85,7 @@ type MultisigAction =
   | { type: "SET_TRANSACTION"; payload: MultisigTransaction | null }
   | { type: "SET_STEP"; payload: MultisigStep }
   | { type: "SET_LOADING"; payload: boolean }
+  | { type: "SET_PENDING_CONFIRMATION"; payload: boolean }
   | { type: "SET_ERROR"; payload: string }
   | { type: "CLEAR_ERROR" }
   | { type: "RESET" }
@@ -98,6 +99,7 @@ const INITIAL_STATE: MultisigState = {
   transaction: null,
   currentStep: "review",
   isLoading: false,
+  isPendingConfirmation: false,
   error: null,
   isMounted: false,
   isVisible: false,
@@ -111,6 +113,8 @@ function multisigReducer(state: MultisigState, action: MultisigAction): Multisig
       return { ...state, currentStep: action.payload };
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
+    case "SET_PENDING_CONFIRMATION":
+      return { ...state, isPendingConfirmation: action.payload };
     case "SET_ERROR":
       return { ...state, error: action.payload, isLoading: false };
     case "CLEAR_ERROR":
@@ -177,7 +181,6 @@ interface MultisigProviderProps {
 
 export function MultisigProvider({ children, networkPassphrase }: MultisigProviderProps) {
   const [state, dispatch] = useReducer(multisigReducer, INITIAL_STATE);
-  const [isPendingConfirmation, setIsPendingConfirmation] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -191,7 +194,6 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
 
   const resetModal = useCallback(() => {
     dispatch({ type: "RESET" });
-    setIsPendingConfirmation(false);
   }, []);
 
   const setTransactionSafe = useCallback((newTransaction: MultisigTransaction | null) => {
@@ -233,19 +235,16 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
       return;
     }
 
-    // Snapshot for rollback if signing fails.
     const previousTransaction = { ...transaction, signers: [...transaction.signers] };
 
     dispatch({ type: "SET_LOADING", payload: true });
     dispatch({ type: "CLEAR_ERROR" });
-    // Optimistic update: flip hasSigned immediately so the UI responds before the async op.
     dispatch({ type: "OPTIMISTIC_SIGN", signerId });
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       const signature = `mock_signature_${Date.now()}_${signerId}`;
       const signedAt = new Date().toISOString();
-      // Settle: attach the real signature and auto-advance step if threshold met.
       dispatch({ type: "CONFIRM_SIGN", signerId, signature, signedAt });
     } catch (err) {
       dispatch({ type: "REVERT_SIGN", previousTransaction });
@@ -267,7 +266,6 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
     try {
       clearError();
 
-      // Verify enough signatures
       const signedWeight = transaction.signers.filter(s => s.hasSigned)
         .reduce((sum, s) => sum + s.weight, 0);
       
@@ -275,17 +273,17 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
         throw new Error("Not enough signatures to submit transaction");
       }
 
-      // Optimistic update: immediately show confirm step with a pending tx hash
+      // Optimistic update: immediately transition to confirm step with pending tx hash
       const pendingTxHash = `tx_pending_${Date.now()}`;
-      setIsPendingConfirmation(true);
-      setCurrentStep("confirm");
+      dispatch({ type: "SET_LOADING", payload: true });
+      dispatch({ type: "SET_PENDING_CONFIRMATION", payload: true });
+      dispatch({ type: "SET_STEP", payload: "confirm" });
       setTransactionSafe({
         ...transaction,
-        status: 'approved' as MultisigApprovalStatus,
+        status: "approved" as MultisigApprovalStatus,
         submittedTxHash: pendingTxHash,
       });
 
-      // Simulate submission process
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Finalize with real transaction hash
@@ -297,7 +295,6 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
       });
       dispatch({ type: "SUBMIT_SUCCESS", txHash: realTxHash });
     } catch (err) {
-      // Revert optimistic update
       setTransactionSafe(previousTransaction);
       const errorMessage = err instanceof Error ? err.message : "Failed to submit transaction";
       dispatch({ type: "SET_ERROR", payload: errorMessage });
@@ -305,7 +302,7 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
       console.error("Submission error:", err);
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
-      setIsPendingConfirmation(false);
+      dispatch({ type: "SET_PENDING_CONFIRMATION", payload: false });
     }
   }, [clearError, setTransactionSafe]);
 
@@ -316,7 +313,7 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
     }
   }, []);
 
-  const { transaction, currentStep, isLoading, error, isMounted, isVisible } = state;
+  const { transaction, currentStep, isLoading, isPendingConfirmation, error, isMounted, isVisible } = state;
 
   const computedValues = useMemo(() => {
     if (!transaction) {
@@ -334,7 +331,8 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
     const signedWeight = transaction.signers
       .filter((s) => s.hasSigned)
       .reduce((sum, s) => sum + s.weight, 0);
-    const progress = (signedWeight / transaction.minSignatures) * 100;
+    const minSignatures = transaction.minSignatures || 1;
+    const progress = minSignatures > 0 ? (signedWeight / minSignatures) * 100 : 0;
 
     let isExpired = false;
     let timeRemaining: string | null = null;
@@ -352,10 +350,10 @@ export function MultisigProvider({ children, networkPassphrase }: MultisigProvid
 
     return {
       canSign: !isExpired && currentStep === "review",
-      canSubmit: signedWeight >= transaction.minSignatures && currentStep !== "confirm",
+      canSubmit: !isExpired && signedWeight >= transaction.minSignatures && currentStep !== "confirm",
       signedCount: transaction.signers.filter((s) => s.hasSigned).length,
       requiredSignatures: transaction.minSignatures,
-      progress: Math.min(progress, 100),
+      progress: Math.min(Math.max(progress, 0), 100),
       isExpired,
       timeRemaining,
     };

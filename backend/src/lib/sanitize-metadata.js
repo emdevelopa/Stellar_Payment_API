@@ -7,6 +7,9 @@ const MAX_NESTING_DEPTH = 4;
 const MAX_STRING_LENGTH = 1000;
 const MAX_KEYS = 50;
 
+// Keys that rewrite an object's prototype chain when assigned (issue #1447).
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 // Patterns that indicate potential XSS or injection attacks
 const DANGEROUS_PATTERNS = [
   /<script[^>]*>.*?<\/script>/gi,
@@ -66,6 +69,21 @@ function countKeys(obj) {
 }
 
 /**
+ * Whether any own key anywhere in obj is a prototype-pollution key.
+ */
+function hasForbiddenKey(obj) {
+  if (typeof obj !== 'object' || obj === null) {
+    return false;
+  }
+  for (const key of Object.keys(obj)) {
+    if (FORBIDDEN_KEYS.has(key) || hasForbiddenKey(obj[key])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Sanitize string values to remove dangerous patterns
  */
 function sanitizeString(str) {
@@ -108,6 +126,9 @@ function sanitizeObject(obj) {
 
   const sanitized = {};
   for (const [key, value] of Object.entries(obj)) {
+    // Never assign prototype-pollution keys: `sanitized.__proto__ = x`
+    // would replace the object's prototype instead of adding a key.
+    if (FORBIDDEN_KEYS.has(key)) continue;
     // Sanitize key names too
     const cleanKey = sanitizeString(key);
     sanitized[cleanKey] = sanitizeObject(value);
@@ -148,6 +169,13 @@ export function validateMetadata(metadata) {
     return {
       valid: false,
       error: `Metadata contains too many keys (max: ${MAX_KEYS})`
+    };
+  }
+
+  if (hasForbiddenKey(metadata)) {
+    return {
+      valid: false,
+      error: 'Metadata contains a forbidden key (__proto__, constructor or prototype)'
     };
   }
 

@@ -38,6 +38,8 @@ import {
   sanitizePaymentMetadata,
   auditPaymentAnomaly,
   isValidTransactionHash,
+  METADATA_ALLOWLIST,
+  STALE_PAYMENT_HOURS,
 } from "./ledger-monitor-security.js";
 import { sendWebhook, isEventSubscribed } from "./webhooks.js";
 import { sendReceiptEmail } from "./email.js";
@@ -54,6 +56,13 @@ import {
   ledgerMonitorCircuitBreakerTrips,
   ledgerMonitorBatchSize,
   ledgerMonitorRateLimiterWaitSeconds,
+  ledgerMonitorValidationFailures,
+  ledgerMonitorAnomaliesDetected,
+  ledgerMonitorMerchantCacheHits,
+  ledgerMonitorMerchantCacheMisses,
+  ledgerMonitorMerchantCacheSize,
+  ledgerMonitorSignatureVerifications,
+  ledgerMonitorHorizonOperations,
   rateLimitRequestsTotal,
   rateLimitExceededTotal,
 } from "./metrics.js";
@@ -73,14 +82,19 @@ class MerchantConfigCache {
 
   get(merchantId) {
     const entry = this.cache.get(merchantId);
-    if (!entry) return null;
+    if (!entry) {
+      ledgerMonitorMerchantCacheMisses.inc();
+      return null;
+    }
     if (Date.now() - entry.insertedAt > this.ttlMs) {
       this.cache.delete(merchantId);
+      ledgerMonitorMerchantCacheMisses.inc();
       return null;
     }
     // LRU touch
     this.cache.delete(merchantId);
     this.cache.set(merchantId, entry);
+    ledgerMonitorMerchantCacheHits.inc();
     return entry.data;
   }
 
@@ -93,6 +107,7 @@ class MerchantConfigCache {
       this.cache.delete(oldest);
     }
     this.cache.set(merchantId, { data, insertedAt: Date.now() });
+    ledgerMonitorMerchantCacheSize.set(this.cache.size);
   }
 
   invalidate(merchantId) {
@@ -170,6 +185,20 @@ let _backoffIndex = 0;
 let _rateLimiter = createLedgerMonitorRateLimiter({
   maxPerSecond: HORIZON_REQUESTS_PER_SECOND,
 });
+
+/**
+ * Sentinel used by the merchant config cache to distinguish between:
+ *   • `undefined`   — entry not cached (cache miss)
+ *   • `NOT_FOUND`   — entry was looked up and the merchant does not exist
+ *   • `null`        — should never be stored; treated as a cache miss
+ *
+ * DI-06: previously both "not found" and "not cached" were represented as
+ * null, so loadMerchantNotificationConfig could not tell whether a null in
+ * the cycle cache meant "we checked and the merchant doesn't exist" vs
+ * "the batch query errored out and we filled null defensively".  Using a
+ * distinct symbol removes that ambiguity.
+ */
+const MERCHANT_NOT_FOUND = Symbol("MERCHANT_NOT_FOUND");
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -370,11 +399,11 @@ async function pollPendingPayments() {
     // Pre-load every merchant notification config for this batch in a single
     // query, replacing the previous N+1 pattern (one merchants lookup per
     // confirmed payment). Seeds the per-cycle cache consumed by checkPayment.
-    const merchantConfigCache = await preloadMerchantConfigs(pending);
+    const cycleCache = await preloadMerchantConfigs(pending);
     const results = await Promise.allSettled(
       Array.from(groups.values()).map(async (group) => {
         for (const p of group) {
-          await checkPayment(p, { merchantConfigCache });
+          await checkPayment(p, { merchantConfigCache: cycleCache });
         }
       })
     );
@@ -408,6 +437,7 @@ async function checkPayment(payment, { merchantConfigCache = new Map() } = {}) {
     // Guard: full security validation on the DB record before touching Horizon
     const validation = validatePaymentRecord(payment);
     if (!validation.valid) {
+      ledgerMonitorValidationFailures.inc({ reason: deriveValidationReasonTag(validation.reason) });
       logger.warn(
         { paymentId: payment?.id, reason: validation.reason },
         "Horizon poller: payment record failed security validation — skipping",
@@ -416,8 +446,9 @@ async function checkPayment(payment, { merchantConfigCache = new Map() } = {}) {
       return;
     }
 
-    // Emit audit event for any anomalous field values
+    // Emit audit event for any anomalous field values and track per-type counts
     auditPaymentAnomaly(payment);
+    recordAnomalyMetrics(payment);
 
     let match;
     try {
@@ -484,8 +515,13 @@ async function checkPayment(payment, { merchantConfigCache = new Map() } = {}) {
         const diff = received - expected;
 
         if (diff < -0.0000001) {
-          // Underpayment — mark failed
-          await retryTransientDbOperation(
+          // Underpayment — mark failed.
+          // DI-01: add .is("tx_id", null) so the update is atomic — if another
+          // poller cycle already claimed this payment the WHERE predicate fails
+          // and `updated` is null, preventing a double-write.
+          // DI-02: check the returned row before firing SSE/socket events so
+          // notifications are not emitted when the row was already claimed.
+          const { data: updated } = await retryTransientDbOperation(
             () => supabase.from("payments").update({
               status: "failed",
               tx_id: anyPayment.transaction_hash,
@@ -496,9 +532,23 @@ async function checkPayment(payment, { merchantConfigCache = new Map() } = {}) {
                 received_amount: received,
                 shortfall: Number((expected - received).toFixed(7)),
               }),
-            }).eq("id", payment.id).eq("status", "pending"),
+            })
+              .eq("id", payment.id)
+              .eq("status", "pending")
+              .is("tx_id", null)        // DI-01: atomic guard
+              .select("id")
+              .maybeSingle(),
             { paymentId: payment.id, operation: "markUnderpaymentFailed" },
           );
+
+          if (!updated) {
+            // Row was already claimed by another cycle — skip silently.
+            logger.info(
+              { paymentId: payment.id },
+              "Horizon poller: underpayment — payment already processed, skipping",
+            );
+            return;
+          }
 
           await safeInvalidatePaymentCache(payment.id);
           logger.info(
@@ -507,6 +557,7 @@ async function checkPayment(payment, { merchantConfigCache = new Map() } = {}) {
           );
           ledgerMonitorPaymentsChecked.inc({ result: "failed" });
 
+          // DI-02: only notify after confirming the DB update succeeded.
           notifyPaymentEvent(payment, {
             sseEvent: "payment.failed",
             sseData: {
@@ -769,6 +820,7 @@ async function verifyLedgerTransactionSignature(txHash, paymentId) {
       { paymentId, txHash, operation: "verifyTransactionSignature" },
     );
   } catch (sigErr) {
+    ledgerMonitorSignatureVerifications.inc({ result: "error" });
     logger.warn(
       { err: sigErr, paymentId, txHash },
       "Horizon poller: unexpected error during signature verification — skipping payment",
@@ -777,6 +829,7 @@ async function verifyLedgerTransactionSignature(txHash, paymentId) {
   }
 
   if (!sigResult?.valid) {
+    ledgerMonitorSignatureVerifications.inc({ result: "failed" });
     logger.warn(
       {
         paymentId,
@@ -791,6 +844,7 @@ async function verifyLedgerTransactionSignature(txHash, paymentId) {
     return false;
   }
 
+  ledgerMonitorSignatureVerifications.inc({ result: "passed" });
   logger.debug(
     {
       paymentId,
@@ -913,10 +967,15 @@ async function preloadMerchantConfigs(payments) {
         merchantConfigCache.set(merchant.id, merchant);
         cache.set(merchant.id, merchant);
       }
+      // DI-06: store MERCHANT_NOT_FOUND (not null) for IDs that were queried
+      // but absent from the result set.  null in a Map means "was fetched
+      // successfully and doesn't exist"; undefined means "not yet fetched".
+      // Using a distinct sentinel prevents a transient DB error from
+      // permanently poisoning the cache with a null that looks like a real miss.
       for (const id of toFetch) {
         if (!cache.has(id)) {
-          merchantConfigCache.set(id, null);
-          cache.set(id, null);
+          merchantConfigCache.set(id, MERCHANT_NOT_FOUND);
+          cache.set(id, MERCHANT_NOT_FOUND);
         }
       }
     }
@@ -937,13 +996,18 @@ async function loadMerchantNotificationConfig(merchantId, cache = new Map()) {
   }
 
   if (cache.has(merchantId)) {
-    return cache.get(merchantId);
+    const cached = cache.get(merchantId);
+    // DI-06: MERCHANT_NOT_FOUND means we already looked this merchant up and
+    // it doesn't exist — return null without hitting the DB again.
+    return cached === MERCHANT_NOT_FOUND ? null : cached;
   }
 
   const merchant = merchantConfigCache.get(merchantId);
   if (merchant !== null && merchant !== undefined) {
-    cache.set(merchantId, merchant);
-    return merchant;
+    // DI-06: translate the sentinel back to null for callers.
+    const resolved = merchant === MERCHANT_NOT_FOUND ? null : merchant;
+    cache.set(merchantId, resolved);
+    return resolved;
   }
 
   const { data, error } = await supabase
@@ -957,13 +1021,72 @@ async function loadMerchantNotificationConfig(merchantId, cache = new Map()) {
       { err: error, merchantId },
       "Horizon poller: failed to load merchant notification config",
     );
+    // DI-06: store MERCHANT_NOT_FOUND so a DB error on one lookup doesn't
+    // permanently null-fill the cache entry for the rest of this cycle.
     cache.set(merchantId, null);
-    merchantConfigCache.set(merchantId, null);
+    merchantConfigCache.set(merchantId, MERCHANT_NOT_FOUND);
     return null;
   }
 
   const result = data ?? null;
+  // DI-06: store MERCHANT_NOT_FOUND in the module-level LRU cache when the
+  // merchant genuinely doesn't exist, so subsequent lookups are fast and the
+  // absence is explicit rather than ambiguous.
   cache.set(merchantId, result);
-  merchantConfigCache.set(merchantId, result);
+  merchantConfigCache.set(merchantId, result === null ? MERCHANT_NOT_FOUND : result);
   return result;
+}
+
+/**
+ * Derive a short, label-safe tag from a validation failure reason string.
+ * Keeps Prometheus label cardinality bounded to a fixed set.
+ */
+function deriveValidationReasonTag(reason) {
+  if (!reason) return "unknown";
+  const r = reason.toLowerCase();
+  if (r.includes("recipient")) return "bad_recipient";
+  if (r.includes("amount")) return "bad_amount";
+  if (r.includes("issuer")) return "bad_issuer";
+  if (r.includes("asset")) return "bad_asset";
+  if (r.includes("memo")) return "bad_memo";
+  if (r.includes("future") || r.includes("created_at")) return "bad_date";
+  if (r.includes("id")) return "missing_id";
+  return "other";
+}
+
+/**
+ * Emit per-type anomaly metrics for a payment record.
+ * Mirrors the anomaly detection logic in auditPaymentAnomaly without
+ * duplicating the logger.warn calls — only the metric increments live here.
+ *
+ * DI-03: uses the exported METADATA_ALLOWLIST from ledger-monitor-security.js
+ * so both codepaths always reference the same set of allowed keys.
+ * DI-05: uses the exported STALE_PAYMENT_HOURS constant so the anomaly
+ * threshold stays in sync with the one used by auditPaymentAnomaly.
+ */
+function recordAnomalyMetrics(payment) {
+  const amount = Number(payment.amount);
+  if (amount > 100_000) {
+    ledgerMonitorAnomaliesDetected.inc({ type: "large_amount" });
+  }
+  if (typeof payment.memo === "string") {
+    if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(payment.memo)) {
+      ledgerMonitorAnomaliesDetected.inc({ type: "memo_control_chars" });
+    }
+    if (payment.memo.includes("'") || payment.memo.includes('"') || payment.memo.includes("--")) {
+      ledgerMonitorAnomaliesDetected.inc({ type: "memo_sql_chars" });
+    }
+  }
+  if (payment.created_at) {
+    const ageHours = (Date.now() - Date.parse(payment.created_at)) / 3_600_000;
+    if (ageHours > STALE_PAYMENT_HOURS) {
+      ledgerMonitorAnomaliesDetected.inc({ type: "stale_payment" });
+    }
+  }
+  if (payment.metadata && typeof payment.metadata === "object") {
+    const unknownKeys = Object.keys(payment.metadata).filter((k) => !METADATA_ALLOWLIST.has(k));
+    if (unknownKeys.length > 0) {
+      ledgerMonitorAnomaliesDetected.inc({ type: "metadata_unknown_keys" });
+    }
+  }
 }

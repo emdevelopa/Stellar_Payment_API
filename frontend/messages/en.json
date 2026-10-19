@@ -16,12 +16,15 @@
     "codeInputPlaceholder": "000000",
     "verifyButton": "Verify & Enable",
     "verifying": "Verifying…",
+    "retryButton": "Retry",
+    "stepAnnouncement": "Step {current} of {total}",
     "successTitle": "Two-Factor Authentication Enabled",
     "successDescription": "Your account is now protected. You will be prompted for a code on each login.",
     "error": {
       "setupFailed": "Failed to start 2FA setup. Please try again.",
       "invalidCode": "Invalid code. Please try again.",
-      "codeLength": "Please enter the 6-digit code from your authenticator app."
+      "codeLength": "Please enter the 6-digit code from your authenticator app.",
+      "networkFailure": "Couldn't reach the server. Check your connection and retry — your code and QR setup are still here."
     }
   },
   "localeSwitcher": {
@@ -702,5 +705,109 @@
     "close": "Close success animation",
     "continue": "Continue",
     "error": "Something went wrong. Please try again."
+  },
+  "multisigModal": {
+    "title": "Multi-Signature Approval",
+    "closeModal": "Close modal",
+    "stepOf": "Step {step} of {total}",
+    "review": {
+      "heading": "Review Transaction",
+      "description": "Please review the transaction details and confirm your approval.",
+      "sectionAriaLabel": "Review transaction section",
+      "amount": "Amount",
+      "to": "To",
+      "issuer": "Issuer",
+      "memo": "Memo",
+      "signaturesLabel": "Signatures ({signed}/{required})",
+      "progressAriaLabel": "Signature progress",
+      "signersLabel": "Signers",
+      "signersListAriaLabel": "Signers list",
+      "signerFallbackName": "Signer {id}",
+      "signedStatus": "Signed",
+      "notSignedStatus": "Not signed",
+      "signerWeight": "Weight: {weight} • {publicKey}...",
+      "signerAriaLabel": "{name}, Weight: {weight}, Status: {status}",
+      "signButton": "Sign",
+      "signingButton": "Signing...",
+      "signButtonAriaLabel": "{action} for {name}",
+      "expiresIn": "Expires in {time}",
+      "submitButton": "Submit Transaction",
+      "submittingButton": "Submitting..."
+    },
+    "processing": {
+      "heading": "Processing Transaction",
+      "description": "Processing your transaction. Please wait."
+    },
+    "confirm": {
+      "pendingHeading": "Transaction Submitted",
+      "pendingDescription": "Awaiting network confirmation...",
+      "hashPendingLabel": "Transaction Hash",
+      "confirmingButton": "Confirming...",
+      "approvedHeading": "Transaction Approved",
+      "approvedDescription": "Your multi-signature transaction has been successfully submitted",
+      "hashLabel": "Transaction Hash",
+      "closeButton": "Close"
+    },
+    "error": {
+      "heading": "Transaction Failed",
+      "defaultMessage": "An error occurred while processing your transaction",
+      "tryAgainButton": "Try Again",
+      "closeButton": "Close",
+      "bannerTitle": "Error",
+      "clearErrorAriaLabel": "Clear error",
+      "statusLabel": "Failed"
+    },
+    "expired": {
+      "heading": "Transaction Expired",
+      "statusLabel": "Transaction Expired",
+      "badge": "Expired",
+      "description": "This transaction has expired and can no longer be signed or submitted.",
+      "closeButton": "Close"
+    },
+    "announcements": {
+      "processing": "Processing your transaction. Please wait.",
+      "confirmed": "Transaction approved successfully.",
+      "failed": "Transaction failed. See error details below."
+    },
+    "toasts": {
+      "signed": "Transaction signed successfully",
+      "submitted": "Transaction submitted successfully"
+    }
+  },
+  "transactionFilters": {
+    "title": "Filters",
+    "landmarkLabel": "Transaction filters",
+    "closeFilters": "Close filters",
+    "ariaLabel": "Clear search",
+    "applyingToResults": "Applying to results…",
+    "clearAll": "Clear all filters",
+    "clearAllAriaLabel": "Clear all {count, plural, one {1 active filter} other {# active filters}}",
+    "clearing": "Clearing…",
+    "search": {
+      "label": "Search",
+      "placeholder": "Search by ID or description",
+      "syncLabel": "Searching…"
+    },
+    "status": {
+      "label": "Status",
+      "all": "All Statuses",
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "failed": "Failed",
+      "refunded": "Refunded",
+      "syncLabel": "Updating status…"
+    },
+    "asset": {
+      "label": "Asset filter",
+      "all": "All",
+      "syncLabel": "Updating asset…"
+    },
+    "dateRange": {
+      "label": "Date range",
+      "from": "From",
+      "to": "To",
+      "fromSyncLabel": "Updating start date…",
+      "toSyncLabel": "Updating end date…"
+    }
   }
 }

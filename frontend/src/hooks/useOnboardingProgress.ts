@@ -82,10 +82,20 @@ export function useOnboardingProgress({
     [sortedSteps],
   );
 
-  const isComplete = useMemo(() => {
-    const required = sortedSteps.filter((s) => s.required);
-    return required.length > 0 && required.every((s) => s.completed);
-  }, [sortedSteps]);
+  const requiredSteps = useMemo(
+    () => sortedSteps.filter((s) => s.required),
+    [sortedSteps],
+  );
+
+  const completedRequiredCount = useMemo(
+    () => requiredSteps.filter((s) => s.completed).length,
+    [requiredSteps],
+  );
+
+  const isComplete = useMemo(
+    () => requiredSteps.length > 0 && completedRequiredCount === requiredSteps.length,
+    [requiredSteps, completedRequiredCount],
+  );
 
   // ── Reducer ──────────────────────────────────────────────────────────────
 
@@ -99,13 +109,19 @@ export function useOnboardingProgress({
     ),
   );
 
+  // Progress is measured against required steps so the percentage always
+  // reaches 100% exactly when `isComplete` flips true. Trackers with no
+  // required steps fall back to counting all steps.
+  const progressTotal = requiredSteps.length > 0 ? requiredSteps.length : sortedSteps.length;
+  const progressCompleted = requiredSteps.length > 0 ? completedRequiredCount : completedCount;
+
   // Sync step counts when the steps prop changes
   useEffect(() => {
     dispatch({
       type: "SYNC_STEPS",
-      payload: { total: sortedSteps.length, completed: completedCount },
+      payload: { total: progressTotal, completed: progressCompleted },
     });
-  }, [sortedSteps.length, completedCount]);
+  }, [progressTotal, progressCompleted]);
 
   // Sync external currentStep prop
   const prevCurrentStepPropRef = useRef(currentStepProp);

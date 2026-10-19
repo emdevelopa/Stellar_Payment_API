@@ -2,6 +2,10 @@ import { randomBytes } from "crypto";
 import { supabase } from "../lib/supabase.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
 import { resolveMerchantSettings } from "../lib/merchant-settings.js";
+import {
+  MAX_GRACE_PERIOD_HOURS,
+  normalizeApiKeyExpiry,
+} from "../lib/merchant-payload-validation.js";
 import { sendWebhook } from "../lib/webhooks.js";
 import { getPayloadForVersion } from "../webhooks/resolver.js";
 
@@ -24,6 +28,30 @@ function resolveWebhookSecretRotationGraceHours(requestValue) {
   }
 
   return Math.min(parsed, 168);
+}
+
+/**
+ * Issue #1482: service-level guards so non-HTTP callers (jobs, scripts, other
+ * services) get the same guarantees as the validated routes.
+ */
+function assertMerchantId(merchantId) {
+  if (typeof merchantId !== "string" || merchantId.trim() === "") {
+    const err = new Error("merchantId is required");
+    err.status = 400;
+    throw err;
+  }
+}
+
+function resolveApiKeyGraceHours(value) {
+  if (value === undefined || value === null) {
+    return DEFAULT_API_KEY_ROTATION_GRACE_HOURS;
+  }
+  if (!Number.isInteger(value)) {
+    const err = new Error("grace_period_hours must be an integer");
+    err.status = 400;
+    throw err;
+  }
+  return Math.min(Math.max(value, 0), MAX_GRACE_PERIOD_HOURS);
 }
 
 export const merchantService = {
@@ -85,6 +113,9 @@ export const merchantService = {
   },
 
   async rotateApiKey(merchantId, gracePeriodHours = DEFAULT_API_KEY_ROTATION_GRACE_HOURS) {
+    assertMerchantId(merchantId);
+    const graceHours = resolveApiKeyGraceHours(gracePeriodHours);
+
     // Get current merchant to preserve old key
     const { data: merchant, error: fetchError } = await supabase
       .from("merchants")
@@ -105,7 +136,6 @@ export const merchantService = {
 
     const newApiKey = `sk_${randomBytes(24).toString("hex")}`;
     const now = Date.now();
-    const graceHours = Math.min(Math.max(gracePeriodHours, 0), 168); // Clamp between 0 and 168 hours (1 week)
     const oldKeyExpiry = new Date(now + graceHours * 60 * 60 * 1000).toISOString();
 
     const { error } = await supabase
@@ -131,9 +161,12 @@ export const merchantService = {
   },
 
   async setApiKeyExpiry(merchantId, expiresAt) {
+    assertMerchantId(merchantId);
+    const normalizedExpiry = normalizeApiKeyExpiry(expiresAt);
+
     const { error } = await supabase
       .from("merchants")
-      .update({ api_key_expires_at: expiresAt })
+      .update({ api_key_expires_at: normalizedExpiry })
       .eq("id", merchantId);
 
     if (error) {
@@ -141,7 +174,7 @@ export const merchantService = {
       throw error;
     }
 
-    return { api_key_expires_at: expiresAt };
+    return { api_key_expires_at: normalizedExpiry };
   },
 
   async getApiKeyStatus(merchantId) {

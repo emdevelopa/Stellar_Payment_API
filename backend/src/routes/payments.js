@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import express from "express";
 import { paymentService } from "../services/paymentService.js";
-import { resolveAssetIssuer } from "../constants/assetConstants.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import {
   paymentSessionZodSchema,
@@ -16,6 +15,7 @@ import { validateRequest } from "../lib/validation.js";
 import { createCreatePaymentRateLimit } from "../lib/create-payment-rate-limit.js";
 import { createVerifyPaymentRateLimit } from "../lib/rate-limit.js";
 import { createPathPaymentQuoteRateLimit } from "../lib/path-payment-quote-rate-limit.js";
+import { requireApiKeyAuth } from "../lib/auth.js";
 import { recaptchaMiddleware } from "../lib/recaptcha.js";
 import { sendWebhook, isEventSubscribed } from "../lib/webhooks.js";
 import { sendReceiptEmail } from "../lib/email.js";
@@ -41,12 +41,37 @@ import {
   paymentFailedCounter,
 } from "../lib/metrics.js";
 import { sanitizeMetadataMiddleware } from "../lib/sanitize-metadata.js";
+import { validatePaymentSession } from "../lib/payment-session-validator.js";
+import { getSupabaseClient } from "../lib/supabase-client.js";
+import { insertPaymentSessionWithRetry } from "../lib/payment-session-retry.js";
+import {
+  withPaymentSessionLock,
+  PAYMENT_SESSION_IN_PROGRESS,
+} from "../lib/payment-session-lock.js";
+import { lookupIdempotentResponse } from "../lib/idempotency.js";
+import {
+  paymentProcessorSessionsTotal,
+  paymentProcessorSessionDuration,
+  paymentProcessorVerificationsTotal,
+  paymentProcessorVerificationDuration,
+  paymentProcessorStatusCacheHits,
+  paymentProcessorStatusCacheMisses,
+  paymentProcessorRefundsTotal,
+} from "../lib/payment-processor-metrics.js";
+import {
+  getExchangeRateQuote,
+  NoPathFoundError,
+} from "../services/exchangeRateService.js";
+import {
+  pathPaymentQuoteRequestsTotal,
+  pathPaymentQuoteStageDuration,
+  pathPaymentQuotePathHops,
+  pathPaymentQuoteRate,
+} from "../lib/path-payment-metrics.js";
 import {
   findMatchingPayment,
   findAnyRecentPayment,
-  findStrictReceivePaths,
   getNetworkFeeStats,
-  isValidStellarPublicKey,
   verifyTransactionSignature,
 } from "../lib/stellar.js";
 
@@ -55,7 +80,6 @@ const createPaymentRateLimit = createCreatePaymentRateLimit();
 const pathPaymentQuoteRateLimit = createPathPaymentQuoteRateLimit();
 
 const defaultVerifyPaymentRateLimit = createVerifyPaymentRateLimit();
-let supabaseClientPromise;
 
 function isSignatureVerificationAccepted(result) {
   if (result === true) {
@@ -71,14 +95,6 @@ async function verifyTransactionSignatureIfAvailable(txHash) {
   }
 
   return verifyTransactionSignature(txHash);
-}
-
-async function getSupabaseClient() {
-  if (!supabaseClientPromise) {
-    supabaseClientPromise = import("../lib/supabase.js").then((module) => module.supabase);
-  }
-
-  return supabaseClientPromise;
 }
 
 
@@ -236,134 +252,158 @@ function createPaymentsRouter({
    *                   type: string
    *       400:
    *         description: Validation error or invalid Idempotency-Key
+   *       409:
+   *         description: A concurrent request with the same Idempotency-Key is still being processed (code PAYMENT_SESSION_IN_PROGRESS). Retry shortly to receive the cached response.
    *       429:
    *         description: Too many requests
    */
+  /**
+   * Issue #1450: serialize concurrent requests that share an Idempotency-Key
+   * (per merchant, across instances) so they can never create two sessions.
+   * The loser of the race gets 409; a request that acquires the lock after
+   * its twin finished replays the cached idempotent response.
+   */
   async function createSession(req, res, next) {
+    const idempotencyKey = req.idempotency?.key ?? req.get?.("Idempotency-Key") ?? null;
     try {
-      const supabase = await getSupabaseClient();
-      const body = req.body;
-      const asset = body.asset?.toUpperCase();
-      const assetIssuer = resolveAssetIssuer(asset, body.asset_issuer);
-      logger.info({ merchantId: req.merchant?.id, amount: body.amount, asset: body.asset }, "DEBUG: createSession started");
-
-      if (asset !== "XLM" && !assetIssuer) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: "missing_issuer" });
-        return res.status(400).json({
-          error: "asset_issuer is required for non-native assets",
-        });
-      }
-
-      if (asset !== "XLM" && !isValidStellarPublicKey(assetIssuer)) {
-        paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
-        return res.status(400).json({
-          error: "asset_issuer must be a valid Stellar public key",
-        });
-      }
-
-      // Per-asset payment limit validation (#153)
-      const limits = req.merchant.payment_limits;
-      if (limits && typeof limits === "object") {
-        const assetLimits = limits[body.asset];
-        if (assetLimits) {
-          if (assetLimits.min !== undefined && body.amount < assetLimits.min) {
-            paymentFailedCounter.inc({ asset: body.asset, reason: "below_min" });
-            return res.status(400).json({
-              error: `Amount is below the minimum for ${body.asset}`,
-              min: assetLimits.min,
-              delta: Number((assetLimits.min - body.amount).toFixed(7)),
+      await withPaymentSessionLock(
+        { merchantId: req.merchant?.id, idempotencyKey },
+        async (lock) => {
+          if (lock && req.idempotency?.payloadHash) {
+            const replay = await lookupIdempotentResponse({
+              redisClient: await connectRedisClient(),
+              merchantId: req.merchant.id,
+              idempotencyKey,
+              payloadHash: req.idempotency.payloadHash,
+            }).catch((err) => {
+              logger.warn({ err: err?.message }, "Idempotency replay lookup failed; continuing");
+              return null;
             });
+            if (replay?.status === "hit") {
+              return res.status(201).json(replay.response);
+            }
+            if (replay?.status === "mismatch") {
+              return res.status(400).json({
+                error: "Idempotency-Key already used with a different request payload",
+              });
+            }
           }
-          if (assetLimits.max !== undefined && body.amount > assetLimits.max) {
-            paymentFailedCounter.inc({ asset: body.asset, reason: "above_max" });
-            return res.status(400).json({
-              error: `Amount exceeds the maximum for ${body.asset}`,
-              max: assetLimits.max,
-              delta: Number((body.amount - assetLimits.max).toFixed(7)),
-            });
-          }
-        }
-      }
-
-      // Allowed-issuers check: if the merchant has configured a non-empty
-      // allowlist, only those issuer addresses may be used.
-      const allowedIssuers = req.merchant.allowed_issuers;
-      if (asset !== "XLM" && Array.isArray(allowedIssuers) && allowedIssuers.length > 0) {
-        if (!assetIssuer || !allowedIssuers.includes(assetIssuer)) {
-          paymentFailedCounter.inc({ asset: body.asset, reason: "invalid_issuer" });
-          return res.status(400).json({
-            error:
-              "asset_issuer is not in the merchant's list of allowed issuers",
-          });
-        }
-      }
-
-      const isSandbox = body.sandbox === true;
-      const baseId = randomUUID();
-      const paymentId = isSandbox ? `test_${baseId}` : baseId;
-      const now = new Date().toISOString();
-      const paymentLinkBase =
-        process.env.PAYMENT_LINK_BASE || "http://localhost:3000";
-      const paymentLink = `${paymentLinkBase}/pay/${paymentId}`;
-      const resolvedBrandingConfig = resolveBrandingConfig({
-        merchantBranding: req.merchant.branding_config,
-        brandingOverrides: body.branding_overrides,
-      });
-
-      const metadata =
-        body.metadata && typeof body.metadata === "object"
-          ? { ...body.metadata }
-          : {};
-      metadata.branding_config = resolvedBrandingConfig;
-
-      const payload = {
-        id: paymentId,
-        merchant_id: req.merchant.id,
-        amount: body.amount,
-        asset,
-        asset_issuer: assetIssuer || null,
-        recipient: body.recipient,
-        description: body.description || null,
-        memo: body.message || body.memo || null,
-        memo_type: body.message ? "text" : (body.memo_type || null),
-        webhook_url: body.webhook_url || null,
-        client_id: body.client_id || null,
-        status: "pending",
-        tx_id: null,
-        metadata,
-        sandbox: isSandbox,
-        created_at: now,
-      };
-
-      const { error: insertError } = await supabase
-        .from("payments")
-        .insert(payload);
-
-      if (insertError) {
-        insertError.status = 500;
-        throw insertError;
-      }
-
-      // Only record production metrics for non-sandbox payments.
-      if (!isSandbox) {
-        paymentCreatedCounter.inc({ asset: body.asset });
-      }
-
-      logger.info({ paymentId: paymentId }, "DEBUG: createSession success");
-      res.status(201).json({
-        payment_id: paymentId,
-        payment_link: paymentLink,
-        status: "pending",
-        sandbox: isSandbox,
-        branding_config: resolvedBrandingConfig,
-      });
+          return createSessionUnlocked(req, res);
+        },
+      );
     } catch (err) {
+      if (err.code === PAYMENT_SESSION_IN_PROGRESS) {
+        return res.status(409).json({ error: err.message, code: err.code });
+      }
       logger.error({ err, merchantId: req.merchant?.id }, "DEBUG: createSession error");
       if (err.status === 400 && err.details) {
         return res.status(400).json({ error: err.message, ...err.details });
       }
       next(err);
     }
+  }
+
+  async function createSessionUnlocked(req, res) {
+    const sessionStart = Date.now();
+    const supabase = await getSupabaseClient();
+    logger.info({ merchantId: req.merchant?.id, amount: req.body?.amount, asset: req.body?.asset }, "DEBUG: createSession started");
+
+    // Sanitization, strict payload checks and shared business rules
+    // (issues #1087, #1447) with validator metrics/health (#1448).
+    const validation = validatePaymentSession({
+      body: req.body,
+      merchant: req.merchant,
+      source: "http",
+    });
+    if (!validation.ok) {
+      const { rejection } = validation;
+      const assetLabel = req.body?.asset;
+      paymentFailedCounter.inc({
+        asset: assetLabel,
+        reason: rejection.reason === "issuer_not_allowed" ? "invalid_issuer" : rejection.reason,
+      });
+      paymentProcessorSessionsTotal.inc({ asset: assetLabel, outcome: "validation_failed" });
+      paymentProcessorSessionDuration.observe(
+        { asset: assetLabel, outcome: "validation_failed" },
+        (Date.now() - sessionStart) / 1000,
+      );
+      return res.status(400).json({
+        error: rejection.message,
+        ...(rejection.rule === "limits" ? rejection.details : {}),
+      });
+    }
+    const body = validation.payload;
+    const { asset, assetIssuer } = validation;
+
+    const isSandbox = body.sandbox === true;
+    const baseId = randomUUID();
+    const paymentId = isSandbox ? `test_${baseId}` : baseId;
+    const now = new Date().toISOString();
+    const paymentLinkBase =
+      process.env.PAYMENT_LINK_BASE || "http://localhost:3000";
+    const paymentLink = `${paymentLinkBase}/pay/${paymentId}`;
+    const resolvedBrandingConfig = resolveBrandingConfig({
+      merchantBranding: req.merchant.branding_config,
+      brandingOverrides: body.branding_overrides,
+    });
+
+    const metadata =
+      body.metadata && typeof body.metadata === "object"
+        ? { ...body.metadata }
+        : {};
+    metadata.branding_config = resolvedBrandingConfig;
+
+    const payload = {
+      id: paymentId,
+      merchant_id: req.merchant.id,
+      amount: body.amount,
+      asset,
+      asset_issuer: assetIssuer || null,
+      recipient: body.recipient,
+      description: body.description || null,
+      memo: body.message || body.memo || null,
+      memo_type: body.message ? "text" : (body.memo_type || null),
+      webhook_url: body.webhook_url || null,
+      client_id: body.client_id || null,
+      status: "pending",
+      tx_id: null,
+      metadata,
+      sandbox: isSandbox,
+      created_at: now,
+    };
+
+    // Issue #1449: transient persistence failures are retried with
+    // exponential backoff; validation/constraint errors are not.
+    try {
+      await insertPaymentSessionWithRetry(supabase, payload);
+    } catch (insertError) {
+      insertError.status = 500;
+      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "persistence_failed" });
+      paymentProcessorSessionDuration.observe(
+        { asset: body.asset, outcome: "persistence_failed" },
+        (Date.now() - sessionStart) / 1000,
+      );
+      throw insertError;
+    }
+
+    // Only record production metrics for non-sandbox payments.
+    if (!isSandbox) {
+      paymentCreatedCounter.inc({ asset: body.asset });
+      paymentProcessorSessionsTotal.inc({ asset: body.asset, outcome: "created" });
+      paymentProcessorSessionDuration.observe(
+        { asset: body.asset, outcome: "created" },
+        (Date.now() - sessionStart) / 1000,
+      );
+    }
+
+    logger.info({ paymentId: paymentId }, "DEBUG: createSession success");
+    res.status(201).json({
+      payment_id: paymentId,
+      payment_link: paymentLink,
+      status: "pending",
+      sandbox: isSandbox,
+      branding_config: resolvedBrandingConfig,
+    });
   }
 
   router.post("/create-payment", createPaymentRateLimit, recaptchaMiddleware(), validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
@@ -403,11 +443,20 @@ function createPaymentsRouter({
       try {
         const supabase = await getSupabaseClient();
         // --- Redis read-through cache ---
+        // Scoped by req.merchant?.id (issue #1311): this route is reachable
+        // both anonymously (a customer following their payment_link) and by
+        // an authenticated merchant, and a cache hit must reflect the same
+        // merchant_id scoping the uncached query below applies — otherwise
+        // whichever caller populates the cache first decides what every
+        // later caller for that payment id sees, bypassing the scoping
+        // entirely on a cache hit.
         const redis = await connectRedisClient();
-        const cached = await getCachedPayment(redis, req.params.id);
+        const cached = await getCachedPayment(redis, req.params.id, req.merchant?.id);
         if (cached) {
+          paymentProcessorStatusCacheHits.inc();
           return res.json({ payment: cached });
         }
+        paymentProcessorStatusCacheMisses.inc();
 
         const baseFields =
           "id, merchant_id, amount, asset, asset_issuer, recipient, description, memo, memo_type, status, tx_id, metadata, created_at";
@@ -487,7 +536,7 @@ function createPaymentsRouter({
         // Only cache confirmed/completed payments — never cache pending
         // so status changes are immediately visible to pollers
         if (data.status === "confirmed" || data.status === "completed") {
-          await setCachedPayment(redis, req.params.id, response);
+          await setCachedPayment(redis, req.params.id, response, req.merchant?.id);
         }
 
         // Prevent HTTP-level caching so 304 responses never mask status changes
@@ -555,6 +604,19 @@ function createPaymentsRouter({
     verifyPaymentRateLimit,
     validateUuidParam(),
     async (req, res, next) => {
+      const verifyStart = Date.now();
+      // Records the granular verification outcome exactly once per attempt
+      // (issue #1088). Skipped for 404s where no asset context exists.
+      let verifyOutcomeRecorded = false;
+      const recordVerificationOutcome = (outcome, asset) => {
+        if (verifyOutcomeRecorded) return;
+        verifyOutcomeRecorded = true;
+        paymentProcessorVerificationsTotal.inc({ asset: asset || "unknown", outcome });
+        paymentProcessorVerificationDuration.observe(
+          { asset: asset || "unknown", outcome },
+          (Date.now() - verifyStart) / 1000,
+        );
+      };
       try {
         const supabase = await getSupabaseClient();
         let query = supabase
@@ -585,6 +647,7 @@ function createPaymentsRouter({
         }
 
         if (data.status === "confirmed") {
+          recordVerificationOutcome("already_confirmed", data.asset);
           return res.json({
             status: "confirmed",
             tx_id: data.tx_id,
@@ -605,6 +668,7 @@ function createPaymentsRouter({
         if (match) {
           const signatureResult = await verifyTransactionSignatureIfAvailable(match.transaction_hash);
           if (!isSignatureVerificationAccepted(signatureResult)) {
+            recordVerificationOutcome("signature_invalid", data.asset);
             return res.json({ status: "pending" });
           }
         }
@@ -626,22 +690,40 @@ function createPaymentsRouter({
             const diff = received - expected;
 
             if (diff < -0.0000001) {
-              // Underpayment — mark as failed with details
-              await supabase.from("payments").update({
-                status: "failed",
-                tx_id: anyPayment.transaction_hash,
-                metadata: {
-                  ...(data.metadata || {}),
-                  failure_reason: "underpayment",
-                  expected_amount: expected,
-                  received_amount: received,
-                  shortfall: Number((expected - received).toFixed(7)),
-                },
-              }).eq("id", data.id);
+              // Underpayment — mark as failed with details.
+              // Conditional on status = "pending" (issue #1310, same class
+              // of race as the exact-match path below): two concurrent
+              // verify calls both reading "pending" before either writes
+              // must not both apply a terminal transition and both report
+              // success — only the call whose UPDATE actually matched a row
+              // proceeds past this point.
+              const { data: underpaymentUpdated } = await supabase
+                .from("payments")
+                .update({
+                  status: "failed",
+                  tx_id: anyPayment.transaction_hash,
+                  metadata: {
+                    ...(data.metadata || {}),
+                    failure_reason: "underpayment",
+                    expected_amount: expected,
+                    received_amount: received,
+                    shortfall: Number((expected - received).toFixed(7)),
+                  },
+                })
+                .eq("id", data.id)
+                .eq("status", "pending")
+                .select("id")
+                .maybeSingle();
+
+              if (!underpaymentUpdated) {
+                recordVerificationOutcome("tx_claim_conflict", data.asset);
+                return res.json({ status: "pending" }); // already processed concurrently
+              }
 
               const redis = await connectRedisClient();
-              await invalidatePaymentCache(redis, data.id);
+              await invalidatePaymentCache(redis, data.id, data.merchant_id);
 
+              recordVerificationOutcome("underpayment", data.asset);
               return res.status(402).json({
                 status: "failed",
                 reason: "underpayment",
@@ -654,26 +736,39 @@ function createPaymentsRouter({
             }
 
             if (diff > 0.0000001) {
-              // Overpayment — still confirm but flag it
+              // Overpayment — still confirm but flag it. Same conditional-
+              // update guard as underpayment above (issue #1310).
               const createdAt = new Date(data.created_at);
               const latencySeconds = (new Date() - createdAt) / 1000;
 
-              await supabase.from("payments").update({
-                status: "confirmed",
-                tx_id: anyPayment.transaction_hash,
-                completion_duration_seconds: Math.floor(latencySeconds),
-                metadata: {
-                  ...(data.metadata || {}),
-                  overpayment: true,
-                  expected_amount: expected,
-                  received_amount: received,
-                  excess: Number((received - expected).toFixed(7)),
-                },
-              }).eq("id", data.id);
+              const { data: overpaymentUpdated } = await supabase
+                .from("payments")
+                .update({
+                  status: "confirmed",
+                  tx_id: anyPayment.transaction_hash,
+                  completion_duration_seconds: Math.floor(latencySeconds),
+                  metadata: {
+                    ...(data.metadata || {}),
+                    overpayment: true,
+                    expected_amount: expected,
+                    received_amount: received,
+                    excess: Number((received - expected).toFixed(7)),
+                  },
+                })
+                .eq("id", data.id)
+                .eq("status", "pending")
+                .select("id")
+                .maybeSingle();
+
+              if (!overpaymentUpdated) {
+                recordVerificationOutcome("tx_claim_conflict", data.asset);
+                return res.json({ status: "pending" }); // already processed concurrently
+              }
 
               const redis = await connectRedisClient();
-              await invalidatePaymentCache(redis, data.id);
+              await invalidatePaymentCache(redis, data.id, data.merchant_id);
 
+              recordVerificationOutcome("overpayment", data.asset);
               return res.json({
                 status: "confirmed",
                 tx_id: anyPayment.transaction_hash,
@@ -686,6 +781,7 @@ function createPaymentsRouter({
             }
           }
 
+          recordVerificationOutcome("pending_no_match", data.asset);
           return res.json({ status: "pending" });
         }
 
@@ -700,6 +796,7 @@ function createPaymentsRouter({
           .maybeSingle();
 
         if (existing) {
+          recordVerificationOutcome("tx_claim_conflict", data.asset);
           return res.json({ status: "pending" });
         }
 
@@ -723,6 +820,7 @@ function createPaymentsRouter({
 
         if (updateError) {
           if (updateError.code === "23505") {
+            recordVerificationOutcome("tx_claim_conflict", data.asset);
             return res.json({ status: "pending" }); // another payment claimed this tx
           }
           updateError.status = 500;
@@ -730,15 +828,17 @@ function createPaymentsRouter({
         }
 
         if (!updated) {
+          recordVerificationOutcome("tx_claim_conflict", data.asset);
           return res.json({ status: "pending" }); // already processed
         }
 
         // --- Invalidate cache so next poll sees confirmed status immediately ---
         const redis = await connectRedisClient();
-        await invalidatePaymentCache(redis, data.id);
+        await invalidatePaymentCache(redis, data.id, data.merchant_id);
         // Record metrics for confirmation
         paymentConfirmedCounter.inc({ asset: data.asset });
         paymentConfirmationLatency.observe({ asset: data.asset }, latencySeconds);
+        recordVerificationOutcome("confirmed", data.asset);
 
         // Emit real-time event to the merchant's private room (issue #229)
         console.log("DEBUG: confirmed logic started. ID:", data.id);
@@ -825,6 +925,7 @@ function createPaymentsRouter({
           webhook: webhookResult,
         });
       } catch (err) {
+        recordVerificationOutcome("error", err?.asset);
         console.error("VERIFY_ROUTE_ERROR:", err);
         next(err);
       }
@@ -1038,35 +1139,13 @@ function createPaymentsRouter({
     async (req, res, next) => {
       try {
         const { tx_hash } = req.body;
-        const supabase = await getSupabaseClient();
 
-        const { data: payment, error } = await supabase
-          .from("payments")
-          .select("id, metadata")
-          .eq("id", req.params.id)
-          .eq("merchant_id", req.merchant.id)
-          .maybeSingle();
-
-        if (error) {
-          error.status = 500;
-          throw error;
-        }
-
-        if (!payment) {
-          return res.status(404).json({ error: "Payment not found" });
-        }
-
-        await supabase
-          .from("payments")
-          .update({
-            metadata: {
-              ...payment.metadata,
-              refund_status: "refunded",
-              refund_tx_hash: tx_hash,
-              refund_confirmed_at: new Date().toISOString(),
-            },
-          })
-          .eq("id", payment.id);
+        // Delegates to paymentService.confirmRefundTx, which verifies
+        // tx_hash against the refund transaction generateRefundTx produced
+        // and confirms it landed on-chain before marking the payment
+        // refunded (issue #1309) — this route previously duplicated an
+        // older, unverified version of this logic inline.
+        await paymentService.confirmRefundTx(req.params.id, req.merchant.id, tx_hash);
 
         res.json({
           status: "refunded",
@@ -1141,6 +1220,12 @@ function createPaymentsRouter({
    */
   router.get(
     "/path-payment-quote/:id",
+    // This route sits outside the `/api/payments` prefix that app.js gates
+    // with requireApiKeyAuth(), so without its own auth here it was
+    // completely unauthenticated: any caller could read another merchant's
+    // payment amount/asset/recipient by id, and generate live Horizon quotes
+    // against it for free (issue #1309).
+    requireApiKeyAuth(),
     pathPaymentQuoteRateLimit,
     validateUuidParam(),
     validateRequest({ query: pathPaymentQuoteQuerySchema }),
@@ -1154,18 +1239,18 @@ function createPaymentsRouter({
         const supabase = await getSupabaseClient();
         const sourceAccount = req.query.source_account;
 
-        let query = supabase
+        const { data, error } = await supabase
           .from("payments")
-          .select("id, amount, asset, asset_issuer, recipient, status");
-
-        if (req.merchant?.id) {
-          query = query.eq("merchant_id", req.merchant.id);
-        }
-
-        const { data, error } = await query
+          .select("id, amount, asset, asset_issuer, recipient, status")
           .eq("id", req.params.id)
+          .eq("merchant_id", req.merchant.id)
           .is("deleted_at", null)
           .maybeSingle();
+
+        pathPaymentQuoteStageDuration.observe(
+          { stage: "payment_lookup" },
+          (Date.now() - startTime) / 1000,
+        );
 
         if (error) {
           error.status = 500;
@@ -1174,6 +1259,7 @@ function createPaymentsRouter({
 
         if (!data) {
           exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "not_found" });
           return res.status(404).json({ error: "Payment not found" });
         }
 
@@ -1185,6 +1271,7 @@ function createPaymentsRouter({
             { ...assetLabels, result: "not_pending" },
             (Date.now() - startTime) / 1000,
           );
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "not_pending" });
           return res.status(409).json({
             error: "Path payment quote is only available for pending payments",
             status: data.status,
@@ -1201,50 +1288,66 @@ function createPaymentsRouter({
             { ...assetLabels, result: "same_asset" },
             (Date.now() - startTime) / 1000,
           );
+          pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "same_asset" });
           return res.status(400).json({
             error:
               "Source asset is the same as destination asset. Use a direct payment.",
           });
         }
 
-        const quote = await findStrictReceivePaths({
-          sourceAccount,
-          destAssetCode: data.asset,
-          destAssetIssuer: data.asset_issuer,
-          destAmount: String(data.amount),
-          sourceAssetCode: sourceAsset,
-          sourceAssetIssuer,
-        });
-
-        if (!quote) {
-          return res.status(404).json({
-            error: "No path found for this asset pair",
+        const quoteStart = Date.now();
+        let quote;
+        try {
+          quote = await getExchangeRateQuote({
+            sourceAssetCode: sourceAsset,
+            sourceAssetIssuer,
+            destAssetCode: data.asset,
+            destAssetIssuer: data.asset_issuer,
+            destAmount: String(data.amount),
+            sourceAccount,
           });
+        } catch (err) {
+          if (err instanceof NoPathFoundError) {
+            pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "no_path" });
+            return res.status(404).json({
+              error: "No path found for this asset pair",
+            });
+          }
+          throw err;
         }
-
-        const SLIPPAGE = 0.01; // 1%
-        const sendMax = (
-          parseFloat(quote.source_amount) *
-          (1 + SLIPPAGE)
-        ).toFixed(7);
-
-        exchangeRateSlippageApplied.inc({ slippage_pct: String(SLIPPAGE) });
-        exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
-        exchangeRateQuoteDuration.observe(
-          { ...assetLabels, result: "success" },
-          (Date.now() - startTime) / 1000,
+        pathPaymentQuoteStageDuration.observe(
+          { stage: "horizon_quote" },
+          (Date.now() - quoteStart) / 1000,
         );
 
+        // Cached quotes never reach Horizon, so count them here to keep
+        // exchange_rate_* success semantics from #1045 (issue #1047).
+        if (quote.cached) {
+          exchangeRateQuoteRequests.inc({ ...assetLabels, result: "success" });
+          exchangeRateQuoteDuration.observe(
+            { ...assetLabels, result: "success" },
+            (Date.now() - startTime) / 1000,
+          );
+        }
+
+        exchangeRateSlippageApplied.inc({ slippage_pct: String(quote.slippage) });
+        pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "success" });
+        pathPaymentQuotePathHops.observe(quote.path.length);
+        pathPaymentQuoteRate.observe({
+          source_asset: quote.sourceAsset,
+          dest_asset: assetLabels.dest_asset,
+        }, parseFloat(quote.sourceAmount) / parseFloat(quote.destinationAmount));
+
         res.json({
-          source_asset: quote.source_asset_code,
-          source_asset_issuer: quote.source_asset_issuer,
-          source_amount: quote.source_amount,
-          send_max: sendMax,
+          source_asset: quote.sourceAsset,
+          source_asset_issuer: quote.sourceAssetIssuer,
+          source_amount: quote.sourceAmount,
+          send_max: quote.sendMax,
           destination_asset: data.asset,
           destination_asset_issuer: data.asset_issuer,
           destination_amount: String(data.amount),
           path: quote.path,
-          slippage: SLIPPAGE,
+          slippage: quote.slippage,
         });
       } catch (err) {
         exchangeRateQuoteRequests.inc({ ...assetLabels, result: "error" });
@@ -1252,6 +1355,7 @@ function createPaymentsRouter({
           { ...assetLabels, result: "error" },
           (Date.now() - startTime) / 1000,
         );
+        pathPaymentQuoteRequestsTotal.inc({ ...assetLabels, outcome: "error" });
         next(err);
       }
     }

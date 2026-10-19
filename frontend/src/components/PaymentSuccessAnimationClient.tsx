@@ -296,8 +296,6 @@ export const PaymentSuccessAnimationClient: React.FC<PaymentSuccessAnimationProp
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [show, handleDismiss]);
 
-  if (!show) return null;
-
   // Pick variants based on reduced-motion preference (#980)
   const activeContainerVariants = prefersReducedMotion ? containerVariantsReduced : containerVariants;
   const activeChildVariants = prefersReducedMotion ? childVariantsReduced : childVariants;
@@ -311,233 +309,243 @@ export const PaymentSuccessAnimationClient: React.FC<PaymentSuccessAnimationProp
     ? t("payment.optimisticNote") || "Transaction submitted — awaiting network confirmation."
     : null;
 
+  // The dialog is rendered as AnimatePresence's conditional child (rather than
+  // this component returning null for the whole tree) so the `exit` variant
+  // actually gets to run when `show` flips to false (#1390).
   return (
     <AnimatePresence>
-      <motion.div
-        ref={containerRef}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-        variants={activeContainerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="payment-success-title"
-        aria-describedby="payment-success-description"
-      >
-        {/* Initial success announcement — assertive so screen readers interrupt (#980) */}
-        <div
-          className="sr-only"
-          role="status"
-          aria-live="assertive"
-          aria-atomic="true"
-        >
-          {successAnnounce}
-        </div>
-
-        {/* Dynamic state announcements: confirmation, errors, pending (#980, #981) */}
-        <div
-          className="sr-only"
-          aria-live="polite"
-          aria-atomic="true"
-          data-testid="sr-announcement"
-        >
-          {announcementText}
-        </div>
-
+      {show && (
         <motion.div
-          className="relative w-full max-w-md overflow-hidden rounded-3xl border border-accent/30 bg-gradient-to-br from-black via-gray-900 to-black p-8 text-center shadow-2xl"
-          variants={activeChildVariants}
+          key="payment-success-dialog"
+          ref={containerRef}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          variants={activeContainerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-success-title"
+          aria-describedby="payment-success-description"
         >
-          {/* Subtle radial glow */}
+          {/* Initial success announcement — uses role="alert" (implicitly
+              assertive) rather than role="status" (implicitly polite), which
+              contradicted the explicit aria-live="assertive" placed on it (#1388) */}
+          <div className="sr-only" role="alert" aria-atomic="true">
+            {successAnnounce}
+          </div>
+
+          {/* Dynamic state announcements: confirmation, errors, pending (#980, #981) */}
           <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-accent/10 blur-3xl"
-          />
-
-          {/* Close button — aria-busy signals pending dismiss to screen readers (#981) */}
-          <motion.button
-            ref={closeButtonRef}
-            onClick={handleDismiss}
-            disabled={isDismissing}
-            aria-busy={isDismissing}
-            className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={t("common.close") || "Close success animation"}
-            variants={activeChildVariants}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
+            className="sr-only"
+            aria-live="polite"
+            aria-atomic="true"
+            data-testid="sr-announcement"
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </motion.button>
+            {announcementText}
+          </div>
 
-          {/* Animated success icon */}
           <motion.div
-            className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center"
+            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-accent/30 bg-gradient-to-br from-black via-gray-900 to-black p-8 text-center shadow-2xl"
             variants={activeChildVariants}
           >
-            {/* Pulsing glow ring — disabled when reduced motion is preferred (#980) */}
-            <motion.div
-              className="absolute inset-0 rounded-full bg-accent/20"
-              animate={
-                prefersReducedMotion
-                  ? {}
-                  : { scale: [1, 1.22, 1], opacity: [0.45, 0.9, 0.45] }
-              }
-              transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+            {/* Subtle radial glow */}
+            <div
               aria-hidden="true"
+              className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-accent/10 blur-3xl"
             />
-            {/* Inner ring */}
-            <motion.div
-              className="absolute inset-2 rounded-full bg-accent/10 ring-1 ring-accent/30"
-              aria-hidden="true"
-            />
-            {/* Check icon */}
-            <motion.div
-              className="relative z-10 flex h-full w-full items-center justify-center"
-              variants={activeCheckVariants}
-              aria-hidden="true"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-9 w-9 text-accent"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <motion.path
-                  d="M5 13l4 4L19 7"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{
-                    duration: prefersReducedMotion ? 0 : 0.5,
-                    ease: "easeOut",
-                    delay: prefersReducedMotion ? 0 : 0.2,
-                  }}
-                />
-              </svg>
-            </motion.div>
-          </motion.div>
 
-          {/* Heading */}
-          <motion.h1
-            id="payment-success-title"
-            className="mb-3 text-3xl font-bold tracking-tight text-white"
-            variants={activeChildVariants}
-          >
-            {t("payment.successTitle") || "Payment Successful!"}
-          </motion.h1>
-
-          {/* Optimistic badge */}
-          {isOptimistic && (
-            <motion.div
-              className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-xs font-medium text-yellow-300"
-              variants={activeChildVariants}
-              role="status"
-              aria-live="polite"
-            >
-              <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400/75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
-              </span>
-              {optimisticNote}
-            </motion.div>
-          )}
-
-          {/* Amount block */}
-          <motion.div
-            className="mb-4 rounded-xl bg-accent/10 p-4"
-            variants={activeChildVariants}
-          >
-            <p className="mb-1 text-sm text-slate-400">
-              {t("payment.amountReceived") || "Amount Received"}
-            </p>
-            <p className="text-2xl font-bold text-accent">
-              {amount} {asset}
-            </p>
-          </motion.div>
-
-          {/* Description */}
-          <motion.p
-            id="payment-success-description"
-            className="mb-6 text-slate-400"
-            variants={activeChildVariants}
-          >
-            {t("payment.successMessage") ||
-              "Your payment has been processed successfully. The transaction is now confirmed on the Stellar network."}
-          </motion.p>
-
-          {/* Transaction ID */}
-          {txId ? (
-            <motion.div
-              className="mb-6 rounded-lg bg-slate-800/50 p-3"
-              variants={activeChildVariants}
-            >
-              <p className="mb-1 text-xs text-slate-500">
-                {t("payment.transactionId") || "Transaction ID"}
-              </p>
-              <p className="break-all font-mono text-xs text-slate-300">{txId}</p>
-            </motion.div>
-          ) : null}
-
-          {/* CTA — shows spinner and disables during optimistic dismiss (#981) */}
-          <motion.div
-            className="flex w-full flex-col gap-3"
-            variants={activeChildVariants}
-          >
-            <button
+            {/* Close button — aria-busy signals pending dismiss to screen readers (#981) */}
+            <motion.button
+              ref={closeButtonRef}
               onClick={handleDismiss}
               disabled={isDismissing}
               aria-busy={isDismissing}
-              className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 font-semibold text-black transition-all hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-70"
-              aria-label={t("common.continue") || "Continue"}
+              className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={t("common.close") || "Close success animation"}
+              variants={activeChildVariants}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
             >
-              {isDismissing && (
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </motion.button>
+
+            {/* Animated success icon */}
+            <motion.div
+              className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center"
+              variants={activeChildVariants}
+            >
+              {/* Pulsing glow ring — disabled when reduced motion is preferred (#980) */}
+              <motion.div
+                className="absolute inset-0 rounded-full bg-accent/20"
+                animate={
+                  prefersReducedMotion
+                    ? {}
+                    : { scale: [1, 1.22, 1], opacity: [0.45, 0.9, 0.45] }
+                }
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                aria-hidden="true"
+              />
+              {/* Inner ring */}
+              <motion.div
+                className="absolute inset-2 rounded-full bg-accent/10 ring-1 ring-accent/30"
+                aria-hidden="true"
+              />
+              {/* Check icon */}
+              <motion.div
+                className="relative z-10 flex h-full w-full items-center justify-center"
+                variants={activeCheckVariants}
+                aria-hidden="true"
+              >
                 <svg
-                  className="h-4 w-4 animate-spin"
-                  fill="none"
                   viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  data-testid="dismiss-spinner"
+                  className="h-9 w-9 text-accent"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  <motion.path
+                    d="M5 13l4 4L19 7"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{
+                      duration: prefersReducedMotion ? 0 : 0.5,
+                      ease: "easeOut",
+                      delay: prefersReducedMotion ? 0 : 0.2,
+                    }}
                   />
                 </svg>
-              )}
-              {t("common.continue") || "Continue"}
-            </button>
-          </motion.div>
+              </motion.div>
+            </motion.div>
 
-          {/* Keyboard hint for screen readers (#980) */}
-          <p className="sr-only">
-            {t("payment.successHint") ||
-              "Press Escape or the close button to dismiss this message."}
-          </p>
+            {/* Heading — <h2>, not <h1>: this is a transient dialog layered over
+                the page, not the page's own top-level heading (#1388, matches
+                the <h2> pattern used by the sibling FirstPaymentCelebration dialog) */}
+            <motion.h2
+              id="payment-success-title"
+              className="mb-3 text-3xl font-bold tracking-tight text-white"
+              variants={activeChildVariants}
+            >
+              {t("payment.successTitle") || "Payment Successful!"}
+            </motion.h2>
+
+            {/* Optimistic badge */}
+            {isOptimistic && (
+              <motion.div
+                className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-xs font-medium text-yellow-300"
+                variants={activeChildVariants}
+                role="status"
+                aria-live="polite"
+              >
+                <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400/75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
+                </span>
+                {optimisticNote}
+              </motion.div>
+            )}
+
+            {/* Amount block */}
+            <motion.div
+              className="mb-4 rounded-xl bg-accent/10 p-4"
+              variants={activeChildVariants}
+            >
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {t("payment.amountReceived") || "Amount Received"}
+              </p>
+              <p className="text-2xl font-bold text-accent">
+                {amount} {asset}
+              </p>
+            </motion.div>
+
+            {/* Description */}
+            <motion.p
+              id="payment-success-description"
+              className="mb-6 leading-relaxed text-slate-400"
+              variants={activeChildVariants}
+            >
+              {t("payment.successMessage") ||
+                "Your payment has been processed successfully. The transaction is now confirmed on the Stellar network."}
+            </motion.p>
+
+            {/* Transaction ID */}
+            {txId ? (
+              <motion.div
+                className="mb-6 rounded-lg bg-slate-800/50 p-3"
+                variants={activeChildVariants}
+              >
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {t("payment.transactionId") || "Transaction ID"}
+                </p>
+                <p className="break-all font-mono text-xs text-slate-300">{txId}</p>
+              </motion.div>
+            ) : null}
+
+            {/* CTA — shows spinner and disables during optimistic dismiss (#981).
+                motion.button + whileHover/whileTap matches the close button's
+                micro-interaction instead of being the one static control in an
+                otherwise animated dialog (#1391) */}
+            <motion.div
+              className="flex w-full flex-col gap-3"
+              variants={activeChildVariants}
+            >
+              <motion.button
+                onClick={handleDismiss}
+                disabled={isDismissing}
+                aria-busy={isDismissing}
+                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 font-semibold text-black transition-all hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-70"
+                aria-label={t("common.continue") || "Continue"}
+                whileHover={isDismissing ? undefined : { scale: 1.02 }}
+                whileTap={isDismissing ? undefined : { scale: 0.98 }}
+              >
+                {isDismissing && (
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    data-testid="dismiss-spinner"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                )}
+                {t("common.continue") || "Continue"}
+              </motion.button>
+            </motion.div>
+
+            {/* Keyboard hint for screen readers (#980) */}
+            <p className="sr-only">
+              {t("payment.successHint") ||
+                "Press Escape or the close button to dismiss this message."}
+            </p>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </AnimatePresence>
   );
 };

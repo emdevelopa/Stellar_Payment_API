@@ -15,6 +15,8 @@ Scope: `src/lib/sep12-kyc.js`, `src/routes/sep12.js`, and the
 | **Invalid account identifiers** | `Keypair.fromPublicKey` validates the account before any DB access | `assertValidAccount` |
 | **PII leakage via logs** | Field values are never logged; only operation labels and error codes are recorded | `withRecovery`, route `handleError` |
 | **Information leakage on errors** | Internal errors are surfaced as a generic 500/`INTERNAL_ERROR`; structured `KycError` codes are deliberate and non-sensitive | `handleError` |
+| **Race / stale overwrite** (concurrent or replayed older PUTs clobbering newer data) | Upsert only updates when the request's signed timestamp is strictly newer than the stored `signed_at`; otherwise `409 STALE_REQUEST` | `putCustomer` |
+| **Memory growth / bad input** (huge account keys in the limiter, non-string memos) | Rate-limit account key truncated to 56 chars; memo must be a string of at most 64 chars | `buildSep12RateLimitKey`, `normalizeMemo` |
 | **Availability under DB stress** | Transient pool failures are retried, then surfaced as a retryable `503` so clients back off rather than hammering | `withRecovery` (#592), `queryWithRetry` |
 
 ## Residual risks / recommendations

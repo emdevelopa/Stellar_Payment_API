@@ -16,12 +16,15 @@
     "codeInputPlaceholder": "000000",
     "verifyButton": "Verificar y activar",
     "verifying": "Verificando…",
+    "retryButton": "Reintentar",
+    "stepAnnouncement": "Paso {current} de {total}",
     "successTitle": "Autenticacion en dos pasos activada",
     "successDescription": "Tu cuenta esta ahora protegida. Se te pedira un codigo en cada inicio de sesion.",
     "error": {
       "setupFailed": "No se pudo iniciar la configuracion de 2FA. Intentalo de nuevo.",
       "invalidCode": "Codigo invalido. Intentalo de nuevo.",
-      "codeLength": "Ingresa el codigo de 6 digitos de tu aplicacion de autenticacion."
+      "codeLength": "Ingresa el codigo de 6 digitos de tu aplicacion de autenticacion.",
+      "networkFailure": "No se pudo conectar con el servidor. Revisa tu conexion y reintenta — tu codigo y la configuracion QR siguen aqui."
     }
   },
   "localeSwitcher": {
@@ -680,5 +683,109 @@
     "close": "Cerrar animación de éxito",
     "continue": "Continuar",
     "error": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "multisigModal": {
+    "title": "Aprobación multifirma",
+    "closeModal": "Cerrar modal",
+    "stepOf": "Paso {step} de {total}",
+    "review": {
+      "heading": "Revisar transacción",
+      "description": "Revise los detalles de la transacción y confirme su aprobación.",
+      "sectionAriaLabel": "Sección de revisión de transacciones",
+      "amount": "Cantidad",
+      "to": "Para",
+      "issuer": "Emisor",
+      "memo": "Memo",
+      "signaturesLabel": "Firmas ({signed}/{required})",
+      "progressAriaLabel": "Progreso de firma",
+      "signersLabel": "Firmantes",
+      "signersListAriaLabel": "Lista de firmantes",
+      "signerFallbackName": "Firmante {id}",
+      "signedStatus": "Firmado",
+      "notSignedStatus": "No firmado",
+      "signerWeight": "Peso: {weight} • {publicKey}...",
+      "signerAriaLabel": "{name}, Peso: {weight}, Estado: {status}",
+      "signButton": "Firmar",
+      "signingButton": "Firmando...",
+      "signButtonAriaLabel": "{action} para {name}",
+      "expiresIn": "Expira en {time}",
+      "submitButton": "Enviar transacción",
+      "submittingButton": "Enviando..."
+    },
+    "processing": {
+      "heading": "Procesando transacción",
+      "description": "Procesando su transacción. Por favor espere."
+    },
+    "confirm": {
+      "pendingHeading": "Transacción enviada",
+      "pendingDescription": "Esperando confirmación de red...",
+      "hashPendingLabel": "Hash de la transacción",
+      "confirmingButton": "Confirmando...",
+      "approvedHeading": "Transacción aprobada",
+      "approvedDescription": "Su transacción multifirma ha sido enviada con éxito",
+      "hashLabel": "Hash de la transacción",
+      "closeButton": "Cerrar"
+    },
+    "error": {
+      "heading": "Transacción fallida",
+      "defaultMessage": "Ocurrió un error al procesar su transacción",
+      "tryAgainButton": "Intentar de nuevo",
+      "closeButton": "Cerrar",
+      "bannerTitle": "Error",
+      "clearErrorAriaLabel": "Borrar error",
+      "statusLabel": "Fallido"
+    },
+    "expired": {
+      "heading": "Transacción expirada",
+      "statusLabel": "Transacción expirada",
+      "badge": "Expirado",
+      "description": "Esta transacción ha expirado y ya no se puede firmar ni enviar.",
+      "closeButton": "Cerrar"
+    },
+    "announcements": {
+      "processing": "Procesando su transacción. Por favor espere.",
+      "confirmed": "Transacción aprobada con éxito.",
+      "failed": "La transacción falló. Consulte los detalles del error a continuación."
+    },
+    "toasts": {
+      "signed": "Transacción firmada con éxito",
+      "submitted": "Transacción enviada con éxito"
+    }
+  },
+  "transactionFilters": {
+    "title": "Filtros",
+    "landmarkLabel": "Filtros de transacciones",
+    "closeFilters": "Cerrar filtros",
+    "ariaLabel": "Borrar búsqueda",
+    "applyingToResults": "Aplicando a los resultados…",
+    "clearAll": "Borrar todos los filtros",
+    "clearAllAriaLabel": "Borrar {count, plural, one {1 filtro activo} other {# filtros activos}}",
+    "clearing": "Borrando…",
+    "search": {
+      "label": "Búsqueda",
+      "placeholder": "Buscar por ID o descripción",
+      "syncLabel": "Buscando…"
+    },
+    "status": {
+      "label": "Estado",
+      "all": "Todos los estados",
+      "pending": "Pendiente",
+      "confirmed": "Confirmado",
+      "failed": "Fallido",
+      "refunded": "Reembolsado",
+      "syncLabel": "Actualizando estado…"
+    },
+    "asset": {
+      "label": "Filtro de activo",
+      "all": "Todos",
+      "syncLabel": "Actualizando activo…"
+    },
+    "dateRange": {
+      "label": "Rango de fechas",
+      "from": "Desde",
+      "to": "Hasta",
+      "fromSyncLabel": "Actualizando fecha de inicio…",
+      "toSyncLabel": "Actualizando fecha de fin…"
+    }
   }
 }

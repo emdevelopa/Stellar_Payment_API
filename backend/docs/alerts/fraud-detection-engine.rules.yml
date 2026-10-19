@@ -1,0 +1,56 @@
+groups:
+  - name: fraud_detection_engine
+    rules:
+      - alert: FraudDetectionEngineHighAlertRate
+        expr: rate(fraud_detection_alerts_fired_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High fraud alert rate detected"
+          description: "Fraud Detection Engine is firing more than 10 alerts/sec over 5 minutes for merchant {{ $labels.merchant_id }}."
+
+      - alert: FraudDetectionEngineDegraded
+        expr: fraud_detection_health_status{component="engine"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fraud Detection Engine is degraded"
+          description: "The Fraud Detection Engine health status is degraded."
+
+      - alert: FraudDetectionCacheNearCapacity
+        expr: fraud_detection_cache_health{metric_type="size"} / fraud_detection_cache_health{metric_type="max_entries"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fraud Detection cache near capacity"
+          description: "Fraud Detection Engine cache is at over 90% capacity."
+
+      - alert: FraudDetectionHighLatency
+        expr: histogram_quantile(0.99, rate(fraud_detection_engine_latency_seconds_bucket[10m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fraud Detection Engine high latency"
+          description: "p99 latency for the Fraud Detection Engine exceeds 100ms."
+
+      - alert: FraudDetectionSuspiciousAnomalySpike
+        expr: rate(fraud_detection_rule_hits_total[5m]) > 50
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spike in fraud detection rule hits"
+          description: "Fraud rule {{ $labels.rule_name }} is triggering frequently for merchant {{ $labels.merchant_id }}."
+
+      - alert: FraudDetectionErrorRate
+        expr: rate(fraud_detection_errors_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fraud Detection Engine error rate elevated"
+          description: "Fraud Detection Engine is experiencing errors."

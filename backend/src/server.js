@@ -9,6 +9,10 @@ import { isHorizonReachable } from "./lib/stellar.js";
 import cron from "node-cron";
 import { archiveOldPaymentIntents } from "./lib/maintenance.js";
 import { startHorizonPoller, stopHorizonPoller } from "./lib/horizon-poller.js";
+import {
+  startTransactionSignerTimers,
+  stopTransactionSignerTimers,
+} from "./lib/transaction-signer.js";
 
 initSentry();
 validateEnvironmentVariables();
@@ -80,6 +84,11 @@ async function startServer() {
   // Start Horizon poller — auto-confirms pending payments
   startHorizonPoller(io);
 
+  // Start Transaction Signer background prune timers — prevents memory leaks
+  // from expired entries accumulating in the in-process ReplayCache and the
+  // VerificationMemoryCache during low-traffic periods (ML-01/ML-02).
+  startTransactionSignerTimers();
+
   // Schedule maintenance jobs: Run once daily at 2:00 AM
   const maintenanceJob = cron.schedule("0 2 * * *", () => {
     logger.info("Starting daily archival of old payment intents");
@@ -93,6 +102,12 @@ async function startServer() {
     if (stopPoolMonitoring) stopPoolMonitoring();
     stopHorizonPoller();
     maintenanceJob.stop();
+    // Release all Transaction Signer in-memory state and stop prune timers so
+    // the ReplayCache and VerificationMemoryCache Maps are eligible for GC
+    // before the process exits (ML-03/ML-04/ML-05).
+    stopTransactionSignerTimers().catch((err) => {
+      logger.warn({ err }, "shutdown: stopTransactionSignerTimers failed");
+    });
     server.close(async () => {
       await closePool();
       await closeRedisClient();

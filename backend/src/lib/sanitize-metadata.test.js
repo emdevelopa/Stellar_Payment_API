@@ -177,6 +177,27 @@ describe('validateMetadata', () => {
   })
 })
 
+describe('validateMetadata — prototype pollution (issue #1447)', () => {
+  it('rejects a top-level __proto__ key parsed from JSON', () => {
+    const metadata = JSON.parse('{"__proto__": {"isAdmin": true}, "ok": 1}')
+    const result = validateMetadata(metadata)
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('forbidden key')
+    expect({}.isAdmin).toBeUndefined()
+  })
+
+  it('rejects nested constructor / prototype keys', () => {
+    expect(validateMetadata({ a: { constructor: { prototype: {} } } }).valid).toBe(false)
+    expect(validateMetadata({ list: [{ prototype: 1 }] }).valid).toBe(false)
+  })
+
+  it('still accepts keys that merely contain the forbidden words', () => {
+    const result = validateMetadata({ constructor_name: 'x', proto: 'y' })
+    expect(result.valid).toBe(true)
+    expect(result.sanitized.constructor_name).toBe('x')
+  })
+})
+
 describe('sanitizeMetadataMiddleware', () => {
   it('passes through when no metadata in request', () => {
     const req = { body: {} }

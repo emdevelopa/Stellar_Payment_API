@@ -69,6 +69,18 @@ describe("SEP-12 routes", () => {
     expect(key).toBe("sep12:GACCOUNT123:203.0.113.10");
   });
 
+  it("truncates oversized account values in rate-limit keys", () => {
+    const key = buildSep12RateLimitKey({
+      query: { account: "G".repeat(10000) },
+      body: {},
+      params: {},
+      ip: "203.0.113.10",
+      socket: {},
+    });
+
+    expect(key).toBe(`sep12:${"G".repeat(56)}:203.0.113.10`);
+  });
+
   it("returns structured retryable errors from the service layer", async () => {
     mockGetCustomer.mockRejectedValue(
       new MockKycError("SERVICE_UNAVAILABLE", "KYC store temporarily unavailable, please retry", 503, {

@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { useTranslations } from "next-intl";
 import { useWallet } from "@/lib/wallet-context";
-import { getAccountBalances, type AssetBalance } from "@/lib/stellar";
 import { Spinner } from "./ui/Spinner";
 import { toast } from "sonner";
 
@@ -25,7 +24,7 @@ export function SupportPanel() {
   const [visitorAddress, setVisitorAddress] = useState<string | null>(null);
   const [isLoadingWallet, setIsLoadingWallet] = useState(false);
   const [amount, setAmount] = useState("");
-  const [assetCode, setAssetCode] = useState("XLM");
+  const [assetCode] = useState("XLM");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
@@ -51,7 +50,7 @@ export function SupportPanel() {
     enabled: !!visitorAddress,
   });
 
-  const selectedBalance = (balances as any).find((b: any) => b.code === assetCode)?.balance ?? "0";
+  const selectedBalance = balances.find((b) => b.code === assetCode)?.balance ?? "0";
   const isUnfunded = visitorAddress && balances.length === 0 && !loadingBalance;
 
   // Single authoritative screen-reader announcement for real-time balance sync,

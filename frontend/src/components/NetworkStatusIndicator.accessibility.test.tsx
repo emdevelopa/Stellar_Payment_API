@@ -303,9 +303,10 @@ describe("NetworkStatusIndicator Accessibility", () => {
       render(<NetworkStatusIndicator enableKeyboardNavigation={true} />);
 
       const refreshButton = screen.getByLabelText("network.refresh");
+      vi.clearAllMocks();
 
       fireEvent.keyDown(refreshButton, { key: "Enter" });
-      expect(mockStore.checkStatus).toHaveBeenCalled();
+      expect(mockStore.checkStatus).toHaveBeenCalledTimes(1);
 
       fireEvent.keyDown(refreshButton, { key: " " });
       expect(mockStore.checkStatus).toHaveBeenCalledTimes(2);

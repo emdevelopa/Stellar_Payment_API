@@ -4,6 +4,7 @@ import readline from "node:readline";
 import { pool } from "./db.js";
 import { hashAuditPayload, signAuditPayload } from "./audit-security.js";
 import { logger } from "./logger.js";
+import { auditLogReplayTotal } from "./metrics.js";
 
 let _isReplaying = false;
 
@@ -106,10 +107,12 @@ export async function replayFallbackLogs(fallbackLogPath) {
           payload.status ?? null,
         ]
       );
+      auditLogReplayTotal.inc({ result: "success" });
     } catch (dbErr) {
       logger.error(dbErr, `[Audit Replay] Database insert failed during replay for timestamp ${timestampStr}`);
       // Keep track of failed lines to write back to fallback log
       failedLines.push(line);
+      auditLogReplayTotal.inc({ result: "failed" });
     }
   }
 

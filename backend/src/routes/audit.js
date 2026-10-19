@@ -11,6 +11,7 @@ import {
   consumeAuditLogRateLimit,
   createAuditLogRateLimitKey,
 } from "../lib/audit-security.js";
+import { auditLogReadRequestsTotal, auditLogRateLimitRejectionsTotal } from "../lib/metrics.js";
 
 const router = express.Router();
 
@@ -86,6 +87,8 @@ router.get("/audit-logs", requireApiKeyAuth(), async (req, res, next) => {
       windowMs: AUDIT_READ_RATE_LIMIT_WINDOW_MS,
     });
     if (!rateLimitResult.allowed) {
+      auditLogRateLimitRejectionsTotal.inc({ source: "read" });
+      auditLogReadRequestsTotal.inc({ result: "rate_limited" });
       return res.status(429).json({
         error: "Too many requests",
         code: "AUDIT_READ_RATE_LIMITED",
@@ -94,11 +97,13 @@ router.get("/audit-logs", requireApiKeyAuth(), async (req, res, next) => {
 
     const { page, limit } = req.query;
     const result = await auditService.getAuditLogs(req.merchant.id, page, limit);
+    auditLogReadRequestsTotal.inc({ result: "success" });
     res.json({
       ...result,
       ...generatePaginationLinks(req, result.page, result.limit, result.total_pages),
     });
   } catch (err) {
+    auditLogReadRequestsTotal.inc({ result: "error" });
     next(err);
   }
 });

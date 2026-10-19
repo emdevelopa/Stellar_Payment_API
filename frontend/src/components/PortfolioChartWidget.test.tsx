@@ -59,10 +59,6 @@ vi.mock('recharts', () => ({
   CartesianGrid: () => <div data-testid="cartesian-grid" />,
 }));
 
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-}));
-
 describe('PortfolioChartWidget', () => {
   const mockAssets: PortfolioAsset[] = [
     {
@@ -105,7 +101,7 @@ describe('PortfolioChartWidget', () => {
   it('renders the localized title and portfolio value', () => {
     render(<PortfolioChartWidget {...defaultProps} />);
 
-    expect(screen.getByText('portfolioChart.valueTitle')).toBeInTheDocument();
+    expect(screen.getByText('Portfolio Value')).toBeInTheDocument();
     expect(screen.getByText('$4,000.00')).toBeInTheDocument();
   });
 
@@ -118,7 +114,7 @@ describe('PortfolioChartWidget', () => {
       />
     );
 
-    const portfolioValue = screen.getByText(/portfolioChart\.valueTitle/i).parentElement;
+    const portfolioValue = screen.getByText(/Portfolio Value/i).parentElement;
     expect(portfolioValue).toBeInTheDocument();
   });
 
@@ -133,14 +129,14 @@ describe('PortfolioChartWidget', () => {
   it('switches to the history view when history data is available', async () => {
     render(<PortfolioChartWidget {...defaultProps} historyData={historyData} />);
 
-    const trendButton = screen.getByText('portfolioChart.trend');
+    const trendButton = screen.getByText('Trend');
     fireEvent.click(trendButton);
 
     await waitFor(() => {
       expect(screen.getByTestId('line-chart')).toBeInTheDocument();
     });
 
-    const allocationButton = screen.getByText('portfolioChart.allocation');
+    const allocationButton = screen.getByText('Allocation');
     fireEvent.click(allocationButton);
 
     await waitFor(() => {
@@ -165,13 +161,6 @@ describe('PortfolioChartWidget', () => {
   it('shows an empty history state when no trend data exists', async () => {
     render(<PortfolioChartWidget {...defaultProps} historyData={[]} />);
 
-    if (assetElement) {
-      fireEvent.click(assetElement);
-      expect(assetElement).toHaveClass('bg-blue-50');
-
-      fireEvent.click(assetElement);
-      expect(assetElement).toBeInTheDocument();
-    }
     fireEvent.click(screen.getByRole('button', { name: 'Trend' }));
 
     await waitFor(() => {
@@ -210,8 +199,16 @@ describe('PortfolioChartWidget', () => {
       />
     );
 
+    // Compare with non-breaking spaces normalized to regular spaces: the
+    // exact separator Intl.NumberFormat emits between the amount and the
+    // currency symbol is ICU-data-dependent and not what this test cares
+    // about — it cares that the value is formatted es-ES/EUR-style.
+    const normalize = (s: string) => s.replace(/ /g, ' ');
+
     expect(screen.getByText('Valor del portafolio')).toBeInTheDocument();
-    expect(screen.getByText(formattedValue)).toBeInTheDocument();
+    expect(
+      screen.getByText((text) => normalize(text) === normalize(formattedValue))
+    ).toBeInTheDocument();
   });
 
   it('handles asset selection and onAssetClick callbacks', () => {
@@ -242,7 +239,7 @@ describe('PortfolioChartWidget', () => {
       />
     );
 
-    expect(screen.getByText(/portfolioChart\.valueTitle/)).toBeInTheDocument();
+    expect(screen.getByText(/Portfolio Value/)).toBeInTheDocument();
   });
 
   it('handles large portfolio values', () => {
@@ -272,10 +269,18 @@ describe('PortfolioChartWidget', () => {
   it('displays asset color indicators', () => {
     render(<PortfolioChartWidget {...defaultProps} />);
 
-    const colorDots = screen.getAllByTestId('cell').length;
-    expect(colorDots).toBeGreaterThanOrEqual(0);
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Unable to load the latest portfolio snapshot.'
-    );
+    expect(screen.getAllByTestId('cell').length).toBe(mockAssets.length);
+  });
+
+  it('makes asset rows keyboard-operable', () => {
+    const onAssetClick = vi.fn();
+    render(<PortfolioChartWidget {...defaultProps} onAssetClick={onAssetClick} />);
+
+    const assetRow = screen.getByText('XLM').closest('[role="button"]');
+    expect(assetRow).toBeInTheDocument();
+    expect(assetRow).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(assetRow as Element, { key: 'Enter' });
+    expect(onAssetClick).toHaveBeenCalledWith(mockAssets[0]);
   });
 });

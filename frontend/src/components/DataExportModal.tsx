@@ -70,7 +70,7 @@ function reducer(state: State, action: Action): State {
       return { ...state, format: action.format };
     case "TOGGLE_COLUMN": {
       const next = new Set(state.selectedColumns);
-      next.has(action.key) ? next.delete(action.key) : next.add(action.key);
+      if (next.has(action.key)) { next.delete(action.key); } else { next.add(action.key); }
       return { ...state, selectedColumns: next };
     }
     case "SELECT_ALL_COLUMNS":

@@ -5,7 +5,6 @@ import { supabase } from "../lib/supabase.js";
 import { requireApiKeyAuth, requireSessionAuth, hashPassword } from "../lib/auth.js";
 import { generateSessionToken } from "../lib/sep10-auth.js";
 import { getMerchantApiUsage } from "../lib/api-usage.js";
-import { z } from "zod";
 import { validateRequest } from "../lib/validation.js";
 import { createMerchantSecurityActionRateLimit } from "../lib/rate-limit.js";
 import {
@@ -17,6 +16,12 @@ import {
 } from "../lib/request-schemas.js";
 import { merchantService } from "../services/merchantService.js";
 import { resolveMerchantSettings } from "../lib/merchant-settings.js";
+import {
+  sanitizeMerchantPayload,
+  rotateApiKeySchema,
+  rotateWebhookSecretSchema,
+  setApiKeyExpirySchema,
+} from "../lib/merchant-payload-validation.js";
 import { renderReceiptEmail } from "../lib/email-templates.js";
 import {
   createWebhookDomainVerificationState,
@@ -35,14 +40,6 @@ const defaultMerchantRegistrationRateLimit = rateLimit({
 const defaultMerchantSecurityActionRateLimit =
   createMerchantSecurityActionRateLimit();
 
-const rotateApiKeySchema = z.object({
-  grace_period_hours: z.number().int().min(0).max(168).optional(),
-});
-
-const setApiKeyExpirySchema = z.object({
-  expires_at: z.string().datetime({ offset: true }).or(z.string().datetime()),
-});
-
 
 
 function createMerchantsRouter({
@@ -52,10 +49,6 @@ function createMerchantsRouter({
   const router = express.Router();
 
   const DEFAULT_WEBHOOK_SECRET_ROTATION_GRACE_HOURS = 24;
-
-  const rotateWebhookSecretSchema = z.object({
-    grace_period_hours: z.number().int().min(0).max(168).optional(),
-  });
 
   function resolveWebhookSecretRotationGraceHours(requestValue) {
     if (typeof requestValue === "number") {
@@ -123,6 +116,7 @@ function createMerchantsRouter({
   router.post(
     "/register-merchant",
     merchantRegistrationRateLimit,
+    sanitizeMerchantPayload,
     validateRequest({ body: registerMerchantZodSchema }),
     async (req, res, next) => {
       try {
@@ -281,6 +275,7 @@ function createMerchantsRouter({
     "/merchants/rotate-webhook-secret",
     requireApiKeyAuth({ requireSignature: true }),
     merchantSecurityActionRateLimit,
+    sanitizeMerchantPayload,
     validateRequest({ body: rotateWebhookSecretSchema }),
     async (req, res, next) => {
       try {
@@ -345,6 +340,7 @@ function createMerchantsRouter({
 
   router.put(
     "/merchant-branding",
+    sanitizeMerchantPayload,
     validateRequest({ body: sessionBrandingSchema }),
     async (req, res, next) => {
       try {
@@ -397,6 +393,7 @@ function createMerchantsRouter({
   router.post(
     "/preview-receipt",
     requireApiKeyAuth(),
+    sanitizeMerchantPayload,
     validateRequest({ body: sessionBrandingSchema }),
     async (req, res) => {
       try {
@@ -504,15 +501,6 @@ function createMerchantsRouter({
     },
   );
 
-  const paymentLimitsSchema = z
-    .record(
-      z.string().min(1),
-      z.object({
-        min: z.number().positive().optional(),
-        max: z.number().positive().optional(),
-      }),
-    )
-    .optional();
   /**
    * @swagger
    * /api/webhook-settings:
@@ -588,6 +576,7 @@ function createMerchantsRouter({
     "/webhook-settings",
     requireApiKeyAuth(),
     merchantSecurityActionRateLimit,
+    sanitizeMerchantPayload,
     validateRequest({ body: webhookSettingsSchema }),
     async (req, res, next) => {
       try {
@@ -794,9 +783,11 @@ function createMerchantsRouter({
       "/merchants/rotate-api-key",
       requireApiKeyAuth({ requireSignature: true }),
       merchantSecurityActionRateLimit,
+      sanitizeMerchantPayload,
+      validateRequest({ body: rotateApiKeySchema }),
       async (req, res, next) => {
       try {
-        const body = rotateApiKeySchema.parse(req.body || {});
+        const body = req.body;
         const result = await merchantService.rotateApiKey(
           req.merchant.id,
           body.grace_period_hours
@@ -848,15 +839,17 @@ function createMerchantsRouter({
      *               expires_at:
      *                 type: string
      *                 format: date-time
-     *                 description: ISO 8601 datetime when the API key expires
+     *                 description: ISO 8601 datetime (with timezone) when the API key expires. Must be at least 1 minute in the future and within 365 days. Unknown body fields are rejected.
      */
     router.put(
       "/merchants/set-api-key-expiry",
       requireApiKeyAuth({ requireSignature: true }),
       merchantSecurityActionRateLimit,
+      sanitizeMerchantPayload,
+      validateRequest({ body: setApiKeyExpirySchema }),
       async (req, res, next) => {
       try {
-        const body = setApiKeyExpirySchema.parse(req.body);
+        const body = req.body;
         const result = await merchantService.setApiKeyExpiry(
           req.merchant.id,
           body.expires_at

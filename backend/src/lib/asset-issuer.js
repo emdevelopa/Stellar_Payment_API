@@ -6,6 +6,9 @@
  * - Issue #887: Rate limiting for asset issuer operations
  * - Issue #888: Cryptographic signature verification for asset operations
  * - Issue #889: Optimized SQL queries for asset and issuer data
+ * - Issue #1052: Refactored legacy code — shared Horizon client, de-duplicated
+ *   rate-limit actor resolution, dead-letter/fallback logging, bounded
+ *   `getRecoveryHealth()` snapshot
  */
 
 import { createHash } from "node:crypto";
@@ -25,6 +28,17 @@ import {
     RATE_LIMIT_REDIS_PREFIX,
 } from "./rate-limit.js";
 import { logger } from "./logger.js";
+import {
+    assetIssuerVerificationsTotal,
+    assetIssuerVerificationDuration,
+    assetIssuerCacheOperationsTotal,
+    assetIssuerCacheSize,
+    assetIssuerQueryDuration,
+    assetIssuerErrorRecoveryTotal,
+    assetIssuerCircuitBreakerState,
+    assetIssuerOpenCircuitBreakers,
+    assetIssuerDeadLetterQueueSize,
+} from "./metrics.js";
 
 // Rate limiting constants
 export const ASSET_ISSUER_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -40,6 +54,101 @@ const CIRCUIT_BREAKER_TIMEOUT_MS = 30 * 1000;
 const CIRCUIT_BREAKER_HALF_OPEN_PROBE_MS = 5 * 1000;
 const OPERATION_TIMEOUT_MS = 15 * 1000;
 const DLQ_MAX_SIZE = 100;
+// Issue #1312: bounds for in-memory registries that were previously unbounded.
+const CIRCUIT_BREAKER_MAX_CONTEXTS = 1000;
+const VERIFICATION_CACHE_MAX_ENTRIES = 1000;
+
+// Issue #1050: bounds and TTL for the issuer query cache.
+const ISSUER_QUERY_CACHE_TTL_MS = 60 * 1000;
+const ISSUER_QUERY_CACHE_MAX_ENTRIES = 500;
+
+/**
+ * Issue #1050: bounded TTL cache for Asset Issuer query results.
+ *
+ * `AssetIssuerSignatureVerifier` already caches per-transaction verification
+ * results, but the aggregate read paths (`getIssuerStats`,
+ * `getAssetIssuerHealthMetrics`) re-queried the database on every call. Those
+ * results are derived from payment rows and change slowly, so a short TTL
+ * removes the repeated round trip without serving materially stale data.
+ *
+ * Expired entries are dropped on read rather than only on write, and the map
+ * is hard-capped with oldest-first eviction so a stream of distinct
+ * issuer/merchant keys cannot grow it without bound.
+ */
+class IssuerQueryCache {
+    constructor({ ttlMs = ISSUER_QUERY_CACHE_TTL_MS, maxEntries = ISSUER_QUERY_CACHE_MAX_ENTRIES } = {}) {
+        this.ttlMs = ttlMs;
+        this.maxEntries = maxEntries;
+        this.entries = new Map();
+        this.stats = { hits: 0, misses: 0, evictions: 0, expirations: 0 };
+    }
+
+    get(key) {
+        const entry = this.entries.get(key);
+        if (!entry) {
+            this.stats.misses++;
+            assetIssuerCacheOperationsTotal.inc({ operation: "miss" });
+            return undefined;
+        }
+        if (Date.now() - entry.timestamp >= this.ttlMs) {
+            this.entries.delete(key);
+            this.stats.expirations++;
+            this.stats.misses++;
+            assetIssuerCacheOperationsTotal.inc({ operation: "expiration" });
+            assetIssuerCacheOperationsTotal.inc({ operation: "miss" });
+            this._publishSize();
+            return undefined;
+        }
+        // Re-insert to refresh recency for LRU ordering.
+        this.entries.delete(key);
+        this.entries.set(key, entry);
+        this.stats.hits++;
+        assetIssuerCacheOperationsTotal.inc({ operation: "hit" });
+        return entry.value;
+    }
+
+    set(key, value) {
+        if (this.entries.has(key)) {
+            this.entries.delete(key);
+        }
+        while (this.entries.size >= this.maxEntries) {
+            this.entries.delete(this.entries.keys().next().value);
+            this.stats.evictions++;
+            assetIssuerCacheOperationsTotal.inc({ operation: "eviction" });
+        }
+        this.entries.set(key, { value, timestamp: Date.now() });
+        this._publishSize();
+    }
+
+    delete(key) {
+        const removed = this.entries.delete(key);
+        if (removed) {
+            assetIssuerCacheOperationsTotal.inc({ operation: "invalidation" });
+            this._publishSize();
+        }
+        return removed;
+    }
+
+    clear() {
+        this.entries.clear();
+        this._publishSize();
+    }
+
+    _publishSize() {
+        assetIssuerCacheSize.set(this.entries.size);
+    }
+
+    getStats() {
+        return {
+            size: this.entries.size,
+            ttlMs: this.ttlMs,
+            maxEntries: this.maxEntries,
+            ...this.stats,
+        };
+    }
+}
+
+const issuerQueryCache = new IssuerQueryCache();
 
 /**
  * Per-context circuit breaker states for failure domain isolation.
@@ -50,6 +159,28 @@ const circuitBreakerRegistry = new Map();
  * In-memory dead-letter queue for operations that exhausted retries.
  */
 const deadLetterQueue = [];
+
+/**
+ * Lazily-initialized shared Horizon server.
+ *
+ * Previously every verification built its own `new StellarSdk.Horizon.Server(...)`,
+ * which meant a fresh client (and its internal agent/socket setup) per call and
+ * no reuse of connections under load.
+ */
+let _horizonServer = null;
+
+function getHorizonServer() {
+    if (!_horizonServer) {
+        const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
+        _horizonServer = new StellarSdk.Horizon.Server(
+            process.env.STELLAR_HORIZON_URL ||
+            (NETWORK === "public"
+                ? "https://horizon.stellar.org"
+                : "https://horizon-testnet.stellar.org")
+        );
+    }
+    return _horizonServer;
+}
 
 /**
  * Issue #890: Enhanced error recovery for asset issuer operations
@@ -69,6 +200,19 @@ export class AssetIssuerErrorRecovery {
 
     static _getState(context = 'default') {
         if (!circuitBreakerRegistry.has(context)) {
+            // Issue #1312: contexts embed per-transaction/issuer/merchant
+            // identifiers, so the registry grew without bound. Evict the
+            // oldest closed (healthy) context first, then the oldest overall.
+            if (circuitBreakerRegistry.size >= CIRCUIT_BREAKER_MAX_CONTEXTS) {
+                let evictKey = circuitBreakerRegistry.keys().next().value;
+                for (const [key, entry] of circuitBreakerRegistry) {
+                    if (entry.state === 'closed') {
+                        evictKey = key;
+                        break;
+                    }
+                }
+                circuitBreakerRegistry.delete(evictKey);
+            }
             circuitBreakerRegistry.set(context, {
                 failures: 0,
                 lastFailureTime: null,
@@ -136,12 +280,21 @@ export class AssetIssuerErrorRecovery {
 
     static _pushToDeadLetterQueue(entry) {
         if (deadLetterQueue.length >= DLQ_MAX_SIZE) {
-            deadLetterQueue.shift();
+            const evicted = deadLetterQueue.shift();
+            logger.warn(
+                { context: evicted?.context, dlqSize: deadLetterQueue.length },
+                'Asset issuer dead-letter queue full, evicted oldest entry'
+            );
         }
         deadLetterQueue.push({
             ...entry,
             enqueuedAt: new Date().toISOString(),
         });
+        logger.warn(
+            { context: entry.context, errorType: entry.errorType, attempts: entry.attempts },
+            'Asset issuer operation added to dead-letter queue'
+        );
+        assetIssuerDeadLetterQueueSize.set(deadLetterQueue.length);
     }
 
     static getDeadLetterQueue() {
@@ -149,7 +302,23 @@ export class AssetIssuerErrorRecovery {
     }
 
     static drainDeadLetterQueue() {
-        return deadLetterQueue.splice(0, deadLetterQueue.length);
+        const drained = deadLetterQueue.splice(0, deadLetterQueue.length);
+        assetIssuerDeadLetterQueueSize.set(0);
+        return drained;
+    }
+
+    /**
+     * Issue #1053: publish the breaker gauges. Aggregated across contexts
+     * rather than labelled per context, so a caller cannot inflate series
+     * count by varying an issuer or merchant id embedded in a context string.
+     */
+    static _publishBreakerGauges() {
+        let open = 0;
+        for (const state of circuitBreakerRegistry.values()) {
+            if (state.state !== 'closed') open++;
+        }
+        assetIssuerOpenCircuitBreakers.set(open);
+        assetIssuerCircuitBreakerState.set(open > 0 ? 1 : 0);
     }
 
     // ─── Timeout Wrapper ─────────────────────────────────────────────────────────
@@ -182,16 +351,21 @@ export class AssetIssuerErrorRecovery {
             cbError.isCircuitBreakerOpen = true;
             cbError.status = 503;
 
+            logger.warn({ context }, 'Asset issuer circuit breaker open, rejecting operation');
             if (fallback) {
                 try {
                     return await fallback(cbError);
-                } catch (_) { }
+                } catch (fallbackError) {
+                    logger.error({ err: fallbackError, context }, 'Asset issuer fallback handler failed while circuit breaker open');
+                }
             }
             throw cbError;
         }
 
         const effectiveMaxAttempts = disposition === 'probe' ? 1 : maxAttempts;
         let lastError = null;
+        let transientFailures = 0;
+        let lastTransientType = 'unknown';
 
         for (let attempt = 1; attempt <= effectiveMaxAttempts; attempt++) {
             try {
@@ -202,6 +376,12 @@ export class AssetIssuerErrorRecovery {
                 );
 
                 this._recordSuccess(context);
+                if (transientFailures > 0) {
+                    assetIssuerErrorRecoveryTotal.inc({
+                        error_type: lastTransientType,
+                        outcome: 'recovered',
+                    });
+                }
                 return result;
             } catch (error) {
                 lastError = error;
@@ -210,40 +390,60 @@ export class AssetIssuerErrorRecovery {
                 if (!errorClass.retryable || attempt === effectiveMaxAttempts) {
                     this._recordFailure(context, error);
                     const enhanced = this.enhanceError(error, context, attempt, errorClass);
+                    this._publishBreakerGauges();
 
                     if (!errorClass.retryable) {
+                        assetIssuerErrorRecoveryTotal.inc({
+                            error_type: errorClass.type,
+                            outcome: 'rejected',
+                        });
                         this._pushToDeadLetterQueue({
                             context,
                             errorType: errorClass.type,
                             errorMessage: error.message,
                             attempts: attempt,
                         });
+                    } else {
+                        assetIssuerErrorRecoveryTotal.inc({
+                            error_type: errorClass.type,
+                            outcome: 'exhausted',
+                        });
                     }
 
                     if (fallback) {
                         try {
                             return await fallback(enhanced);
-                        } catch (_) { }
+                        } catch (fallbackError) {
+                            logger.error({ err: fallbackError, context }, 'Asset issuer fallback handler failed');
+                        }
                     }
                     throw enhanced;
                 }
 
                 const delay = this.calculateRetryDelay(attempt, errorClass.priority);
+                transientFailures++;
+                lastTransientType = errorClass.type;
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
 
         this._recordFailure(context, lastError);
+        this._publishBreakerGauges();
+        const finalClass = this.classifyError(lastError);
+        assetIssuerErrorRecoveryTotal.inc({
+            error_type: finalClass.type,
+            outcome: 'exhausted',
+        });
         const finalEnhanced = this.enhanceError(
             lastError,
             context,
             effectiveMaxAttempts,
-            this.classifyError(lastError),
+            finalClass,
         );
 
         this._pushToDeadLetterQueue({
             context,
-            errorType: this.classifyError(lastError).type,
+            errorType: finalClass.type,
             errorMessage: lastError?.message,
             attempts: effectiveMaxAttempts,
         });
@@ -251,7 +451,9 @@ export class AssetIssuerErrorRecovery {
         if (fallback) {
             try {
                 return await fallback(finalEnhanced);
-            } catch (_) { }
+            } catch (fallbackError) {
+                logger.error({ err: fallbackError, context }, 'Asset issuer fallback handler failed');
+            }
         }
         throw finalEnhanced;
     }
@@ -403,9 +605,11 @@ export class AssetIssuerErrorRecovery {
         } else {
             circuitBreakerRegistry.clear();
         }
+        this._publishBreakerGauges();
     }
 
     static getCircuitBreakerMetrics() {
+        this._publishBreakerGauges();
         const snapshot = {};
         for (const [ctx, state] of circuitBreakerRegistry.entries()) {
             snapshot[ctx] = {
@@ -418,6 +622,39 @@ export class AssetIssuerErrorRecovery {
         return snapshot;
     }
 
+    /**
+     * Issue #1052: single operational snapshot of the recovery subsystem.
+     *
+     * The per-context `getCircuitBreakerMetrics()` map is unbounded in shape
+     * (one entry per context string) and the dead-letter queue is private, so
+     * health endpoints had no cheap, bounded way to report how many contexts
+     * are degraded or how much work is sitting unprocessed. This aggregates
+     * both into fixed-shape counters.
+     */
+    static getRecoveryHealth() {
+        let open = 0;
+        let halfOpen = 0;
+        let totalFailures = 0;
+        let totalRecoveries = 0;
+
+        for (const state of circuitBreakerRegistry.values()) {
+            if (state.state === 'open') open += 1;
+            if (state.state === 'half-open') halfOpen += 1;
+            totalFailures += state.metrics.totalFailures;
+            totalRecoveries += state.metrics.totalRecoveries;
+        }
+
+        return {
+            trackedContexts: circuitBreakerRegistry.size,
+            openCircuits: open,
+            halfOpenCircuits: halfOpen,
+            deadLetterQueueSize: deadLetterQueue.length,
+            deadLetterQueueCapacity: DLQ_MAX_SIZE,
+            totalFailures,
+            totalRecoveries,
+        };
+    }
+
     static recordFailure() {
         this._recordFailure('default', new Error('Manual failure record'));
     }
@@ -427,13 +664,7 @@ export class AssetIssuerErrorRecovery {
     static async verifyIssuerOnChain(issuer) {
         return this.executeWithRecovery(
             async () => {
-                const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
-                const server = new StellarSdk.Horizon.Server(
-                    process.env.STELLAR_HORIZON_URL ||
-                    (NETWORK === "public"
-                        ? "https://horizon.stellar.org"
-                        : "https://horizon-testnet.stellar.org")
-                );
+                const server = getHorizonServer();
 
                 try {
                     await withHorizonRetry(
@@ -467,40 +698,47 @@ export class AssetIssuerErrorRecovery {
  */
 export class AssetIssuerRateLimiter {
 
-    static getKey(req) {
+    /**
+     * Issue #1052: the actor resolution (merchant → hashed API key → IP, with
+     * a tier skip) was duplicated verbatim in `getKey`/`getBurstKey`, so the
+     * two tiers could silently drift apart — e.g. a fix to the key hashing
+     * applied to only one of them, leaving standard and burst buckets keyed
+     * differently for the same caller.
+     */
+    static _resolveActor(req) {
         const merchantId = req?.merchant?.id;
         const apiKey = req?.headers?.["x-api-key"];
         const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
 
+        // Issue #1314: the key was previously truncated to 16 hex chars
+        // (64 bits), which is enough for an attacker to search for a
+        // colliding prefix and share — or exhaust — a victim API key's
+        // rate-limit bucket. Use the full SHA-256 digest.
         const hashedApiKey = apiKey
-            ? createHash("sha256").update(apiKey).digest("hex").substring(0, 16)
+            ? createHash("sha256").update(apiKey).digest("hex")
             : null;
 
-        const actor = merchantId
-            ? `merchant:${merchantId}`
-            : hashedApiKey
-                ? `api:${hashedApiKey}`
-                : `ip:${ipKey}`;
+        return {
+            actor: merchantId
+                ? `merchant:${merchantId}`
+                : hashedApiKey
+                    ? `api:${hashedApiKey}`
+                    : `ip:${ipKey}`,
+            actorType: merchantId ? 'merchant' : hashedApiKey ? 'api_key' : 'ip',
+        };
+    }
 
-        return `asset:issuer:${actor}`;
+    static _isExemptTier(req) {
+        const merchantTier = req?.merchant?.metadata?.tier;
+        return merchantTier === 'enterprise' || merchantTier === 'premium';
+    }
+
+    static getKey(req) {
+        return `asset:issuer:${this._resolveActor(req).actor}`;
     }
 
     static getBurstKey(req) {
-        const merchantId = req?.merchant?.id;
-        const apiKey = req?.headers?.["x-api-key"];
-        const ipKey = ipKeyGenerator(req?.ip ?? req?.socket?.remoteAddress ?? "unknown-ip");
-
-        const hashedApiKey = apiKey
-            ? createHash("sha256").update(apiKey).digest("hex").substring(0, 16)
-            : null;
-
-        const actor = merchantId
-            ? `merchant:${merchantId}`
-            : hashedApiKey
-                ? `api:${hashedApiKey}`
-                : `ip:${ipKey}`;
-
-        return `asset:issuer:burst:${actor}`;
+        return `asset:issuer:burst:${this._resolveActor(req).actor}`;
     }
 
     static createRateLimiter({ store } = {}) {
@@ -516,10 +754,9 @@ export class AssetIssuerRateLimiter {
             keyGenerator: this.getKey,
             requestWasSuccessful: (_req, res) => res.statusCode < 400,
             handler: (req, res, _next, options) => {
-                const actorType = req?.merchant?.id ? 'merchant' : req?.headers?.["x-api-key"] ? 'api_key' : 'ip';
                 logger.warn({
                     endpoint: 'asset_issuer',
-                    actorType,
+                    actorType: AssetIssuerRateLimiter._resolveActor(req).actorType,
                     ip: req.ip,
                     merchantId: req.merchant?.id,
                     limit: options.max,
@@ -529,10 +766,7 @@ export class AssetIssuerRateLimiter {
             },
             store,
             passOnStoreError: true,
-            skip: (req) => {
-                const merchantTier = req?.merchant?.metadata?.tier;
-                return merchantTier === 'enterprise' || merchantTier === 'premium';
-            }
+            skip: (req) => AssetIssuerRateLimiter._isExemptTier(req)
         });
     }
 
@@ -549,10 +783,9 @@ export class AssetIssuerRateLimiter {
             keyGenerator: this.getBurstKey,
             requestWasSuccessful: (_req, res) => res.statusCode < 400,
             handler: (req, res, _next, options) => {
-                const actorType = req?.merchant?.id ? 'merchant' : req?.headers?.["x-api-key"] ? 'api_key' : 'ip';
                 logger.warn({
                     endpoint: 'asset_issuer_burst',
-                    actorType,
+                    actorType: AssetIssuerRateLimiter._resolveActor(req).actorType,
                     ip: req.ip,
                     merchantId: req.merchant?.id,
                     limit: options.max,
@@ -562,10 +795,7 @@ export class AssetIssuerRateLimiter {
             },
             store,
             passOnStoreError: true,
-            skip: (req) => {
-                const merchantTier = req?.merchant?.metadata?.tier;
-                return merchantTier === 'enterprise' || merchantTier === 'premium';
-            }
+            skip: (req) => AssetIssuerRateLimiter._isExemptTier(req)
         });
     }
 }
@@ -584,26 +814,74 @@ export class AssetIssuerSignatureVerifier {
     constructor() {
         this.verificationCache = new Map();
         this.cacheTimeout = 5 * 60 * 1000;
+        // Issue #1315: in-flight de-duplication. Without this, concurrent
+        // callers verifying the same transaction (e.g. a webhook retry
+        // racing the original request) would all miss the still-empty
+        // cache, each kick off its own Horizon round trip, and each write
+        // its own cache entry — wasted work and a window where the cache
+        // could briefly hold a stale/inconsistent result.
+        this.pendingVerifications = new Map();
     }
 
     async verifyOperation(txHash, options = {}) {
+        const startedAt = process.hrtime.bigint();
+        const observe = (result, operation = "any") => {
+            const seconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+            const label = result?.valid ? "valid" : "invalid";
+            assetIssuerVerificationDuration.observe({ result: label }, seconds);
+            assetIssuerVerificationsTotal.inc({ result: label, operation });
+        };
+
         const {
             expectedOperation = null,
             expectedAssetCode = null,
             expectedAssetIssuer = null,
             skipCache = false,
-        } = typeof options === 'string' ? { expectedOperation: options } : options;
+        } = typeof options === 'string' ? { expectedOperation: options } : (options ?? {});
 
+        const cacheKey = `${txHash}:${expectedOperation || 'any'}:${expectedAssetCode || 'any'}:${expectedAssetIssuer || 'any'}`;
+
+        if (!skipCache) {
+            const cached = this.verificationCache.get(cacheKey);
+            if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+                observe(cached.result, expectedOperation || 'any');
+                return cached.result;
+            }
+            if (cached) {
+                // Issue #1312: drop expired entries instead of retaining them forever.
+                this.verificationCache.delete(cacheKey);
+            }
+
+            const pending = this.pendingVerifications.get(cacheKey);
+            if (pending) {
+                return pending;
+            }
+        }
+
+        const verificationPromise = this._runVerification(txHash, {
+            expectedOperation,
+            expectedAssetCode,
+            expectedAssetIssuer,
+            skipCache,
+            cacheKey,
+        });
+
+        if (!skipCache) {
+            this.pendingVerifications.set(cacheKey, verificationPromise);
+        }
+
+        try {
+            const result = await verificationPromise;
+            observe(result, result?.operationType || expectedOperation || 'any');
+            return result;
+        } finally {
+            this.pendingVerifications.delete(cacheKey);
+        }
+    }
+
+    async _runVerification(txHash, { expectedOperation, expectedAssetCode, expectedAssetIssuer, skipCache, cacheKey }) {
         return AssetIssuerErrorRecovery.executeWithRecovery(
             async () => {
-                const cacheKey = `${txHash}:${expectedOperation || 'any'}:${expectedAssetCode || 'any'}:${expectedAssetIssuer || 'any'}`;
-                if (!skipCache) {
-                    const cached = this.verificationCache.get(cacheKey);
-                    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-                        return cached.result;
-                    }
-                }
-
                 // Step 1: Basic signature verification
                 const basicVerification = await verifyTransactionSignature(txHash);
 
@@ -638,6 +916,9 @@ export class AssetIssuerSignatureVerifier {
                 };
 
                 if (!skipCache) {
+                    if (this.verificationCache.size >= VERIFICATION_CACHE_MAX_ENTRIES) {
+                        this.verificationCache.delete(this.verificationCache.keys().next().value);
+                    }
                     this.verificationCache.set(cacheKey, {
                         result,
                         timestamp: Date.now()
@@ -652,12 +933,7 @@ export class AssetIssuerSignatureVerifier {
 
     async verifyAssetIssuerOperation(txHash, expectedOperation, expectedAssetCode, expectedAssetIssuer) {
         const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
-        const server = new StellarSdk.Horizon.Server(
-            process.env.STELLAR_HORIZON_URL ||
-            (NETWORK === "public"
-                ? "https://horizon.stellar.org"
-                : "https://horizon-testnet.stellar.org")
-        );
+        const server = getHorizonServer();
 
         try {
             const tx = await withHorizonRetry(
@@ -784,6 +1060,7 @@ export class AssetIssuerSignatureVerifier {
             };
 
         } catch (error) {
+            logger.warn({ err: error, txHash }, 'Asset issuer operation verification failed');
             return {
                 valid: false,
                 reason: `Failed to verify asset issuer operation: ${error.message}`,
@@ -813,7 +1090,15 @@ export class AssetIssuerSignatureVerifier {
  */
 export class AssetIssuerQueryOptimizer {
 
-    static async getIssuerStats(issuer) {
+    static async getIssuerStats(issuer, { skipCache = false } = {}) {
+        const cacheKey = `issuer_stats:${issuer}`;
+        if (!skipCache) {
+            const cached = issuerQueryCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
         const query = `
       SELECT
         asset,
@@ -830,10 +1115,18 @@ export class AssetIssuerQueryOptimizer {
       ORDER BY total_volume DESC
     `;
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
-            () => queryWithRetry(query, [issuer]),
-            `get stats for issuer ${issuer}`
+        const result = await this._timeQuery('issuer_stats', () =>
+            AssetIssuerErrorRecovery.executeWithRecovery(
+                () => queryWithRetry(query, [issuer]),
+                `get stats for issuer ${issuer}`
+            )
         );
+
+        if (!skipCache) {
+            issuerQueryCache.set(cacheKey, result);
+        }
+
+        return result;
     }
 
     static async findPaymentsByAssetAndIssuer(assetCode, assetIssuer, options = {}) {
@@ -951,7 +1244,15 @@ export class AssetIssuerQueryOptimizer {
         );
     }
 
-    static async getAssetIssuerHealthMetrics(merchantId) {
+    static async getAssetIssuerHealthMetrics(merchantId, { skipCache = false } = {}) {
+        const cacheKey = `health_metrics:${merchantId}`;
+        if (!skipCache) {
+            const cached = issuerQueryCache.get(cacheKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
         const query = `
       WITH asset_stats AS (
         SELECT
@@ -975,6 +1276,7 @@ export class AssetIssuerQueryOptimizer {
           jsonb_array_length(COALESCE(m.allowed_issuers, '[]'::jsonb)) as issuer_count
         FROM merchants m
         WHERE m.id = $1
+          AND m.deleted_at IS NULL
       )
       SELECT
         a.*,
@@ -994,13 +1296,49 @@ export class AssetIssuerQueryOptimizer {
       ORDER BY a.total_volume DESC
     `;
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
-            () => queryWithRetry(query, [merchantId]),
-            `get asset issuer health metrics for merchant ${merchantId}`
+        const result = await this._timeQuery('health_metrics', () =>
+            AssetIssuerErrorRecovery.executeWithRecovery(
+                () => queryWithRetry(query, [merchantId]),
+                `get asset issuer health metrics for merchant ${merchantId}`
+            )
         );
+
+        if (!skipCache) {
+            issuerQueryCache.set(cacheKey, result);
+        }
+
+        return result;
     }
 
-    static async logAssetIssuerVerification({ merchantId, txHash, verification, assetCode, assetIssuer }) {
+    /**
+     * Issue #1053: time an asset issuer query. Labelled by query name (a fixed
+     * set) rather than by issuer, so the series count cannot be driven up by
+     * varying an issuer id. Failures are observed too, then rethrown.
+     */
+    static async _timeQuery(name, run) {
+        const startedAt = process.hrtime.bigint();
+        try {
+            const result = await run();
+            assetIssuerQueryDuration.observe(
+                { query: name },
+                Number(process.hrtime.bigint() - startedAt) / 1e9,
+            );
+            return result;
+        } catch (error) {
+            assetIssuerQueryDuration.observe(
+                { query: name },
+                Number(process.hrtime.bigint() - startedAt) / 1e9,
+            );
+            throw error;
+        }
+    }
+
+    static async logAssetIssuerVerification({ merchantId, txHash, verification, assetCode, assetIssuer } = {}) {
+        // Issue #1313: `verification` was dereferenced unconditionally, so a
+        // missing verification result threw a null pointer exception.
+        if (!verification) {
+            throw new TypeError('logAssetIssuerVerification requires a verification result');
+        }
         const query = `
       INSERT INTO asset_issuer_verifications (
         merchant_id,
@@ -1030,15 +1368,56 @@ export class AssetIssuerQueryOptimizer {
             })
         ];
 
-        return AssetIssuerErrorRecovery.executeWithRecovery(
-            () => queryWithRetry(query, params),
-            `log asset issuer verification for merchant ${merchantId}`
+        const result = await AssetIssuerQueryOptimizer._timeQuery('verification_log', () =>
+            AssetIssuerErrorRecovery.executeWithRecovery(
+                () => queryWithRetry(query, params),
+                `log asset issuer verification for merchant ${merchantId}`
+            )
         );
+
+        // Issue #1050: a new verification changes this issuer's stats and this
+        // merchant's health rollup, so drop both cached reads. Bounded to the
+        // keys this write can actually affect.
+        AssetIssuerQueryOptimizer.invalidateQueryCache({
+            assetIssuer: assetIssuer || verification.assetIssuer,
+            merchantId,
+        });
+
+        return result;
+    }
+
+    // ─── Query Cache (Issue #1050) ───────────────────────────────────────────────
+
+    /**
+     * Drop the cached reads that a verification write makes stale. Call with no
+     * arguments to clear the whole cache; with `{ assetIssuer }` and/or
+     * `{ merchantId }` to drop only those keys. A call that names neither key
+     * but passes an options object is a no-op, so a write with no known
+     * issuer/merchant cannot wipe the cache for everyone.
+     */
+    static invalidateQueryCache(options) {
+        if (options === undefined) {
+            const size = issuerQueryCache.getStats().size;
+            issuerQueryCache.clear();
+            return size;
+        }
+
+        const { assetIssuer, merchantId } = options;
+        let removed = 0;
+        if (merchantId) {
+            if (issuerQueryCache.delete(`health_metrics:${merchantId}`)) removed++;
+        }
+        if (assetIssuer) {
+            if (issuerQueryCache.delete(`issuer_stats:${assetIssuer}`)) removed++;
+        }
+        return removed;
+    }
+
+    static getQueryCacheStats() {
+        return issuerQueryCache.getStats();
     }
 
     static async createOptimizedIndexes() {
-        const NETWORK = (process.env.STELLAR_NETWORK || "testnet").toLowerCase();
-
         const indexes = [
             `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_asset_issuer_status
              ON payments(asset_issuer, status, created_at DESC)
@@ -1094,7 +1473,7 @@ export class AssetIssuerManager {
             expectedAssetCode = null,
             expectedAssetIssuer = null,
             skipCache = false,
-        } = options;
+        } = options ?? {};
 
         return this.errorRecovery.executeWithRecovery(
             () => this.signatureVerifier.verifyOperation(txHash, {
@@ -1137,6 +1516,14 @@ export class AssetIssuerManager {
 
     getDeadLetterQueue() {
         return this.errorRecovery.getDeadLetterQueue();
+    }
+
+    getQueryCacheStats() {
+        return this.queryOptimizer.getQueryCacheStats();
+    }
+
+    invalidateQueryCache(options) {
+        return this.queryOptimizer.invalidateQueryCache(options);
     }
 }
 

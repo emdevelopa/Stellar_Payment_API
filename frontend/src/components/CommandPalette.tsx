@@ -7,6 +7,26 @@ import { useMerchantApiKey } from "@/lib/merchant-store";
 import { ThemeMode, useThemeActions, useThemeState } from "@/lib/theme-context";
 import { toast } from "sonner";
 import { filterPaletteCommands, PaletteCommand } from "@/components/commandPaletteData";
+import { useSwipeToDismiss } from "@/hooks/useSwipeToDismiss";
+
+/**
+ * Window event that opens the palette. Touch devices have no Cmd/Ctrl+K, so
+ * on-screen triggers (e.g. the mobile header search button) dispatch this.
+ */
+export const OPEN_COMMAND_PALETTE_EVENT = "command-palette:open";
+
+export function openCommandPalette() {
+  window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+}
+
+/**
+ * On touch-first devices, focusing the search input on open would pop the
+ * on-screen keyboard over the bottom drawer. There the dialog is focused
+ * instead and the user taps the input when they want to search.
+ */
+function prefersTouchInput() {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
+}
 
 const THEME_CYCLE: ThemeMode[] = ["light", "dark", "system"];
 
@@ -166,6 +186,16 @@ export default function CommandPalette() {
 
   const filtered = useMemo(() => filterPaletteCommands(query), [query]);
 
+  const close = useCallback(() => setOpen(false), []);
+
+  // Swipe down to dismiss the mobile drawer. Disabled in the converter view,
+  // which handles its own swipe-down (back to the command list).
+  const swipe = useSwipeToDismiss({
+    onDismiss: close,
+    enabled: view === "commands",
+    scrollRef: listRef,
+  });
+
   useEffect(() => {
     function handleGlobalKeydown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -174,9 +204,27 @@ export default function CommandPalette() {
       }
     }
 
+    function handleOpenRequest() {
+      setOpen(true);
+    }
+
     window.addEventListener("keydown", handleGlobalKeydown);
-    return () => window.removeEventListener("keydown", handleGlobalKeydown);
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenRequest);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeydown);
+      window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenRequest);
+    };
   }, []);
+
+  // Lock page scroll behind the palette so swipes don't scroll the page.
+  useEffect(() => {
+    if (!open) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -186,7 +234,9 @@ export default function CommandPalette() {
       setExecutingId(null);
       // Store the previously focused element to restore focus on close
       previousActiveElementRef.current = document.activeElement as HTMLElement;
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() =>
+        (prefersTouchInput() ? dialogRef.current : inputRef.current)?.focus(),
+      );
     } else {
       // Restore focus to the previously focused element when dialog closes
       if (previousActiveElementRef.current) {
@@ -378,9 +428,12 @@ export default function CommandPalette() {
   if (!open) return null;
 
   return (
+    // Mobile: bottom drawer. sm and up: centered palette near the top.
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 pt-[15vh] backdrop-blur-sm"
-      onClick={() => setOpen(false)}
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-start sm:pt-[15vh]"
+      style={{ backgroundColor: swipe.offset > 0 ? `rgba(0,0,0,${Math.max(0.2, 0.6 - swipe.offset / 600)})` : undefined }}
+      onClick={close}
+      data-testid="command-palette-backdrop"
     >
       <div
         ref={dialogRef}
@@ -388,9 +441,19 @@ export default function CommandPalette() {
         aria-label="Command palette"
         aria-modal="true"
         aria-describedby="command-description"
-        className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-[#1F1F1F] bg-black shadow-[0_30px_60px_rgba(0,0,0,0.8)] backdrop-blur-xl"
+        tabIndex={-1}
+        data-dragging={swipe.dragging || undefined}
+        style={{ transform: swipe.offset > 0 ? `translate3d(0, ${swipe.offset}px, 0)` : undefined }}
+        className={`flex max-h-[85dvh] w-full flex-col rounded-t-[2rem] border-t border-[#1F1F1F] bg-black pb-[env(safe-area-inset-bottom)] shadow-[0_30px_60px_rgba(0,0,0,0.8)] focus:outline-none motion-safe:animate-palette-drawer-in sm:max-h-none sm:max-w-lg sm:overflow-hidden sm:rounded-[2rem] sm:border sm:pb-0 sm:backdrop-blur-xl sm:motion-safe:animate-none ${
+          // AssetConverter is its own fixed bottom drawer on mobile; a clipping or
+          // backdrop-filtered parent would trap it, so the shell steps aside there.
+          view === "converter"
+            ? "max-sm:border-0 max-sm:bg-transparent max-sm:shadow-none"
+            : "overflow-hidden backdrop-blur-xl"
+        } ${swipe.dragging ? "" : "transition-transform duration-200 ease-out motion-reduce:transition-none"}`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handlePaletteKeydown}
+        {...swipe.handlers}
       >
         {view === "converter" ? (
           <AssetConverter onBack={() => setView("commands")} />
@@ -401,7 +464,20 @@ export default function CommandPalette() {
               Command palette dialog. Use arrow keys to navigate, Enter to select, Escape to close. Tab cycles through focusable elements.
             </span>
 
-            <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
+            {/* Mobile drag handle: swipe down to close */}
+            <div
+              className="flex shrink-0 touch-none justify-center pb-1 pt-3 sm:hidden"
+              data-testid="command-palette-drawer-handle"
+              aria-hidden="true"
+            >
+              <div
+                className={`h-1.5 w-12 rounded-full transition-colors ${
+                  swipe.dragging ? "bg-[#00F5D4]/70" : "bg-white/20"
+                }`}
+              />
+            </div>
+
+            <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
               <svg
                 viewBox="0 0 24 24"
                 className="h-5 w-5 shrink-0 text-[#A0A0A0]"
@@ -420,7 +496,7 @@ export default function CommandPalette() {
                 onChange={(e) => setQuery(e.target.value)}
                 disabled={executingId !== null}
                 placeholder="Type a command..."
-                className="flex-1 bg-transparent font-heading text-sm font-black tracking-widest text-white outline-none placeholder:text-white/10 disabled:opacity-60"
+                className="min-w-0 flex-1 bg-transparent font-heading text-base font-black tracking-widest text-white outline-none placeholder:text-white/10 disabled:opacity-60 sm:text-sm"
                 aria-label="Search commands"
                 aria-activedescendant={filtered.length > 0 ? `cmd-${filtered[activeIndex].id}` : undefined}
                 role="combobox"
@@ -433,9 +509,23 @@ export default function CommandPalette() {
               <kbd className="hidden rounded-lg border border-[#1F1F1F] bg-white/[0.03] px-2 py-1 font-heading text-[10px] font-black text-[#A0A0A0] sm:inline-block">
                 ESC
               </kbd>
+
+              {/* Touch users have no Escape key: give them an explicit close target */}
+              <button
+                type="button"
+                onClick={close}
+                className="inline-flex h-11 shrink-0 items-center rounded-xl px-3 font-heading text-[11px] font-black uppercase tracking-widest text-[#A0A0A0] transition-colors hover:text-white active:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5D4] sm:hidden"
+              >
+                Cancel
+              </button>
             </div>
 
-            <ul id="command-list" ref={listRef} role="listbox" className="max-h-72 overflow-y-auto p-2">
+            <ul
+              id="command-list"
+              ref={listRef}
+              role="listbox"
+              className="min-h-0 flex-1 touch-manipulation overflow-y-auto overscroll-contain p-2 sm:max-h-72 sm:flex-none"
+            >
               {filtered.length === 0 && (
                 <li className="px-3 py-6 text-center text-sm text-slate-500">No matching commands</li>
               )}
@@ -451,10 +541,10 @@ export default function CommandPalette() {
                     aria-selected={index === activeIndex}
                     aria-busy={isExecuting}
                     aria-disabled={executingId !== null && !isExecuting}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
+                    className={`flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
                       executingId !== null && !isExecuting
                         ? "cursor-not-allowed opacity-40"
-                        : "cursor-pointer"
+                        : "cursor-pointer active:scale-[0.99] active:bg-white/10"
                     } ${index === activeIndex ? "bg-accent/10 text-white" : "text-slate-300 hover:bg-white/5"}`}
                     onMouseEnter={() => {
                       if (!executingId) setActiveIndex(index);
@@ -497,7 +587,11 @@ export default function CommandPalette() {
               })}
             </ul>
 
-            <div className="flex items-center gap-4 border-t border-white/10 px-4 py-2">
+            <p className="shrink-0 border-t border-white/10 px-4 py-3 text-center text-[11px] text-slate-500 sm:hidden">
+              Tap a command to run it · swipe down to close
+            </p>
+
+            <div className="hidden items-center gap-4 border-t border-white/10 px-4 py-2 sm:flex">
               <span className="flex items-center gap-1 text-[11px] text-slate-500">
                 <kbd className="rounded border border-white/10 bg-white/5 px-1 py-0.5 font-mono text-[10px]">UP/DOWN</kbd>
                 navigate
@@ -515,5 +609,26 @@ export default function CommandPalette() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * On-screen button that opens the palette. Shown in the dashboard header
+ * below `lg`, where a hardware keyboard (and Cmd/Ctrl+K) is unlikely.
+ */
+export function CommandPaletteTrigger({ className = "" }: { className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={openCommandPalette}
+      aria-haspopup="dialog"
+      aria-label="Open command palette"
+      className={`inline-flex h-10 w-10 touch-manipulation items-center justify-center rounded-xl border border-[#E8E8E8] bg-white text-[#6B6B6B] transition-all hover:border-[#0A0A0A] hover:bg-[#F9F9F9] hover:text-[#0A0A0A] active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A0A0A] ${className}`}
+    >
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+      </svg>
+    </button>
   );
 }

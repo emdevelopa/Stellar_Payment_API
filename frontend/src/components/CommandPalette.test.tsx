@@ -2,7 +2,7 @@ import React from "react";
 import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import CommandPalette from "./CommandPalette";
+import CommandPalette, { CommandPaletteTrigger, openCommandPalette } from "./CommandPalette";
 
 const pushMock = vi.fn();
 const toggleThemeMock = vi.fn();
@@ -51,6 +51,10 @@ function pressGlobalShortcut() {
 async function openPalette() {
   pressGlobalShortcut();
   await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+  // Also wait for the rAF focus, otherwise focus assertions race it.
+  await waitFor(() =>
+    expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true),
+  );
 }
 
 describe("CommandPalette", () => {
@@ -426,5 +430,123 @@ describe("CommandPalette", () => {
       // Should have at least the input and potentially other focusable elements
       expect(focusableElements.length).toBeGreaterThan(0);
     });
+  });
+});
+
+describe("CommandPalette mobile drawer", () => {
+  function swipe(el: Element, fromY: number, toY: number) {
+    fireEvent.touchStart(el, { touches: [{ clientX: 100, clientY: fromY }] });
+    fireEvent.touchMove(el, { touches: [{ clientX: 100, clientY: toY }] });
+    fireEvent.touchEnd(el, { changedTouches: [{ clientX: 100, clientY: toY }] });
+  }
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    document.body.style.overflow = "";
+  });
+
+  it("opens from the on-screen trigger, which has no keyboard shortcut dependency", async () => {
+    render(
+      <>
+        <CommandPaletteTrigger />
+        <CommandPalette />
+      </>,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Open command palette" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+
+    fireEvent.click(trigger);
+    expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
+  });
+
+  it("opens via the openCommandPalette() event helper", async () => {
+    render(<CommandPalette />);
+    act(() => openCommandPalette());
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("renders a drag handle and a Cancel button for touch users", async () => {
+    render(<CommandPalette />);
+    await openPalette();
+
+    expect(screen.getByTestId("command-palette-drawer-handle")).toHaveAttribute("aria-hidden", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("locks page scroll while open and restores it on close", async () => {
+    render(<CommandPalette />);
+    await openPalette();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("swiping down on the drawer dismisses it", async () => {
+    render(<CommandPalette />);
+    await openPalette();
+
+    swipe(screen.getByTestId("command-palette-drawer-handle"), 100, 260);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("follows the finger while dragging and snaps back on a short, slow drag", async () => {
+    render(<CommandPalette />);
+    await openPalette();
+    const dialog = screen.getByRole("dialog");
+    const handle = screen.getByTestId("command-palette-drawer-handle");
+
+    fireEvent.touchStart(handle, { touches: [{ clientX: 100, clientY: 100 }] });
+    fireEvent.touchMove(handle, { touches: [{ clientX: 100, clientY: 130 }] });
+    expect(dialog.style.transform).toContain("30px");
+    expect(dialog).toHaveAttribute("data-dragging", "true");
+
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 2000);
+    fireEvent.touchEnd(handle, { changedTouches: [{ clientX: 100, clientY: 130 }] });
+    nowSpy.mockRestore();
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(dialog.style.transform).toBe("");
+    expect(dialog).not.toHaveAttribute("data-dragging");
+  });
+
+  it("does not dismiss when the command list is scrolled and the user drags down", async () => {
+    render(<CommandPalette />);
+    await openPalette();
+    const list = screen.getByRole("listbox");
+    list.scrollTop = 120;
+
+    swipe(list.querySelector("li")!, 100, 400);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("leaves swipe handling to the converter view instead of closing the palette", async () => {
+    render(<CommandPalette />);
+    await openPalette();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "converter" } });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Enter" });
+    expect(screen.getByText("Asset Converter View")).toBeInTheDocument();
+
+    swipe(screen.getByText("Asset Converter View"), 100, 400);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("focuses the dialog instead of the input on touch devices to keep the keyboard closed", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(pointer: coarse)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(<CommandPalette />);
+    pressGlobalShortcut();
+    const dialog = await screen.findByRole("dialog");
+
+    await waitFor(() => expect(dialog).toHaveFocus());
+    expect(screen.getByRole("combobox")).not.toHaveFocus();
   });
 });

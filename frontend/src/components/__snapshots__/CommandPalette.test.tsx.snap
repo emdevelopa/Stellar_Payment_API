@@ -2,13 +2,30 @@
 
 exports[`CommandPalette > matches its dialog structure for the default (no query) state 1`] = `
 <div
+  aria-describedby="command-description"
   aria-label="Command palette"
   aria-modal="true"
-  class="w-full max-w-lg overflow-hidden rounded-[2rem] border border-[#1F1F1F] bg-black shadow-[0_30px_60px_rgba(0,0,0,0.8)] backdrop-blur-xl"
+  class="flex max-h-[85dvh] w-full flex-col rounded-t-[2rem] border-t border-[#1F1F1F] bg-black pb-[env(safe-area-inset-bottom)] shadow-[0_30px_60px_rgba(0,0,0,0.8)] focus:outline-none motion-safe:animate-palette-drawer-in sm:max-h-none sm:max-w-lg sm:overflow-hidden sm:rounded-[2rem] sm:border sm:pb-0 sm:backdrop-blur-xl sm:motion-safe:animate-none overflow-hidden backdrop-blur-xl transition-transform duration-200 ease-out motion-reduce:transition-none"
   role="dialog"
+  tabindex="-1"
 >
+  <span
+    class="sr-only"
+    id="command-description"
+  >
+    Command palette dialog. Use arrow keys to navigate, Enter to select, Escape to close. Tab cycles through focusable elements.
+  </span>
   <div
-    class="flex items-center gap-3 border-b border-white/10 px-4 py-3"
+    aria-hidden="true"
+    class="flex shrink-0 touch-none justify-center pb-1 pt-3 sm:hidden"
+    data-testid="command-palette-drawer-handle"
+  >
+    <div
+      class="h-1.5 w-12 rounded-full transition-colors bg-white/20"
+    />
+  </div>
+  <div
+    class="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3"
   >
     <svg
       class="h-5 w-5 shrink-0 text-[#A0A0A0]"
@@ -34,7 +51,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-controls="command-list"
       aria-expanded="true"
       aria-label="Search commands"
-      class="flex-1 bg-transparent font-heading text-sm font-black tracking-widest text-white outline-none placeholder:text-white/10 disabled:opacity-60"
+      class="min-w-0 flex-1 bg-transparent font-heading text-base font-black tracking-widest text-white outline-none placeholder:text-white/10 disabled:opacity-60 sm:text-sm"
       placeholder="Type a command..."
       role="combobox"
       type="text"
@@ -45,9 +62,15 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
     >
       ESC
     </kbd>
+    <button
+      class="inline-flex h-11 shrink-0 items-center rounded-xl px-3 font-heading text-[11px] font-black uppercase tracking-widest text-[#A0A0A0] transition-colors hover:text-white active:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5D4] sm:hidden"
+      type="button"
+    >
+      Cancel
+    </button>
   </div>
   <ul
-    class="max-h-72 overflow-y-auto p-2"
+    class="min-h-0 flex-1 touch-manipulation overflow-y-auto overscroll-contain p-2 sm:max-h-72 sm:flex-none"
     id="command-list"
     role="listbox"
   >
@@ -55,7 +78,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="true"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer bg-accent/10 text-white"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 bg-accent/10 text-white"
       id="cmd-dashboard"
       role="option"
     >
@@ -105,7 +128,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-settings"
       role="option"
     >
@@ -150,7 +173,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-docs"
       role="option"
     >
@@ -195,7 +218,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-create-new-payment"
       role="option"
     >
@@ -234,7 +257,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-copy-api-key"
       role="option"
     >
@@ -279,7 +302,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-toggle-theme"
       role="option"
     >
@@ -319,7 +342,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-api-keys"
       role="option"
     >
@@ -364,7 +387,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-webhooks"
       role="option"
     >
@@ -409,7 +432,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-payment-history"
       role="option"
     >
@@ -448,7 +471,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-help-api-guide"
       role="option"
     >
@@ -499,7 +522,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-help-hmac-signatures"
       role="option"
     >
@@ -550,7 +573,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-help-x402-agentic-payments"
       role="option"
     >
@@ -601,7 +624,7 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       aria-busy="false"
       aria-disabled="false"
       aria-selected="false"
-      class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer text-slate-300 hover:bg-white/5"
+      class="flex select-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer active:scale-[0.99] active:bg-white/10 text-slate-300 hover:bg-white/5"
       id="cmd-asset-converter"
       role="option"
     >
@@ -644,8 +667,13 @@ exports[`CommandPalette > matches its dialog structure for the default (no query
       </span>
     </li>
   </ul>
+  <p
+    class="shrink-0 border-t border-white/10 px-4 py-3 text-center text-[11px] text-slate-500 sm:hidden"
+  >
+    Tap a command to run it · swipe down to close
+  </p>
   <div
-    class="flex items-center gap-4 border-t border-white/10 px-4 py-2"
+    class="hidden items-center gap-4 border-t border-white/10 px-4 py-2 sm:flex"
   >
     <span
       class="flex items-center gap-1 text-[11px] text-slate-500"

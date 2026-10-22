@@ -4,6 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import AuthGuard from "@/components/AuthGuard";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import { CommandPaletteTrigger } from "@/components/CommandPalette";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 import PaymentToastListener from "@/components/PaymentToastListener";
 import Sidebar from "@/components/Sidebar";
@@ -63,6 +64,7 @@ export default function AuthenticatedLayout({
               
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 mr-2">
+                  <CommandPaletteTrigger className="lg:hidden" />
                   <NotificationCenter />
                   <LocaleSwitcher className="text-[#0A0A0A] border-none bg-transparent hover:bg-[#F5F5F5] rounded-lg transition-colors p-1" />
                 </div>

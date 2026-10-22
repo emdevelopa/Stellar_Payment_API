@@ -64,6 +64,10 @@ module.exports = {
           from: { transform: "rotate(0deg)" },
           to: { transform: "rotate(360deg)" },
         },
+        "palette-drawer-in": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
       },
       animation: {
         "payment-confirmed": "payment-confirmed 1.2s ease-out forwards",
@@ -72,6 +76,7 @@ module.exports = {
         "onboarding-fade-up": "onboarding-fade-up 0.3s ease-out forwards",
         "onboarding-check-pop": "onboarding-check-pop 0.35s cubic-bezier(0.16,1,0.3,1) forwards",
         "onboarding-spin": "onboarding-spin 0.9s linear infinite",
+        "palette-drawer-in": "palette-drawer-in 0.28s cubic-bezier(0.16,1,0.3,1)",
       },
       backgroundColor: {
         dark: "#000000",

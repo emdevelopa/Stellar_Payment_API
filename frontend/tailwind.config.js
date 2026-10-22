@@ -64,6 +64,14 @@ module.exports = {
           from: { transform: "rotate(0deg)" },
           to: { transform: "rotate(360deg)" },
         },
+        "drawer-in": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
+        "dialog-in": {
+          from: { opacity: "0", transform: "scale(0.96)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
       },
       animation: {
         "payment-confirmed": "payment-confirmed 1.2s ease-out forwards",
@@ -72,6 +80,8 @@ module.exports = {
         "onboarding-fade-up": "onboarding-fade-up 0.3s ease-out forwards",
         "onboarding-check-pop": "onboarding-check-pop 0.35s cubic-bezier(0.16,1,0.3,1) forwards",
         "onboarding-spin": "onboarding-spin 0.9s linear infinite",
+        "drawer-in": "drawer-in 0.28s cubic-bezier(0.16,1,0.3,1)",
+        "dialog-in": "dialog-in 0.2s ease-out",
       },
       backgroundColor: {
         dark: "#000000",

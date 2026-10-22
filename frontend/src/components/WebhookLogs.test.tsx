@@ -22,7 +22,28 @@ vi.mock("@/components/ui/Button", () => ({
 
 vi.mock("./WebhookDetailModal", () => ({
   __esModule: true,
-  default: () => null,
+  default: ({
+    log,
+    onNext,
+    onPrevious,
+    positionLabel,
+  }: {
+    log: { event: string | null } | null;
+    onNext?: () => void;
+    onPrevious?: () => void;
+    positionLabel?: string;
+  }) =>
+    log ? (
+      <div data-testid="detail-stub">
+        <span>{`Viewing ${log.event} (${positionLabel})`}</span>
+        <button type="button" onClick={onPrevious} disabled={!onPrevious}>
+          stub-previous
+        </button>
+        <button type="button" onClick={onNext} disabled={!onNext}>
+          stub-next
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock("@/lib/merchant-store", () => ({
@@ -166,5 +187,47 @@ describe("WebhookLogs", () => {
     const preventDefaultSpy = vi.spyOn(event, "preventDefault");
     row.dispatchEvent(event);
     expect(preventDefaultSpy).toHaveBeenCalled();
+  });
+});
+
+describe("WebhookLogs drawer navigation", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    globalThis.fetch = vi.fn();
+  });
+
+  it("passes next / previous handlers and position to the detail drawer", async () => {
+    const base = {
+      payment_id: "p",
+      status_code: 200,
+      url: "https://example.com/wh",
+      request_payload: {},
+      request_headers: null,
+      response_body: "ok",
+      timestamp: "2026-04-25T09:00:00.000Z",
+    };
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        logs: [
+          { ...base, id: "n1", event: "first.event" },
+          { ...base, id: "n2", event: "second.event" },
+        ],
+      }),
+    });
+
+    render(<WebhookLogs />);
+    await waitFor(() => expect(screen.getByText("first.event")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /first\.event/ }));
+    expect(screen.getByText("Viewing first.event (1 of 2)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "stub-previous" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "stub-next" }));
+    expect(screen.getByText("Viewing second.event (2 of 2)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "stub-next" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "stub-previous" }));
+    expect(screen.getByText("Viewing first.event (1 of 2)")).toBeInTheDocument();
   });
 });

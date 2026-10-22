@@ -96,6 +96,15 @@ export default function WebhookLogs() {
     return () => controller.abort();
   }, [apiKey, hydrated]);
 
+  // Index of the open log, used for next / previous navigation in the drawer.
+  const viewingIndex = viewingLog ? logs.findIndex((log) => log.id === viewingLog.id) : -1;
+  const showPreviousLog =
+    viewingIndex > 0 ? () => setViewingLog(logs[viewingIndex - 1]) : undefined;
+  const showNextLog =
+    viewingIndex >= 0 && viewingIndex < logs.length - 1
+      ? () => setViewingLog(logs[viewingIndex + 1])
+      : undefined;
+
   const retryableLogs = logs.filter(isRetryable);
   const allRetryableSelected =
     retryableLogs.length > 0 && retryableLogs.every((log) => selectedLogIds.includes(log.id));
@@ -252,7 +261,8 @@ export default function WebhookLogs() {
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          {/* touch-manipulation removes the tap delay; active state gives tap feedback on touch screens */}
+          <tbody className="touch-manipulation divide-y divide-white/5 [&>tr:active]:bg-white/10">
             {logs.map((log) => {
               const retryable = isRetryable(log);
               const selected = selectedLogIds.includes(log.id);
@@ -312,6 +322,9 @@ export default function WebhookLogs() {
         isOpen={!!viewingLog}
         onClose={() => setViewingLog(null)}
         log={viewingLog}
+        onPrevious={showPreviousLog}
+        onNext={showNextLog}
+        positionLabel={viewingIndex >= 0 ? `${viewingIndex + 1} of ${logs.length}` : undefined}
       />
     </div>
   );

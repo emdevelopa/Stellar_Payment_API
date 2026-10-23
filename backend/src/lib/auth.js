@@ -4,6 +4,7 @@ import {
   reserveApiGatewaySignature,
   verifyApiGatewayRequestSignature,
 } from "./api-gateway-signature.js";
+import { resolveSignatureToleranceSeconds } from "./api-gateway-payload-validation.js";
 import { queryWithRetry } from "./db.js";
 
 const SALT_ROUNDS = 12;
@@ -143,9 +144,7 @@ export function createApiKeyAuth({
           secret: apiKey,
           signatureHeader,
           method: req.method,
-          toleranceSeconds: Number(
-            process.env.API_GATEWAY_SIGNATURE_TOLERANCE_SECONDS || 300,
-          ),
+          toleranceSeconds: resolveSignatureToleranceSeconds(),
         });
         if (!reservation.reserved) {
           return res.status(reservation.replay ? 401 : 503).json({

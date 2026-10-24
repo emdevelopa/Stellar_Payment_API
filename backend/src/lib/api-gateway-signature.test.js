@@ -577,3 +577,144 @@ describe("api-gateway-signature", () => {
     });
   });
 });
+
+// ── Payload sanitization & strict validation ────────────────────────────────
+
+describe("api-gateway-signature strict validation", () => {
+  const timestamp = 1713916800;
+  const now = timestamp * 1000;
+
+  function signedParams(overrides = {}) {
+    const base = { method: "POST", path: "/api/payments", body: { amount: 1 }, ...overrides };
+    const signature = signApiGatewayRequest({ secret: VALID_SECRET, timestamp, ...base });
+    return {
+      secret: VALID_SECRET,
+      ...base,
+      timestampHeader: String(timestamp),
+      signatureHeader: `sha256=${signature ?? "a".repeat(64)}`,
+      now,
+    };
+  }
+
+  beforeEach(() => {
+    _resetApiGatewayRateLimitStateForTests();
+    vi.unstubAllEnvs();
+  });
+
+  it("still verifies a normal signed request", () => {
+    expect(verifyApiGatewayRequestSignature(signedParams()).valid).toBe(true);
+  });
+
+  it("rejects a path containing a newline (canonical payload injection)", () => {
+    const result = verifyApiGatewayRequestSignature(
+      signedParams({ path: "/api/payments\nPOST" }),
+    );
+    expect(result).toMatchObject({ valid: false, code: "API_GATEWAY_INVALID_REQUEST" });
+  });
+
+  it("rejects an unsupported HTTP method", () => {
+    const result = verifyApiGatewayRequestSignature({ ...signedParams(), method: "CONNECT" });
+    expect(result).toMatchObject({ valid: false, code: "API_GATEWAY_INVALID_REQUEST" });
+  });
+
+  it("rejects a body carrying a __proto__ key even when the signature is valid", () => {
+    const body = JSON.parse('{"amount":1,"__proto__":{"isAdmin":true}}');
+    // Sign the canonical form directly so the only problem is the body shape.
+    const signature = signApiGatewayRequest({
+      secret: VALID_SECRET, method: "POST", path: "/api/payments", timestamp, body: { amount: 1 },
+    });
+    const result = verifyApiGatewayRequestSignature({
+      ...signedParams(),
+      body,
+      signatureHeader: `sha256=${signature}`,
+    });
+    expect(result).toMatchObject({ valid: false, code: "API_GATEWAY_INVALID_PAYLOAD" });
+  });
+
+  it("rejects NaN so it cannot share a signature with null", () => {
+    const signatureForNull = signApiGatewayRequest({
+      secret: VALID_SECRET, method: "POST", path: "/api/payments", timestamp, body: { amount: null },
+    });
+    const result = verifyApiGatewayRequestSignature({
+      ...signedParams(),
+      body: { amount: NaN },
+      signatureHeader: `sha256=${signatureForNull}`,
+    });
+    expect(result).toMatchObject({ valid: false, code: "API_GATEWAY_INVALID_PAYLOAD" });
+  });
+
+  it("refuses to sign a body that cannot be serialized instead of signing it as empty", () => {
+    const circular = { a: 1 };
+    circular.self = circular;
+    expect(
+      signApiGatewayRequest({ secret: VALID_SECRET, method: "POST", path: "/x", timestamp, body: circular }),
+    ).toBeNull();
+    expect(
+      signApiGatewayRequest({ secret: VALID_SECRET, method: "POST", path: "/x", timestamp, body: { n: BigInt(1) } }),
+    ).toBeNull();
+  });
+
+  it("rejects non-string secrets", () => {
+    const result = verifyApiGatewayRequestSignature({ ...signedParams(), secret: ["x".repeat(32)] });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/secret/);
+  });
+
+  it("does not disable the timestamp window when the tolerance env var is invalid", () => {
+    vi.stubEnv("API_GATEWAY_SIGNATURE_TOLERANCE_SECONDS", "not-a-number");
+    const stale = signedParams();
+    // One day after signing: must be outside the (default 300s) window.
+    const result = verifyApiGatewayRequestSignature({ ...stale, now: now + 86400 * 1000 });
+    expect(result).toMatchObject({ valid: false, reason: expect.stringMatching(/outside the accepted window/) });
+  });
+
+  it("caps an explicitly huge tolerance", () => {
+    const result = verifyApiGatewayRequestSignature({
+      ...signedParams(),
+      now: now + 2 * 3600 * 1000,
+      toleranceSeconds: 10 * 24 * 3600,
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it("sanitizes attacker-controlled header values before logging", async () => {
+    const { logger } = await import("./logger.js");
+    logger.warn.mockClear();
+
+    verifyApiGatewayRequestSignature({
+      ...signedParams(),
+      signatureHeader: "sha256=zz\r\nFAKE LOG LINE",
+      clientIp: "1.2.3.4\nforged",
+    });
+
+    const [fields] = logger.warn.mock.calls.at(-1);
+    expect(fields.signatureHeader).not.toMatch(/[\r\n]/);
+    expect(fields.clientIp).toBe("1.2.3.4?forged");
+  });
+
+  it("only honours the current and previous key during rotation", () => {
+    const thirdKey = "third-key-should-be-ignored-32ch";
+    const signature = signApiGatewayRequest({
+      secret: thirdKey, method: "POST", path: "/api/payments", timestamp, body: {},
+    });
+    const result = verifyApiGatewayRequestSignatureWithRotation({
+      secrets: ["current-secret-at-least-32-chars", "previous-secret-also-32-chars-ok", thirdKey],
+      method: "POST",
+      path: "/api/payments",
+      timestampHeader: String(timestamp),
+      signatureHeader: `sha256=${signature}`,
+      body: {},
+      now,
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it("skips non-string entries in the rotation key list", () => {
+    const params = signedParams({ body: {} });
+    const result = verifyApiGatewayRequestSignatureWithRotation({
+      ...params,
+      secrets: [null, VALID_SECRET],
+    });
+    expect(result).toEqual({ valid: true, keyIndex: 1 });
+  });
+});

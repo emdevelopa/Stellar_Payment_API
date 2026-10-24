@@ -2,8 +2,13 @@ import crypto from "node:crypto";
 import { logger } from "./logger.js";
 import { apiGatewaySignatureCacheSize, apiGatewayReplayBlockedTotal } from "./metrics.js";
 import { connectRedisClient } from "./redis.js";
+import {
+  resolveSignatureToleranceSeconds,
+  sanitizeForLog,
+  validateSignatureBody,
+  validateSignatureRequestParts,
+} from "./api-gateway-payload-validation.js";
 
-const DEFAULT_SIGNATURE_WINDOW_SECONDS = 300;
 // Minimum HMAC secret length to prevent signing with trivially weak keys
 const MIN_SECRET_LENGTH = 16;
 
@@ -243,15 +248,18 @@ function normalizeSignatureHeader(signatureHeader) {
   }
 }
 
+// Fails closed: a body that cannot be serialized (circular, BigInt, …) must
+// never be signed as if it were empty, or any such body would match the
+// signature of an empty request.
 function safeJsonStringify(value) {
+  if (value === undefined) {
+    return "";
+  }
   try {
-    if (value === undefined) {
-      return "";
-    }
     return JSON.stringify(value);
   } catch (err) {
     logger.warn({ err }, "Failed to stringify value for signature");
-    return "";
+    throw new Error("Request body cannot be serialized for signature");
   }
 }
 
@@ -317,7 +325,7 @@ export async function reserveApiGatewaySignature({
     const result = await client.set(
       distributedReplayKey(secret, signatureHeader),
       "1",
-      { NX: true, EX: Math.max(1, Math.ceil(toleranceSeconds)) },
+      { NX: true, EX: Math.max(1, Math.ceil(resolveSignatureToleranceSeconds(toleranceSeconds))) },
     );
 
     if (result !== "OK") {
@@ -361,16 +369,25 @@ export function verifyApiGatewayRequestSignatureWithRotation({
   signatureHeader,
   body,
   now = Date.now(),
-  toleranceSeconds = Number(
-    process.env.API_GATEWAY_SIGNATURE_TOLERANCE_SECONDS || DEFAULT_SIGNATURE_WINDOW_SECONDS,
-  ),
+  toleranceSeconds,
 }) {
   if (!secrets || !Array.isArray(secrets)) {
     return { valid: false, reason: "No secrets provided for signature verification" };
   }
 
-  for (let keyIndex = 0; keyIndex < secrets.length; keyIndex++) {
-    const secret = secrets[keyIndex];
+  // Only the current and previous key are honoured; anything beyond
+  // MAX_KEY_ROTATION_DEPTH would silently widen the set of accepted keys.
+  if (secrets.length > MAX_KEY_ROTATION_DEPTH) {
+    logger.warn(
+      { provided: secrets.length, max: MAX_KEY_ROTATION_DEPTH },
+      "Too many secrets supplied for API gateway key rotation; extra keys ignored",
+    );
+  }
+  const candidateSecrets = secrets.slice(0, MAX_KEY_ROTATION_DEPTH);
+
+  for (let keyIndex = 0; keyIndex < candidateSecrets.length; keyIndex++) {
+    const secret = candidateSecrets[keyIndex];
+    if (typeof secret !== "string") continue;
     const result = verifyApiGatewayRequestSignature({
       secret,
       method,
@@ -404,8 +421,14 @@ export function signApiGatewayRequest({
   body,
 }) {
   try {
-    if (!secret || secret.length < MIN_SECRET_LENGTH || !timestamp) {
+    if (typeof secret !== "string" || secret.length < MIN_SECRET_LENGTH || !timestamp) {
       logger.warn({ secretLength: secret?.length }, "Invalid parameters for signing API gateway request");
+      return null;
+    }
+
+    const bodyCheck = validateSignatureBody(body);
+    if (!bodyCheck.valid) {
+      logger.warn({ reason: bodyCheck.reason, at: bodyCheck.detail }, "Refusing to sign invalid API gateway payload");
       return null;
     }
 
@@ -426,10 +449,12 @@ export function verifyApiGatewayRequestSignature({
   body,
   clientIp,
   now = Date.now(),
-  toleranceSeconds = Number(
-    process.env.API_GATEWAY_SIGNATURE_TOLERANCE_SECONDS || DEFAULT_SIGNATURE_WINDOW_SECONDS,
-  ),
+  toleranceSeconds: rawToleranceSeconds,
 }) {
+  // A NaN / non-positive tolerance would make the window check always pass.
+  const toleranceSeconds = resolveSignatureToleranceSeconds(rawToleranceSeconds);
+  const logIp = sanitizeForLog(clientIp);
+
   // Error recovery #900: Check circuit breaker first
   if (_isCircuitBreakerOpen(now)) {
     logger.warn("API gateway signature verification circuit breaker is open, rejecting request");
@@ -444,7 +469,7 @@ export function verifyApiGatewayRequestSignature({
     // Rate limiting check (issue #897)
     if (clientIp && isApiGatewayRateLimited(clientIp, now)) {
       const rateLimitInfo = getApiGatewayRateLimitInfo(clientIp, now);
-      logger.warn({ clientIp, rateLimitInfo }, "API gateway signature verification rate limit exceeded");
+      logger.warn({ clientIp: logIp, rateLimitInfo }, "API gateway signature verification rate limit exceeded");
       return {
         valid: false,
         reason: "API gateway signature verification rate limit exceeded",
@@ -453,25 +478,49 @@ export function verifyApiGatewayRequestSignature({
       };
     }
 
-    if (!secret || secret.length < MIN_SECRET_LENGTH) {
+    if (typeof secret !== "string" || secret.length < MIN_SECRET_LENGTH) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
-      logger.warn({ secretLength: secret?.length, clientIp }, "Missing or insufficient signature secret");
+      logger.warn({ secretLength: secret?.length, clientIp: logIp }, "Missing or insufficient signature secret");
       return { valid: false, reason: "Missing or insufficient signature secret" };
+    }
+
+    // Strict validation of the request line, headers and body before any of
+    // them is hashed. Bounded checks run first so oversized input is rejected
+    // before regexes or JSON serialization touch it.
+    const inputCheck = validateSignatureRequestParts({ method, path, timestampHeader, signatureHeader });
+    const validation = inputCheck.valid ? validateSignatureBody(body) : inputCheck;
+    if (!validation.valid) {
+      recordApiGatewaySignatureAttempt(clientIp, false, now);
+      _recordCircuitBreakerFailure(now);
+      logger.warn(
+        {
+          clientIp: logIp,
+          method: sanitizeForLog(method),
+          path: sanitizeForLog(path),
+          code: validation.code,
+          at: validation.detail,
+        },
+        `Rejected API gateway request: ${validation.reason}`,
+      );
+      return { valid: false, reason: validation.reason, code: validation.code };
     }
 
     const timestampValue = String(timestampHeader || "").trim();
     if (!/^[0-9]+$/.test(timestampValue)) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
-      logger.warn({ timestampHeader, clientIp }, "Missing or invalid x-api-timestamp header");
+      logger.warn(
+        { timestampHeader: sanitizeForLog(timestampHeader), clientIp: logIp },
+        "Missing or invalid x-api-timestamp header",
+      );
       return { valid: false, reason: "Missing or invalid x-api-timestamp header" };
     }
     const timestamp = Number(timestampValue);
     if (!Number.isSafeInteger(timestamp)) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
-      logger.warn({ clientIp }, "API gateway timestamp exceeds safe integer range");
+      logger.warn({ clientIp: logIp }, "API gateway timestamp exceeds safe integer range");
       return { valid: false, reason: "Missing or invalid x-api-timestamp header" };
     }
 
@@ -479,7 +528,7 @@ export function verifyApiGatewayRequestSignature({
     if (deltaSeconds > toleranceSeconds) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
-      logger.warn({ deltaSeconds, toleranceSeconds, clientIp }, "Request signature timestamp outside accepted window");
+      logger.warn({ deltaSeconds, toleranceSeconds, clientIp: logIp }, "Request signature timestamp outside accepted window");
       return { valid: false, reason: "Request signature timestamp is outside the accepted window" };
     }
 
@@ -487,7 +536,10 @@ export function verifyApiGatewayRequestSignature({
     if (!receivedSignature) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
-      logger.warn({ signatureHeader, clientIp }, "Missing or invalid x-api-signature header");
+      logger.warn(
+        { signatureHeader: sanitizeForLog(signatureHeader), clientIp: logIp },
+        "Missing or invalid x-api-signature header",
+      );
       return { valid: false, reason: "Missing or invalid x-api-signature header" };
     }
 
@@ -502,7 +554,7 @@ export function verifyApiGatewayRequestSignature({
     if (!expected || !signaturesEqual(receivedSignature, expected)) {
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
-      logger.warn({ clientIp, method, path }, "Request signature verification failed");
+      logger.warn({ clientIp: logIp, method: sanitizeForLog(method), path: sanitizeForLog(path) }, "Request signature verification failed");
       return { valid: false, reason: "Request signature verification failed" };
     }
 
@@ -515,7 +567,7 @@ export function verifyApiGatewayRequestSignature({
       recordApiGatewaySignatureAttempt(clientIp, false, now);
       _recordCircuitBreakerFailure(now);
       apiGatewayReplayBlockedTotal.inc();
-      logger.warn({ clientIp, method, path }, "Rejected replayed API gateway signature");
+      logger.warn({ clientIp: logIp, method: sanitizeForLog(method), path: sanitizeForLog(path) }, "Rejected replayed API gateway signature");
       return {
         valid: false,
         reason: "Signature has already been used and cannot be replayed",
@@ -532,7 +584,7 @@ export function verifyApiGatewayRequestSignature({
   } catch (err) {
     // Error recovery #900: Catch unexpected errors and fail gracefully
     _recordCircuitBreakerFailure(now);
-    logger.error({ err, clientIp }, "Unexpected error during API gateway signature verification");
+    logger.error({ err, clientIp: logIp }, "Unexpected error during API gateway signature verification");
     return {
       valid: false,
       reason: "Signature verification encountered an unexpected error",

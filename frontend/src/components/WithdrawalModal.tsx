@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Spinner } from "@/components/ui/Spinner";
-import { useSep24AnchorFlow } from "@/hooks/useSep24AnchorFlow";
+import { useSep24AnchorFlow, SEP24_ERROR_TOAST_ID } from "@/hooks/useSep24AnchorFlow";
 
 export interface WithdrawalModalProps {
   isOpen: boolean;
@@ -105,7 +105,9 @@ export default function WithdrawalModal({
         direction: "withdraw",
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Withdrawal failed");
+      toast.error(err instanceof Error ? err.message : "Withdrawal failed", {
+        id: SEP24_ERROR_TOAST_ID,
+      });
     }
   };
 

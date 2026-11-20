@@ -70,7 +70,8 @@ export function NetworkFeeEstimation({ enabled = true }: NetworkFeeEstimationPro
     return <FeeLoadingSkeleton />;
   }
 
-  if (error) {
+  // Keep showing the last good estimate when a refresh fails; the hook toasts.
+  if (error && !fee) {
     return <FeeErrorState message={t("networkFeeUnavailable")} onRetry={refetch} />;
   }
 

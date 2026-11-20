@@ -8,7 +8,7 @@ import "react-loading-skeleton/dist/skeleton.css";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Spinner";
-import { useSep24AnchorFlow, type Sep24BusyStep } from "@/hooks/useSep24AnchorFlow";
+import { useSep24AnchorFlow, SEP24_ERROR_TOAST_ID, type Sep24BusyStep } from "@/hooks/useSep24AnchorFlow";
 
 interface FiatOnrampModalProps {
   isOpen: boolean;
@@ -68,7 +68,7 @@ export default function FiatOnrampModal({ isOpen, onClose }: FiatOnrampModalProp
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : t("genericError");
-      toast.error(message);
+      toast.error(message, { id: SEP24_ERROR_TOAST_ID });
       setError(message);
     }
   }, [start, anchorDomain, amount, selectedAsset, t]);

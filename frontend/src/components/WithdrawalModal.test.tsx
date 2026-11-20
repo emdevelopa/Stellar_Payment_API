@@ -44,6 +44,7 @@ let mockFlowState = {
 
 vi.mock("@/hooks/useSep24AnchorFlow", () => ({
   useSep24AnchorFlow: () => mockFlowState,
+  SEP24_ERROR_TOAST_ID: "sep24-flow-error",
 }));
 
 describe("WithdrawalModal", () => {
@@ -177,7 +178,7 @@ describe("WithdrawalModal", () => {
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
-        expect(mockToastError).toHaveBeenCalledWith("Network connection error");
+        expect(mockToastError).toHaveBeenCalledWith("Network connection error", expect.objectContaining({ id: "sep24-flow-error" }));
       });
     });
 
@@ -189,7 +190,7 @@ describe("WithdrawalModal", () => {
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
-        expect(mockToastError).toHaveBeenCalledWith("Withdrawal failed");
+        expect(mockToastError).toHaveBeenCalledWith("Withdrawal failed", expect.objectContaining({ id: "sep24-flow-error" }));
       });
     });
   });

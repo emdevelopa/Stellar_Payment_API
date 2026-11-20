@@ -1,6 +1,11 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { useSep24AnchorFlow } from "./useSep24AnchorFlow";
+import { useSep24AnchorFlow, SEP24_ERROR_TOAST_ID } from "./useSep24AnchorFlow";
+
+const mockToastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...args: unknown[]) => mockToastError(...args) },
+}));
 
 const mockGetFreighterPublicKey = vi.fn();
 const mockSignWithFreighter = vi.fn();
@@ -136,5 +141,39 @@ describe("useSep24AnchorFlow", () => {
 
     expect(result.current.step).toBe("IDLE");
     expect(result.current.interactiveUrl).toBeNull();
+  });
+
+  it("shows one deduplicated error toast when the flow fails", async () => {
+    mockAuthenticateWithAnchor.mockRejectedValue(new Error("Failed to fetch"));
+    const { result } = renderHook(() => useSep24AnchorFlow({ networkPassphrase: NETWORK_PASSPHRASE }));
+
+    await act(async () => {
+      await expect(
+        result.current.start({ anchorDomain: "testanchor.stellar.org", assetCode: "USDC", direction: "deposit" }),
+      ).rejects.toThrow("Failed to fetch");
+    });
+
+    expect(mockToastError).toHaveBeenCalledTimes(1);
+    expect(mockToastError).toHaveBeenCalledWith("Failed to fetch", { id: SEP24_ERROR_TOAST_ID });
+    expect(result.current.step).toBe("IDLE");
+  });
+
+  it("rolls back to the previous READY state when a retry fails", async () => {
+    const { result } = renderHook(() => useSep24AnchorFlow({ networkPassphrase: NETWORK_PASSPHRASE }));
+
+    await act(async () => {
+      await result.current.start({ anchorDomain: "testanchor.stellar.org", assetCode: "USDC", direction: "deposit" });
+    });
+    expect(result.current.step).toBe("READY");
+
+    mockInitiateWithdrawal.mockRejectedValue(new Error("Anchor offline"));
+    await act(async () => {
+      await expect(
+        result.current.start({ anchorDomain: "testanchor.stellar.org", assetCode: "USDC", direction: "withdraw" }),
+      ).rejects.toThrow("Anchor offline");
+    });
+
+    expect(result.current.step).toBe("READY");
+    expect(result.current.interactiveUrl).toBe("https://anchor.example/interactive/deposit");
   });
 });

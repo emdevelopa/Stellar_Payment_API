@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
+
+export const NETWORK_FEE_ERROR_TOAST_ID = "network-fee-error";
 
 export interface NetworkFeeData {
   network: string;
@@ -47,10 +50,14 @@ export function useNetworkFee(enabled = true): UseNetworkFeeReturn {
       if (!res.ok) throw new Error("Network fee unavailable");
       const data = (await res.json()) as NetworkFeeResponse;
       setFee(data.network_fee);
+      toast.dismiss(NETWORK_FEE_ERROR_TOAST_ID);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setFee(null);
-      setError("Network fee unavailable right now.");
+      // Keep the last good estimate instead of blanking the UI, and surface
+      // the failure in a single (deduplicated) toast.
+      const message = "Network fee unavailable right now.";
+      setError(message);
+      toast.error(message, { id: NETWORK_FEE_ERROR_TOAST_ID });
     } finally {
       setIsLoading(false);
     }

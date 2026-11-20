@@ -61,6 +61,63 @@ function classifyFreighterError(err: unknown): TransactionSignerError {
   );
 }
 
+// ── Accessibility helpers (WCAG 2.1 AA) ──────────────────────────────────────
+
+/** Screen reader labels for each wallet bridge state. */
+export const FREIGHTER_A11Y_LABELS = {
+  connecting: "Connecting to Freighter wallet. Approve the request in the Freighter popup.",
+  connected: "Freighter wallet connected.",
+  signing: "Waiting for your signature in the Freighter popup.",
+  signed: "Transaction signed.",
+  failed: "Freighter request failed.",
+} as const;
+
+const LIVE_REGION_ID = "freighter-a11y-live-region";
+
+/**
+ * Announce a status message to assistive technology through a visually hidden
+ * polite live region (WCAG 4.1.3 Status Messages). No-op outside the browser.
+ */
+export function announceWalletStatus(
+  message: string,
+  politeness: "polite" | "assertive" = "polite",
+): void {
+  if (typeof document === "undefined") return;
+  let region = document.getElementById(LIVE_REGION_ID);
+  if (!region) {
+    region = document.createElement("div");
+    region.id = LIVE_REGION_ID;
+    region.setAttribute("role", "status");
+    region.setAttribute("aria-atomic", "true");
+    region.style.cssText =
+      "position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;";
+    document.body.appendChild(region);
+  }
+  region.setAttribute("aria-live", politeness);
+  // Clear first so repeating the same message is still announced.
+  region.textContent = "";
+  region.textContent = message;
+}
+
+/**
+ * Run a wallet action and return keyboard focus to the element that started
+ * it. The Freighter popup steals focus, so without this keyboard users land
+ * on <body> afterwards (WCAG 2.4.3 Focus Order).
+ */
+export async function withFocusRestore<T>(action: () => Promise<T>): Promise<T> {
+  const origin =
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  try {
+    return await action();
+  } finally {
+    if (origin && origin.isConnected && origin !== document.body) {
+      origin.focus();
+    }
+  }
+}
+
 /**
  * Check if Freighter wallet is installed (not just allowed).
  * We check for installation separately from permission so the button
@@ -91,6 +148,21 @@ export async function isFreighterAvailable(): Promise<boolean> {
  * Throws a typed TransactionSignerError on any failure.
  */
 export async function getFreighterPublicKey(): Promise<string> {
+  announceWalletStatus(FREIGHTER_A11Y_LABELS.connecting);
+  try {
+    const key = await withFocusRestore(fetchFreighterPublicKey);
+    announceWalletStatus(FREIGHTER_A11Y_LABELS.connected);
+    return key;
+  } catch (err) {
+    announceWalletStatus(
+      `${FREIGHTER_A11Y_LABELS.failed} ${err instanceof Error ? err.message : ""}`.trim(),
+      "assertive",
+    );
+    throw err;
+  }
+}
+
+async function fetchFreighterPublicKey(): Promise<string> {
   const available = await isFreighterAvailable();
   if (!available) {
     throw new TransactionSignerError(
@@ -153,6 +225,7 @@ export async function signWithFreighter(
     );
   }
 
+  announceWalletStatus(FREIGHTER_A11Y_LABELS.signing);
   try {
     const freighter = await loadFreighter();
     const result = await freighter.signTransaction(transactionXDR, {
@@ -172,10 +245,12 @@ export async function signWithFreighter(
     if (!signedXDR) throw new Error("No signed XDR returned from Freighter");
 
     const publicKey = await getFreighterPublicKey();
+    announceWalletStatus(FREIGHTER_A11Y_LABELS.signed);
     return { signedXDR, publicKey };
   } catch (err) {
-    if (err instanceof TransactionSignerError) throw err;
-    throw classifyFreighterError(err);
+    const typed = err instanceof TransactionSignerError ? err : classifyFreighterError(err);
+    announceWalletStatus(`${FREIGHTER_A11Y_LABELS.failed} ${typed.message}`, "assertive");
+    throw typed;
   }
 }
 

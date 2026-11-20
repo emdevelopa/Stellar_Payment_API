@@ -14,7 +14,6 @@ import {
   didWalletAccountSwitch,
   sortSupportedAssetsByBalance,
 } from "@/lib/checkout-balance-sync";
-import { createReceiptPdf } from "@/lib/receipt-pdf";
 import CheckoutQrModal from "@/components/CheckoutQrModal";
 import CopyButton from "@/components/CopyButton";
 import WalletSelector from "@/components/WalletSelector";
@@ -333,16 +332,30 @@ export default function PaymentPage() {
 
   const handleDownloadReceipt = async () => {
     if (!payment) return;
+    // Code-split: the PDF builder is only fetched when a receipt is requested.
+    let downloadReceiptPdf: typeof import("@/lib/receipt-pdf").downloadReceiptPdf;
+    setIsDownloadingReceipt(true); setActionError(null);
     try {
-      setIsDownloadingReceipt(true); setActionError(null);
-      const blob = createReceiptPdf({ merchantName: branding?.merchant_name, paymentId: payment.id, amount: payment.amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 7 }), asset: payment.asset.toUpperCase(), status: t(`status.${payment.status.toLowerCase()}`), date: new Date(payment.created_at).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }), recipient: payment.recipient, transactionHash: payment.tx_id ?? t("receiptHashUnavailable"), description: payment.description });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = buildReceiptFilename(payment.id);
-      document.body.appendChild(a); a.click(); a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(t("receiptDownloaded"));
-    } catch { const msg = t("receiptDownloadFailed"); setActionError(msg); toast.error(msg); }
-    finally { setIsDownloadingReceipt(false); }
+      ({ downloadReceiptPdf } = await import("@/lib/receipt-pdf"));
+    } catch {
+      // Chunk failed to load (offline / flaky network): roll back and offer a retry.
+      const msg = t("receiptDownloadFailed");
+      setIsDownloadingReceipt(false); setActionError(msg);
+      toast.error(msg, { action: { label: "Retry", onClick: () => { void handleDownloadReceipt(); } } });
+      return;
+    }
+    await downloadReceiptPdf(
+      { merchantName: branding?.merchant_name, paymentId: payment.id, amount: payment.amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 7 }), asset: payment.asset.toUpperCase(), status: t(`status.${payment.status.toLowerCase()}`), date: new Date(payment.created_at).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }), recipient: payment.recipient, transactionHash: payment.tx_id ?? t("receiptHashUnavailable"), description: payment.description },
+      buildReceiptFilename(payment.id),
+      {
+        onRollback: () => {
+          const msg = t("receiptDownloadFailed");
+          setIsDownloadingReceipt(false); setActionError(msg);
+          toast.error(msg, { action: { label: "Retry", onClick: () => { void handleDownloadReceipt(); } } });
+        },
+        onSuccess: () => { setIsDownloadingReceipt(false); toast.success(t("receiptDownloaded")); },
+      },
+    );
   };
 
   if (loading) return <LoadingSkeleton />;

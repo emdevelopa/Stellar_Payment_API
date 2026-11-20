@@ -1,5 +1,9 @@
-import * as StellarSdk from "stellar-sdk";
-import * as freighter from "@stellar/freighter-api";
+import type { Transaction, FeeBumpTransaction } from "stellar-sdk";
+
+// Heavy dependencies are loaded on first use so they stay out of the initial
+// bundle for pages that never touch the wallet bridge.
+const loadFreighter = () => import("@stellar/freighter-api");
+const loadStellarSdk = () => import("stellar-sdk");
 
 export interface FreighterSignResponse {
   signedXDR: string;
@@ -121,6 +125,7 @@ export async function withFocusRestore<T>(action: () => Promise<T>): Promise<T> 
  */
 export async function isFreighterInstalled(): Promise<boolean> {
   try {
+    const freighter = await loadFreighter();
     const result = await freighter.isConnected();
     // isConnected returns boolean or { isConnected: boolean }
     if (typeof result === "boolean") return result;
@@ -167,6 +172,7 @@ async function fetchFreighterPublicKey(): Promise<string> {
   }
 
   try {
+    const freighter = await loadFreighter();
     // setAllowed() triggers the Freighter popup asking user to approve the site
     const allowed = await freighter.setAllowed();
     if (!allowed) {
@@ -221,9 +227,10 @@ export async function signWithFreighter(
 
   announceWalletStatus(FREIGHTER_A11Y_LABELS.signing);
   try {
-    const result = await withFocusRestore(() =>
-      freighter.signTransaction(transactionXDR, { networkPassphrase }),
-    );
+    const freighter = await loadFreighter();
+    const result = await freighter.signTransaction(transactionXDR, {
+      networkPassphrase,
+    });
 
     // Handle both string return (old API) and object return (new API)
     let signedXDR: string;
@@ -263,7 +270,8 @@ export async function submitTransaction(
     );
   }
 
-  let signedTx: StellarSdk.Transaction | StellarSdk.FeeBumpTransaction;
+  const StellarSdk = await loadStellarSdk();
+  let signedTx: Transaction | FeeBumpTransaction;
   try {
     signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXDR, networkPassphrase);
   } catch (err) {
@@ -295,5 +303,51 @@ export async function submitTransaction(
       "SUBMISSION_FAILED",
       err,
     );
+  }
+}
+
+/**
+ * Run an optimistic UI update and undo it if the async action fails.
+ * `apply` runs immediately, `rollback` runs when `action` rejects, and
+ * `onError` receives a typed error so callers can show a toast.
+ * The original error is rethrown after rollback.
+ */
+export async function withOptimisticRollback<T>(
+  apply: () => void,
+  rollback: () => void,
+  action: () => Promise<T>,
+  onError?: (err: TransactionSignerError) => void,
+): Promise<T> {
+  apply();
+  try {
+    return await action();
+  } catch (err) {
+    rollback();
+    const typed =
+      err instanceof TransactionSignerError
+        ? err
+        : new TransactionSignerError(
+            err instanceof Error ? err.message : String(err),
+            "UNKNOWN",
+            err,
+          );
+    onError?.(typed);
+    throw typed;
+  }
+}
+
+/** Short, user-facing toast text for each signer error code. */
+export function describeSignerError(err: TransactionSignerError): string {
+  switch (err.code) {
+    case "USER_REJECTED":
+      return "Request cancelled. Nothing was signed.";
+    case "WALLET_UNAVAILABLE":
+      return "Freighter was not found. Install or unlock the extension.";
+    case "NETWORK_MISMATCH":
+      return "Freighter is on a different network than this app.";
+    case "SUBMISSION_FAILED":
+      return "Network error while submitting. Your change was reverted.";
+    default:
+      return "Wallet request failed. Your change was reverted.";
   }
 }

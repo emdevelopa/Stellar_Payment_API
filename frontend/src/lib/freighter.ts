@@ -1,5 +1,9 @@
-import * as StellarSdk from "stellar-sdk";
-import * as freighter from "@stellar/freighter-api";
+import type { Transaction, FeeBumpTransaction } from "stellar-sdk";
+
+// Heavy dependencies are loaded on first use so they stay out of the initial
+// bundle for pages that never touch the wallet bridge.
+const loadFreighter = () => import("@stellar/freighter-api");
+const loadStellarSdk = () => import("stellar-sdk");
 
 export interface FreighterSignResponse {
   signedXDR: string;
@@ -57,6 +61,63 @@ function classifyFreighterError(err: unknown): TransactionSignerError {
   );
 }
 
+// ── Accessibility helpers (WCAG 2.1 AA) ──────────────────────────────────────
+
+/** Screen reader labels for each wallet bridge state. */
+export const FREIGHTER_A11Y_LABELS = {
+  connecting: "Connecting to Freighter wallet. Approve the request in the Freighter popup.",
+  connected: "Freighter wallet connected.",
+  signing: "Waiting for your signature in the Freighter popup.",
+  signed: "Transaction signed.",
+  failed: "Freighter request failed.",
+} as const;
+
+const LIVE_REGION_ID = "freighter-a11y-live-region";
+
+/**
+ * Announce a status message to assistive technology through a visually hidden
+ * polite live region (WCAG 4.1.3 Status Messages). No-op outside the browser.
+ */
+export function announceWalletStatus(
+  message: string,
+  politeness: "polite" | "assertive" = "polite",
+): void {
+  if (typeof document === "undefined") return;
+  let region = document.getElementById(LIVE_REGION_ID);
+  if (!region) {
+    region = document.createElement("div");
+    region.id = LIVE_REGION_ID;
+    region.setAttribute("role", "status");
+    region.setAttribute("aria-atomic", "true");
+    region.style.cssText =
+      "position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;";
+    document.body.appendChild(region);
+  }
+  region.setAttribute("aria-live", politeness);
+  // Clear first so repeating the same message is still announced.
+  region.textContent = "";
+  region.textContent = message;
+}
+
+/**
+ * Run a wallet action and return keyboard focus to the element that started
+ * it. The Freighter popup steals focus, so without this keyboard users land
+ * on <body> afterwards (WCAG 2.4.3 Focus Order).
+ */
+export async function withFocusRestore<T>(action: () => Promise<T>): Promise<T> {
+  const origin =
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  try {
+    return await action();
+  } finally {
+    if (origin && origin.isConnected && origin !== document.body) {
+      origin.focus();
+    }
+  }
+}
+
 /**
  * Check if Freighter wallet is installed (not just allowed).
  * We check for installation separately from permission so the button
@@ -64,6 +125,7 @@ function classifyFreighterError(err: unknown): TransactionSignerError {
  */
 export async function isFreighterInstalled(): Promise<boolean> {
   try {
+    const freighter = await loadFreighter();
     const result = await freighter.isConnected();
     // isConnected returns boolean or { isConnected: boolean }
     if (typeof result === "boolean") return result;
@@ -86,6 +148,21 @@ export async function isFreighterAvailable(): Promise<boolean> {
  * Throws a typed TransactionSignerError on any failure.
  */
 export async function getFreighterPublicKey(): Promise<string> {
+  announceWalletStatus(FREIGHTER_A11Y_LABELS.connecting);
+  try {
+    const key = await withFocusRestore(fetchFreighterPublicKey);
+    announceWalletStatus(FREIGHTER_A11Y_LABELS.connected);
+    return key;
+  } catch (err) {
+    announceWalletStatus(
+      `${FREIGHTER_A11Y_LABELS.failed} ${err instanceof Error ? err.message : ""}`.trim(),
+      "assertive",
+    );
+    throw err;
+  }
+}
+
+async function fetchFreighterPublicKey(): Promise<string> {
   const available = await isFreighterAvailable();
   if (!available) {
     throw new TransactionSignerError(
@@ -95,6 +172,7 @@ export async function getFreighterPublicKey(): Promise<string> {
   }
 
   try {
+    const freighter = await loadFreighter();
     // setAllowed() triggers the Freighter popup asking user to approve the site
     const allowed = await freighter.setAllowed();
     if (!allowed) {
@@ -147,7 +225,9 @@ export async function signWithFreighter(
     );
   }
 
+  announceWalletStatus(FREIGHTER_A11Y_LABELS.signing);
   try {
+    const freighter = await loadFreighter();
     const result = await freighter.signTransaction(transactionXDR, {
       networkPassphrase,
     });
@@ -165,10 +245,12 @@ export async function signWithFreighter(
     if (!signedXDR) throw new Error("No signed XDR returned from Freighter");
 
     const publicKey = await getFreighterPublicKey();
+    announceWalletStatus(FREIGHTER_A11Y_LABELS.signed);
     return { signedXDR, publicKey };
   } catch (err) {
-    if (err instanceof TransactionSignerError) throw err;
-    throw classifyFreighterError(err);
+    const typed = err instanceof TransactionSignerError ? err : classifyFreighterError(err);
+    announceWalletStatus(`${FREIGHTER_A11Y_LABELS.failed} ${typed.message}`, "assertive");
+    throw typed;
   }
 }
 
@@ -188,7 +270,8 @@ export async function submitTransaction(
     );
   }
 
-  let signedTx: StellarSdk.Transaction | StellarSdk.FeeBumpTransaction;
+  const StellarSdk = await loadStellarSdk();
+  let signedTx: Transaction | FeeBumpTransaction;
   try {
     signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXDR, networkPassphrase);
   } catch (err) {
@@ -220,5 +303,51 @@ export async function submitTransaction(
       "SUBMISSION_FAILED",
       err,
     );
+  }
+}
+
+/**
+ * Run an optimistic UI update and undo it if the async action fails.
+ * `apply` runs immediately, `rollback` runs when `action` rejects, and
+ * `onError` receives a typed error so callers can show a toast.
+ * The original error is rethrown after rollback.
+ */
+export async function withOptimisticRollback<T>(
+  apply: () => void,
+  rollback: () => void,
+  action: () => Promise<T>,
+  onError?: (err: TransactionSignerError) => void,
+): Promise<T> {
+  apply();
+  try {
+    return await action();
+  } catch (err) {
+    rollback();
+    const typed =
+      err instanceof TransactionSignerError
+        ? err
+        : new TransactionSignerError(
+            err instanceof Error ? err.message : String(err),
+            "UNKNOWN",
+            err,
+          );
+    onError?.(typed);
+    throw typed;
+  }
+}
+
+/** Short, user-facing toast text for each signer error code. */
+export function describeSignerError(err: TransactionSignerError): string {
+  switch (err.code) {
+    case "USER_REJECTED":
+      return "Request cancelled. Nothing was signed.";
+    case "WALLET_UNAVAILABLE":
+      return "Freighter was not found. Install or unlock the extension.";
+    case "NETWORK_MISMATCH":
+      return "Freighter is on a different network than this app.";
+    case "SUBMISSION_FAILED":
+      return "Network error while submitting. Your change was reverted.";
+    default:
+      return "Wallet request failed. Your change was reverted.";
   }
 }

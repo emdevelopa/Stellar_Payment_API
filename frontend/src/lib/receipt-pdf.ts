@@ -302,3 +302,50 @@ export function createReceiptPdf(data: ReceiptPdfData): Blob {
 
   return new Blob([pdf], { type: "application/pdf" });
 }
+
+// ── Download with optimistic state + rollback ────────────────────────────────
+
+export interface ReceiptDownloadHooks {
+  /** Called immediately, before any work, so the UI can show a pending state. */
+  onOptimistic?: () => void;
+  /** Called when the download fails so the UI can undo the optimistic state. */
+  onRollback?: (error: Error) => void;
+  /** Called after the browser has been handed the file. */
+  onSuccess?: () => void;
+}
+
+/**
+ * Builds the receipt PDF and triggers a browser download. The optimistic hook
+ * fires first; any failure (build, object URL, or DOM click) triggers the
+ * rollback hook exactly once and resolves to `false` instead of throwing, so
+ * callers can surface a toast without a try/catch.
+ */
+export async function downloadReceiptPdf(
+  data: ReceiptPdfData,
+  filename: string,
+  hooks: ReceiptDownloadHooks = {},
+): Promise<boolean> {
+  hooks.onOptimistic?.();
+  let url: string | null = null;
+  try {
+    const blob = createReceiptPdf(data);
+    url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    hooks.onSuccess?.();
+    return true;
+  } catch (err) {
+    hooks.onRollback?.(err instanceof Error ? err : new Error(String(err)));
+    return false;
+  } finally {
+    if (url) {
+      const toRevoke = url;
+      setTimeout(() => URL.revokeObjectURL(toRevoke), 1000);
+    }
+  }
+}

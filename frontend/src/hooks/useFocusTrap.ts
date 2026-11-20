@@ -19,10 +19,18 @@ interface UseFocusTrapOptions {
    */
   onEscape?: () => void;
   /**
-   * Element to focus when the trap is disabled.
-   * Defaults to the element that had focus when the trap was enabled.
+   * Whether to return focus to the element that had it when the trap was
+   * enabled, once the trap is disabled or the component unmounts.
+   * Defaults to true (WCAG 2.4.3 Focus Order).
    */
   returnFocusOnDeactivate?: boolean;
+  /**
+   * Move focus to the container itself, instead of its first focusable
+   * element, when the trap is enabled. The container needs `tabIndex={-1}`.
+   * Use this for dialogs so a screen reader announces the dialog's name and
+   * description before any control (#1839). Defaults to false.
+   */
+  focusContainerOnActivate?: boolean;
 }
 
 /**
@@ -70,7 +78,12 @@ const FOCUSABLE_ELEMENTS = [
 export function useFocusTrap<T extends HTMLElement = HTMLElement>(
   options: UseFocusTrapOptions
 ) {
-  const { enabled, onEscape, returnFocusOnDeactivate = true } = options;
+  const {
+    enabled,
+    onEscape,
+    returnFocusOnDeactivate = true,
+    focusContainerOnActivate = false,
+  } = options;
   const containerRef = useRef<T>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
@@ -96,21 +109,37 @@ export function useFocusTrap<T extends HTMLElement = HTMLElement>(
     (event: KeyboardEvent) => {
       if (!enabled || event.key !== 'Tab') return;
 
+      const container = containerRef.current;
       const focusableElements = getFocusableElements();
-      if (focusableElements.length === 0) return;
+      if (focusableElements.length === 0) {
+        // Nothing to tab to: keep focus on the container rather than let it leave.
+        event.preventDefault();
+        container?.focus();
+        return;
+      }
 
       const firstElement = focusableElements[0];
       const lastElement = focusableElements[focusableElements.length - 1];
+      const active = document.activeElement;
+
+      // Focus is on the container itself (it has tabindex="-1"), or has somehow left
+      // it: Shift+Tab goes to the last control, Tab to the first, so focus can never
+      // escape to the page behind a modal.
+      if (!active || active === container || !container?.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? lastElement : firstElement).focus();
+        return;
+      }
 
       // Shift + Tab on first element -> focus last
-      if (event.shiftKey && document.activeElement === firstElement) {
+      if (event.shiftKey && active === firstElement) {
         event.preventDefault();
         lastElement.focus();
         return;
       }
 
       // Tab on last element -> focus first
-      if (!event.shiftKey && document.activeElement === lastElement) {
+      if (!event.shiftKey && active === lastElement) {
         event.preventDefault();
         firstElement.focus();
         return;
@@ -133,36 +162,37 @@ export function useFocusTrap<T extends HTMLElement = HTMLElement>(
   );
 
   /**
-   * Set up focus trap when enabled.
+   * Activate the trap: remember where focus was, move it into the container, and give
+   * it back when the trap is disabled or the component unmounts.
+   *
+   * Restoring in this effect's cleanup (keyed on `enabled`) matters for components that
+   * stay mounted while closed, such as a dialog that returns `null` when `isOpen` is
+   * false. Restoring only on unmount would leave focus lost after the dialog closes.
    */
   useEffect(() => {
     if (!enabled) return;
 
     // Store the currently focused element to return focus later
-    previousActiveElement.current = document.activeElement as HTMLElement;
+    previousActiveElement.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
-    // Focus the first focusable element in the container
-    const focusableElements = getFocusableElements();
-    if (focusableElements.length > 0) {
-      // Small delay to ensure the container is rendered and positioned
-      const timer = setTimeout(() => {
-        focusableElements[0].focus();
-      }, 10);
-
-      return () => clearTimeout(timer);
-    }
-  }, [enabled, getFocusableElements]);
-
-  /**
-   * Return focus when trap is deactivated.
-   */
-  useEffect(() => {
-    return () => {
-      if (returnFocusOnDeactivate && previousActiveElement.current) {
-        previousActiveElement.current.focus();
+    // Small delay to ensure the container is rendered and positioned
+    const timer = setTimeout(() => {
+      if (focusContainerOnActivate) {
+        containerRef.current?.focus();
+        return;
       }
+      getFocusableElements()[0]?.focus();
+    }, 10);
+
+    return () => {
+      clearTimeout(timer);
+      if (returnFocusOnDeactivate) {
+        previousActiveElement.current?.focus();
+      }
+      previousActiveElement.current = null;
     };
-  }, [returnFocusOnDeactivate]);
+  }, [enabled, focusContainerOnActivate, returnFocusOnDeactivate, getFocusableElements]);
 
   /**
    * Set up keyboard event listeners.

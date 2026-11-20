@@ -282,6 +282,8 @@
   },
   "walletSelector": {
     "chooseWallet": "Escolha uma carteira",
+    "connectWallet": "Conectar carteira",
+    "closeWalletSelector": "Fechar seletor de carteira",
     "description": "Conecte sua carteira Stellar para concluir este pagamento.",
     "connecting": "Conectando...",
     "walletConnectWaiting": "Aguardando a carteira...",

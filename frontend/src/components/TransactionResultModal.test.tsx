@@ -15,17 +15,25 @@ type MotionProps = React.HTMLAttributes<HTMLDivElement> & {
   animate?: unknown;
   exit?: unknown;
 };
-vi.mock("framer-motion", () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  motion: {
-    div: ({ initial, animate, exit, ...rest }: MotionProps) => {
-      void initial;
-      void animate;
-      void exit;
-      return <div {...rest} />;
+// `motion.div` forwards its ref, as the real one does: the dialog's focus trap needs it.
+vi.mock("framer-motion", async () => {
+  const { forwardRef } = await import("react");
+  return {
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    MotionConfig: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    motion: {
+      div: forwardRef<HTMLDivElement, MotionProps>(function MotionDiv(
+        { initial, animate, exit, ...rest },
+        ref,
+      ) {
+        void initial;
+        void animate;
+        void exit;
+        return <div ref={ref} {...rest} />;
+      }),
     },
-  },
-}));
+  };
+});
 
 const TX_HASH = "0123456789abcdef".repeat(4);
 const EXPLORER_URL = `https://stellar.expert/explorer/testnet/tx/${TX_HASH}`;
@@ -112,7 +120,8 @@ describe("TransactionResultModal rendering", () => {
   it("links to the transaction on Stellar Expert in a new, isolated tab", () => {
     renderModal();
 
-    const link = screen.getByRole("link", { name: "View on Stellar Expert" });
+    // The accessible name says it opens a new tab, so the surprise is announced.
+    const link = screen.getByRole("link", { name: "View on Stellar Expert (opens in a new tab)" });
     expect(link).toHaveAttribute("href", EXPLORER_URL);
     expect(link).toHaveAttribute("target", "_blank");
     expect(link.getAttribute("rel")).toContain("noopener");
@@ -284,5 +293,223 @@ describe("TransactionResultModal copy link", () => {
     unmount();
 
     expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+  });
+});
+
+describe("TransactionResultModal accessibility (WCAG 2.1 AA, #1839)", () => {
+  const originalOffsetParent = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetParent");
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // jsdom does no layout, so offsetParent is always null and the focus trap's "is this
+    // visible" check would exclude every control. Every attached element counts as visible.
+    Object.defineProperty(HTMLElement.prototype, "offsetParent", {
+      configurable: true,
+      get() {
+        return this.parentNode;
+      },
+    });
+  });
+
+  afterEach(() => {
+    if (originalOffsetParent) {
+      Object.defineProperty(HTMLElement.prototype, "offsetParent", originalOffsetParent);
+    } else {
+      delete (HTMLElement.prototype as { offsetParent?: unknown }).offsetParent;
+    }
+  });
+
+  const settle = () => act(() => void vi.advanceTimersByTime(10));
+  const pressTab = (shift = false) =>
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Tab", shiftKey: shift });
+
+  /** A trigger and the modal it opens, the way a page uses them. */
+  function Page() {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>Open receipt</button>
+        <TransactionResultModal
+          isOpen={open}
+          onClose={() => setOpen(false)}
+          txHash={TX_HASH}
+          amount="25.5"
+          assetCode="USDC"
+          recipientDisplayName="Ada"
+        />
+      </>
+    );
+  }
+
+  describe("dialog semantics", () => {
+    it("is modal, so assistive technology ignores the page behind it", () => {
+      renderModal();
+
+      expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
+    });
+
+    it("is described by the sentence saying what was sent and to whom", () => {
+      renderModal();
+
+      expect(screen.getByRole("dialog")).toHaveAccessibleDescription("Sent 25.5 USDC to Ada");
+    });
+
+    it("hides the decorative backdrop and every icon from assistive technology", () => {
+      const { container } = renderModal();
+
+      expect(container.querySelector(".bg-black\\/60")).toHaveAttribute("aria-hidden", "true");
+      expect(container.querySelectorAll("svg:not([aria-hidden='true'])")).toHaveLength(0);
+    });
+  });
+
+  describe("focus management", () => {
+    it("moves focus to the dialog when it opens, so its name and description are announced first", () => {
+      renderModal();
+      settle();
+
+      expect(screen.getByRole("dialog")).toHaveFocus();
+    });
+
+    it("keeps Tab inside the dialog, wrapping from the last control to the first", () => {
+      renderModal();
+      settle();
+      screen.getByRole("button", { name: "Done" }).focus();
+
+      const notPrevented = pressTab();
+
+      expect(notPrevented).toBe(false);
+      expect(screen.getByRole("button", { name: "Close dialog" })).toHaveFocus();
+    });
+
+    it("keeps Shift+Tab inside the dialog, wrapping from the dialog to the last control", () => {
+      renderModal();
+      settle();
+
+      pressTab(true);
+
+      expect(screen.getByRole("button", { name: "Done" })).toHaveFocus();
+    });
+
+    it("closes on Escape even when focus is not inside the dialog", () => {
+      renderModal();
+      settle();
+      (document.activeElement as HTMLElement).blur();
+
+      fireEvent.keyDown(document.body, { key: "Escape" });
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not listen for Escape while closed", () => {
+      renderModal({ isOpen: false });
+
+      fireEvent.keyDown(document.body, { key: "Escape" });
+
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it("returns focus to the control that opened it when it closes", () => {
+      render(<Page />);
+      const opener = screen.getByRole("button", { name: "Open receipt" });
+      opener.focus();
+
+      fireEvent.click(opener);
+      settle();
+      expect(screen.getByRole("dialog")).toHaveFocus();
+
+      fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(opener).toHaveFocus();
+    });
+
+    it("returns focus to the opener after closing with the Done button too", () => {
+      render(<Page />);
+      const opener = screen.getByRole("button", { name: "Open receipt" });
+      opener.focus();
+      fireEvent.click(opener);
+      settle();
+
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+      expect(opener).toHaveFocus();
+    });
+  });
+
+  describe("screen reader labels", () => {
+    it("exposes the full transaction hash to screen readers and hides the shortened one", () => {
+      renderModal();
+
+      expect(screen.getByText(TX_HASH)).toHaveClass("sr-only");
+      expect(screen.getByText("01234567...89abcdef")).toHaveAttribute("aria-hidden", "true");
+    });
+
+    it("groups the hash under its visible label", () => {
+      renderModal();
+
+      expect(screen.getByRole("group", { name: "Transaction Hash" })).toBeInTheDocument();
+    });
+
+    it("announces that the explorer link opens in a new tab", () => {
+      renderModal();
+
+      expect(screen.getByRole("link")).toHaveAccessibleName(/opens in a new tab/);
+    });
+
+    it("has a polite live region that is empty until something is copied", () => {
+      renderModal();
+
+      const status = screen.getByRole("status");
+      expect(status).toHaveAttribute("aria-live", "polite");
+      expect(status).toBeEmptyDOMElement();
+    });
+
+    it("announces a successful copy", async () => {
+      renderModal();
+
+      fireEvent.click(copyButton());
+      await flush();
+
+      expect(screen.getByRole("status")).toHaveTextContent("Link copied to clipboard.");
+    });
+
+    it("announces a failed copy, so the failure is not only a toast outside the dialog", async () => {
+      setClipboard(vi.fn().mockRejectedValue(new Error("denied")));
+      renderModal();
+
+      fireEvent.click(copyButton());
+      await flush();
+
+      expect(screen.getByRole("status")).toHaveTextContent(/Couldn't copy the link/);
+    });
+
+    it("clears the announcement when the confirmation reverts", async () => {
+      renderModal();
+      fireEvent.click(copyButton());
+      await flush();
+      expect(screen.getByRole("status")).toHaveTextContent("Link copied");
+
+      act(() => void vi.advanceTimersByTime(2000));
+
+      expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    });
+  });
+
+  describe("visible keyboard focus", () => {
+    it.each([
+      ["button", "Close dialog"],
+      ["button", COPY_LABEL],
+      ["button", "Done"],
+    ])("gives the %s %j a visible focus ring", (_kind, name) => {
+      renderModal();
+
+      expect(screen.getByRole("button", { name })).toHaveClass("focus-visible:ring-2");
+    });
+
+    it("gives the explorer link a visible focus ring", () => {
+      renderModal();
+
+      expect(screen.getByRole("link")).toHaveClass("focus-visible:ring-2");
+    });
   });
 });

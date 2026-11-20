@@ -17,6 +17,7 @@ import {
 import CheckoutQrModal from "@/components/CheckoutQrModal";
 import CopyButton from "@/components/CopyButton";
 import WalletSelector from "@/components/WalletSelector";
+import WalletSelectorDrawer from "@/components/WalletSelectorDrawer";
 import { toast } from "sonner";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -618,7 +619,15 @@ export default function PaymentPage() {
                       </button>
                     </>
                   ) : (
-                    <WalletSelector networkPassphrase={process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015"} onConnected={() => { }} />
+                    <>
+                      {/* Phones get a "Connect wallet" button that opens a drawer; from sm up the picker stays inline. */}
+                      <div className="sm:hidden">
+                        <WalletSelectorDrawer networkPassphrase={process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015"} onConnected={() => { }} />
+                      </div>
+                      <div className="hidden sm:block">
+                        <WalletSelector networkPassphrase={process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015"} onConnected={() => { }} />
+                      </div>
+                    </>
                   )}
                 </div>
               )}

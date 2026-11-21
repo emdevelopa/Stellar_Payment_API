@@ -276,6 +276,8 @@
   },
   "walletSelector": {
     "chooseWallet": "Choisissez un portefeuille",
+    "connectWallet": "Connecter le portefeuille",
+    "closeWalletSelector": "Fermer le sélecteur de portefeuille",
     "description": "Connectez votre portefeuille Stellar pour finaliser ce paiement.",
     "connecting": "Connexion...",
     "walletConnectWaiting": "En attente du portefeuille...",

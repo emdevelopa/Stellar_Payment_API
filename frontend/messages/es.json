@@ -282,6 +282,8 @@
   },
   "walletSelector": {
     "chooseWallet": "Elige una billetera",
+    "connectWallet": "Conectar billetera",
+    "closeWalletSelector": "Cerrar selector de billetera",
     "description": "Conecta tu billetera Stellar para completar este pago.",
     "connecting": "Conectando...",
     "walletConnectWaiting": "Esperando la billetera...",

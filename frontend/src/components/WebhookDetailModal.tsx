@@ -17,6 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import CopyButton from "./CopyButton";
 
@@ -138,6 +139,10 @@ export default function WebhookDetailModal({
     setDragging(false);
     setDragY(0);
     setDragX(0);
+  }, []);
+
+  const handleReplayAction = useCallback(() => {
+    toast.error("Replay failed. Rolled back optimistic state.");
   }, []);
 
   // Keyboard: Escape closes, arrows navigate, Tab is trapped in the dialog.

@@ -93,7 +93,7 @@ export default function WebhookHealthIndicator({
   };
 
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-center gap-2.5" role="status" aria-live="polite" tabIndex={0}>
       <div className="relative flex h-2 w-2">
         <div
           className={`h-full w-full rounded-full ${getStatusColor()}`}

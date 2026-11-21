@@ -296,7 +296,19 @@
     "extensionNotFound": "Ce portefeuille est introuvable sur cet appareil. Installez l'extension et réessayez.",
     "noAccountFound": "Votre portefeuille est connecté, mais aucun compte Stellar n'a été renvoyé. Ouvrez un compte Stellar dans le portefeuille et réessayez.",
     "walletConnectFailed": "Impossible de finaliser la connexion WalletConnect. Veuillez réessayer.",
-    "connectionFailed": "Impossible de se connecter à ce portefeuille pour le moment. Veuillez réessayer."
+    "connectionFailed": "Impossible de se connecter à ce portefeuille pour le moment. Veuillez réessayer.",
+    "networkFailure": "Impossible de joindre le réseau. Le choix du portefeuille a été annulé. Vérifiez votre connexion et réessayez.",
+    "networkFailureHint": "Aucun portefeuille n'a été connecté.",
+    "reverted": "Choix annulé",
+    "subtitleFreighter": "Portefeuille d'extension de navigateur",
+    "subtitleXbull": "Extension de navigateur xBull",
+    "subtitleAlbedo": "Portefeuille web, sans extension",
+    "subtitleWalletConnect": "Portefeuilles mobiles et de bureau",
+    "walletListLabel": "Portefeuilles disponibles",
+    "installFreighter": "Vous n'avez pas Freighter ? Installez-le",
+    "opensNewTab": "(s'ouvre dans un nouvel onglet)",
+    "checkingAvailability": "Vérification de la disponibilité…",
+    "qrLabel": "QR code d'appairage WalletConnect"
   },
   "support": {
     "panelAriaLabel": "Panneau d'aide et d'assistance",

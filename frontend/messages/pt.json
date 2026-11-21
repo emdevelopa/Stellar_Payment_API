@@ -817,6 +817,19 @@
       "toSyncLabel": "Atualizando data final…"
     }
   },
+  "userNav": {
+    "openMenu": "Abrir menu da conta",
+    "closeMenu": "Fechar menu da conta",
+    "menuTitle": "Conta",
+    "menuDescription": "Conta autenticada, organização e ações da sessão.",
+    "organization": "Organização",
+    "sessionNavigation": "Navegação da sessão",
+    "dashboard": "Painel",
+    "accountSettings": "Configurações da conta",
+    "supportCenter": "Central de suporte",
+    "signOut": "Sair",
+    "swipeHint": "Deslize para baixo para fechar"
+  },
   "dashboardShell": {
     "openNavigationMenu": "Abrir menu de navegação"
   }

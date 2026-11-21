@@ -817,6 +817,19 @@
       "toSyncLabel": "Updating end date…"
     }
   },
+  "userNav": {
+    "openMenu": "Open account menu",
+    "closeMenu": "Close account menu",
+    "menuTitle": "Account",
+    "menuDescription": "Signed-in account, organization, and session actions.",
+    "organization": "Organization",
+    "sessionNavigation": "Session navigation",
+    "dashboard": "Dashboard",
+    "accountSettings": "Account Settings",
+    "supportCenter": "Support Center",
+    "signOut": "Sign Out",
+    "swipeHint": "Swipe down to close"
+  },
   "dashboardShell": {
     "openNavigationMenu": "Open navigation menu"
   }

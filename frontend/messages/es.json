@@ -817,6 +817,19 @@
       "toSyncLabel": "Actualizando fecha de fin…"
     }
   },
+  "userNav": {
+    "openMenu": "Abrir menú de cuenta",
+    "closeMenu": "Cerrar menú de cuenta",
+    "menuTitle": "Cuenta",
+    "menuDescription": "Cuenta iniciada, organización y acciones de sesión.",
+    "organization": "Organización",
+    "sessionNavigation": "Navegación de sesión",
+    "dashboard": "Panel",
+    "accountSettings": "Configuración de la cuenta",
+    "supportCenter": "Centro de soporte",
+    "signOut": "Cerrar sesión",
+    "swipeHint": "Desliza hacia abajo para cerrar"
+  },
   "dashboardShell": {
     "openNavigationMenu": "Abrir menú de navegación"
   }

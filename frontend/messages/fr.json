@@ -200,7 +200,13 @@
       "7D": "7 jours",
       "30D": "30 jours",
       "1Y": "1 an"
-    }
+    },
+    "heatmapKeyboardHint": "Utilisez les flèches pour naviguer, Entrée pour inspecter, Échap pour fermer",
+    "heatmapDrawerTitle": "Détails du jour",
+    "heatmapDrawerDate": "Date",
+    "heatmapDrawerCount": "Activité",
+    "heatmapDrawerClose": "Fermer les détails",
+    "heatmapDrawerHint": "Balayez vers le bas ou appuyez sur Échap pour fermer"
   },
   "paymentsPage": {
     "title": "Historique des paiements",
@@ -810,6 +816,19 @@
       "fromSyncLabel": "Mise à jour de la date de début…",
       "toSyncLabel": "Mise à jour de la date de fin…"
     }
+  },
+  "userNav": {
+    "openMenu": "Ouvrir le menu du compte",
+    "closeMenu": "Fermer le menu du compte",
+    "menuTitle": "Compte",
+    "menuDescription": "Compte connecté, organisation et actions de session.",
+    "organization": "Organisation",
+    "sessionNavigation": "Navigation de session",
+    "dashboard": "Tableau de bord",
+    "accountSettings": "Paramètres du compte",
+    "supportCenter": "Centre d'assistance",
+    "signOut": "Se déconnecter",
+    "swipeHint": "Balayez vers le bas pour fermer"
   },
   "dashboardShell": {
     "openNavigationMenu": "Ouvrir le menu de navigation"

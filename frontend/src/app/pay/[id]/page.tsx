@@ -14,13 +14,15 @@ import {
   didWalletAccountSwitch,
   sortSupportedAssetsByBalance,
 } from "@/lib/checkout-balance-sync";
-import CheckoutQrModal from "@/components/CheckoutQrModal";
+import dynamic from "next/dynamic";
+import LazyQRCodeSVG from "@/components/LazyQRCodeSVG";
+// Only needed once the payer opens it, so it is not part of the first load (#1852).
+const CheckoutQrModal = dynamic(() => import("@/components/CheckoutQrModal"), { ssr: false });
 import CopyButton from "@/components/CopyButton";
 import WalletSelector from "@/components/WalletSelector";
 import { toast } from "sonner";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
-import { QRCodeSVG } from "qrcode.react";
 import { localeToLanguageTag } from "@/i18n/config";
 import { useCheckoutPresence } from "@/lib/useCheckoutPresence";
 import { Modal } from "@/components/ui/Modal";
@@ -494,7 +496,7 @@ export default function PaymentPage() {
                 <DetailRow label={t("scanToPay")}>
                   <div className="flex items-center gap-4 rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] p-4">
                     <div className="rounded-lg border border-[#E8E8E8] bg-white p-2 shrink-0 transition-transform hover:scale-105 active:scale-95 duration-200">
-                      <QRCodeSVG
+                      <LazyQRCodeSVG
                         value={paymentIntentUri}
                         size={256}
                         level="H"
@@ -673,7 +675,9 @@ export default function PaymentPage() {
         </div>
       </main>
 
-      <CheckoutQrModal isOpen={showQrModal} onClose={() => setShowQrModal(false)} qrValue={paymentIntentUri} paymentId={payment.id} />
+      {showQrModal && (
+        <CheckoutQrModal isOpen onClose={() => setShowQrModal(false)} qrValue={paymentIntentUri} paymentId={payment.id} />
+      )}
 
       <Modal isOpen={isPayModalOpen} onClose={() => { if (!isProcessing) setIsPayModalOpen(false); }} title={t("reviewPaymentTitle")}>
         <div className="flex flex-col gap-4">

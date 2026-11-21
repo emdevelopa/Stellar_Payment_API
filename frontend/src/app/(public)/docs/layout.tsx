@@ -1,4 +1,4 @@
-import DocsSidebar from "@/components/DocsSidebar";
+import LazyDocsSidebar from "@/components/DocsSidebar.lazy";
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -17,7 +17,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               <p className="text-sm font-bold text-[#0A0A0A]">PLUTO Guides</p>
             </div>
           </div>
-          <DocsSidebar />
+          <LazyDocsSidebar />
         </div>
       </aside>
 

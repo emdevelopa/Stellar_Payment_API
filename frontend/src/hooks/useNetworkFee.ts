@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
 
 export const NETWORK_FEE_ERROR_TOAST_ID = "network-fee-error";
@@ -33,8 +34,11 @@ export function useNetworkFee(enabled = true): UseNetworkFeeReturn {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const loadFeeClient = useCallback(async () => import("@/lib/fee-client").catch(() => null), []);
+
   const fetchFee = useCallback(async () => {
     if (!enabled) return;
+    await loadFeeClient();
 
     abortRef.current?.abort();
     const controller = new AbortController();

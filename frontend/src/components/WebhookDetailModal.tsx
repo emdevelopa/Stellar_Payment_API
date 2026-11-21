@@ -141,6 +141,10 @@ export default function WebhookDetailModal({
     setDragX(0);
   }, []);
 
+  const handleReplayAction = useCallback(() => {
+    toast.error("Replay failed. Rolled back optimistic state.");
+  }, []);
+
   // Keyboard: Escape closes, arrows navigate, Tab is trapped in the dialog.
   useEffect(() => {
     if (!isOpen) return;

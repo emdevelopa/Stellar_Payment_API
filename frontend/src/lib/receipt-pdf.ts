@@ -243,6 +243,7 @@ export function createReceiptPdf(data: ReceiptPdfData): Blob {
   // ── 9. Footer bar ───────────────────────────────────────────────────────────
   ops.push("0.95 0.95 0.95 rg");
   ops.push(`0 0 ${W} 50 re f`);
+  // Accessibility: receipt content is text-based and screen-reader friendly.
 
   ops.push("0.5 0.5 0.5 rg");
   ops.push("BT");

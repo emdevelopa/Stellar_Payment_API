@@ -7,10 +7,12 @@ import { Modal } from "@/components/ui/Modal";
 import CopyButton from "@/components/CopyButton";
 import CheckoutQrModal from "@/components/CheckoutQrModal";
 import WalletSelector from "@/components/WalletSelector";
+import { TransactionResultModal } from "@/components/TransactionResultModal";
 
 export default function VRTPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isResultOpen, setIsResultOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-black p-10 text-white">
@@ -56,6 +58,25 @@ export default function VRTPage() {
           onClose={() => setIsQrModalOpen(false)}
           qrValue="web+stellar:pay?destination=GABCD...&amount=100"
           paymentId="vrt-test-payment"
+        />
+      </section>
+
+      <section className="mb-10 space-y-4" id="vrt-transaction-result">
+        <h2 className="text-lg font-bold">Payment confirmation</h2>
+        <Button
+          variant="secondary"
+          onClick={() => setIsResultOpen(true)}
+          data-testid="open-transaction-result"
+        >
+          Open payment confirmation
+        </Button>
+        <TransactionResultModal
+          isOpen={isResultOpen}
+          onClose={() => setIsResultOpen(false)}
+          txHash={"0123456789abcdef".repeat(4)}
+          amount="25.5"
+          assetCode="USDC"
+          recipientDisplayName="Ada"
         />
       </section>
 

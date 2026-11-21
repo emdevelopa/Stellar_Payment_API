@@ -22,10 +22,20 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { NextIntlClientProvider } from "next-intl";
+
+const { mockToastError } = vi.hoisted(() => ({
+  mockToastError: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mockToastError,
+  },
+}));
 
 import TransactionFilterSidebar from "./TransactionFilterSidebar";
 import enMessages from "../../messages/en.json";
@@ -727,6 +737,114 @@ describe("TransactionFilterSidebar", () => {
       const dialog = screen.getByRole("dialog");
       expect(dialog).toHaveAttribute("aria-modal", "true");
       expect(dialog).toHaveAttribute("aria-label", "Transaction filters");
+    });
+  });
+
+  // ── 8. Optimistic state rollback & toast feedback (#1836) ────────────────
+
+  describe("8 · Optimistic state rollback & toast feedback (#1836)", () => {
+    it("rolls back optimistic filter change and shows toast on async network failure", async () => {
+      const networkError = new Error("Filter sync timeout");
+      const onFilterChange = vi.fn().mockRejectedValue(networkError);
+      const onRollback = vi.fn();
+
+      const { container } = renderSidebar(
+        buildProps({
+          filters: { ...DEFAULT_FILTERS, status: "pending" },
+          hasActiveFilters: true,
+          onFilterChange,
+          onRollback,
+        }),
+      );
+
+      const panel = getDesktopPanel(container);
+      const select = getSelect(panel, /Status/i);
+      fireEvent.change(select, { target: { value: "confirmed" } });
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith(
+          "Filter sync timeout",
+          expect.objectContaining({
+            description: "Your previous filter selection has been restored.",
+            action: expect.objectContaining({ label: "Retry" }),
+          }),
+        );
+      });
+
+      expect(select).toHaveValue("pending");
+      expect(onRollback).toHaveBeenCalledWith(
+        networkError,
+        expect.objectContaining({ status: "pending" }),
+      );
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /Failed updating status filter\. Reverted to previous filters\./i,
+      );
+    });
+
+    it("rolls back optimistic Clear All and shows toast on network failure", async () => {
+      const networkError = new Error("Network offline");
+      const onClearAll = vi.fn().mockRejectedValue(networkError);
+      const onRollback = vi.fn();
+
+      const activeFilters = {
+        ...DEFAULT_FILTERS,
+        search: "tx-123",
+        asset: "USDC",
+      };
+
+      const { container } = renderSidebar(
+        buildProps({
+          filters: activeFilters,
+          hasActiveFilters: true,
+          onClearAll,
+          onRollback,
+        }),
+      );
+
+      const panel = getDesktopPanel(container);
+      fireEvent.click(
+        within(panel).getByRole("button", { name: /clear all 2 active filters/i }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith(
+          "Network offline",
+          expect.objectContaining({
+            action: expect.objectContaining({ label: "Retry" }),
+          }),
+        );
+      });
+
+      expect(getInput(panel, /Search/i)).toHaveValue("tx-123");
+      expect(onRollback).toHaveBeenCalledWith(networkError, activeFilters);
+    });
+
+    it("retries the failed filter mutation when the toast Retry action is clicked", async () => {
+      const onFilterChange = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Temporary 503"))
+        .mockResolvedValueOnce(undefined);
+
+      const { container } = renderSidebar(
+        buildProps({
+          onFilterChange,
+        }),
+      );
+
+      const panel = getDesktopPanel(container);
+      const group = within(panel).getByRole("group", { name: /Asset filter/i });
+      fireEvent.click(within(group).getByRole("button", { name: /^XLM$/i }));
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledTimes(1);
+      });
+
+      const retryAction = mockToastError.mock.calls[0][1].action;
+      retryAction.onClick();
+
+      await waitFor(() => {
+        expect(onFilterChange).toHaveBeenCalledTimes(2);
+      });
     });
   });
 });

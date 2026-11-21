@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useId } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
+import { toast } from "sonner";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-interface FilterState {
+export interface FilterState {
   search: string;
   status: string;
   asset: string;
@@ -14,12 +15,22 @@ interface FilterState {
   dateTo: string;
 }
 
+const EMPTY_FILTERS: FilterState = {
+  search: "",
+  status: "all",
+  asset: "all",
+  dateFrom: "",
+  dateTo: "",
+};
+
 interface TransactionFilterSidebarProps {
   /** Optimistic filter state; updates synchronously on every interaction. */
   filters: FilterState;
-  onFilterChange: (key: keyof FilterState, value: string) => void;
-  onClearFilter: (key: keyof FilterState) => void;
-  onClearAll: () => void;
+  onFilterChange: (key: keyof FilterState, value: string) => void | Promise<void>;
+  onClearFilter: (key: keyof FilterState) => void | Promise<void>;
+  onClearAll: () => void | Promise<void>;
+  /** Optional callback invoked when an optimistic filter update rolls back on network failure. */
+  onRollback?: (error: Error, previousFilters: FilterState) => void;
   /** Reflects draft filters — keeps actions like Clear All responsive before URL sync. */
   hasActiveFilters: boolean;
   /**
@@ -621,6 +632,7 @@ export default function TransactionFilterSidebar({
   onFilterChange,
   onClearFilter,
   onClearAll,
+  onRollback,
   hasActiveFilters,
   searchSyncPending = false,
   isFilterPending = false,
@@ -632,24 +644,127 @@ export default function TransactionFilterSidebar({
 
   // Stable IDs for desktop vs mobile duplicate inputs (avoids duplicate-id a11y violations)
   const uid = useId();
-  const anyPending = searchSyncPending || isFilterPending;
+
+  // Optimistic filter state with automatic rollback & toast feedback on network failure
+  const [optimisticFilters, setOptimisticFilters] = useState<FilterState>(filters);
+  const [isOptimisticPending, setIsOptimisticPending] = useState(false);
+  const [rollbackAnnouncement, setRollbackAnnouncement] = useState<string>("");
+  const filtersRef = useRef<FilterState>(filters);
+
+  useEffect(() => {
+    setOptimisticFilters(filters);
+    filtersRef.current = filters;
+  }, [filters]);
+
+  const runOptimisticMutation = useCallback(
+    (
+      nextFilters: FilterState,
+      actionLabel: string,
+      mutate: () => void | Promise<void>,
+    ) => {
+      const previousFilters = filtersRef.current;
+
+      const handleFailure = (error: unknown) => {
+        const err =
+          error instanceof Error
+            ? error
+            : new Error(`Network failure while ${actionLabel}.`);
+
+        setOptimisticFilters(previousFilters);
+        filtersRef.current = previousFilters;
+        setRollbackAnnouncement(
+          `Failed ${actionLabel}. Reverted to previous filters.`,
+        );
+        onRollback?.(err, previousFilters);
+
+        toast.error(
+          err.message || `Failed ${actionLabel}. Reverted to previous filters.`,
+          {
+            description: "Your previous filter selection has been restored.",
+            action: {
+              label: "Retry",
+              onClick: () => {
+                runOptimisticMutation(nextFilters, actionLabel, mutate);
+              },
+            },
+          },
+        );
+      };
+
+      try {
+        const result = mutate();
+        if (result && typeof (result as Promise<void>).then === "function") {
+          setOptimisticFilters(nextFilters);
+          filtersRef.current = nextFilters;
+          setIsOptimisticPending(true);
+          setRollbackAnnouncement("");
+
+          (result as Promise<void>)
+            .catch(handleFailure)
+            .finally(() => {
+              setIsOptimisticPending(false);
+            });
+        }
+      } catch (error) {
+        handleFailure(error);
+      }
+    },
+    [onRollback],
+  );
+
+  const handleFilterChange = useCallback(
+    (key: keyof FilterState, value: string) => {
+      const nextFilters: FilterState = {
+        ...filtersRef.current,
+        [key]: value,
+      };
+      runOptimisticMutation(nextFilters, `updating ${key} filter`, () =>
+        onFilterChange(key, value),
+      );
+    },
+    [onFilterChange, runOptimisticMutation],
+  );
+
+  const handleClearFilter = useCallback(
+    (key: keyof FilterState) => {
+      const clearedValue = key === "status" || key === "asset" ? "all" : "";
+      const nextFilters: FilterState = {
+        ...filtersRef.current,
+        [key]: clearedValue,
+      };
+      runOptimisticMutation(nextFilters, `clearing ${key} filter`, () =>
+        onClearFilter(key),
+      );
+    },
+    [onClearFilter, runOptimisticMutation],
+  );
+
+  const handleClearAll = useCallback(() => {
+    runOptimisticMutation(EMPTY_FILTERS, "clearing all filters", () =>
+      onClearAll(),
+    );
+  }, [onClearAll, runOptimisticMutation]);
+
+  const anyPending = searchSyncPending || isFilterPending || isOptimisticPending;
 
   const activeFilterCount = [
-    filters.search !== "",
-    filters.status !== "all",
-    filters.asset !== "all",
-    filters.dateFrom !== "",
-    filters.dateTo !== "",
+    optimisticFilters.search !== "",
+    optimisticFilters.status !== "all",
+    optimisticFilters.asset !== "all",
+    optimisticFilters.dateFrom !== "",
+    optimisticFilters.dateTo !== "",
   ].filter(Boolean).length;
 
+  const effectiveHasActiveFilters = hasActiveFilters || activeFilterCount > 0;
+
   const sharedProps = {
-    filters,
-    onFilterChange,
-    onClearFilter,
-    onClearAll,
-    hasActiveFilters,
+    filters: optimisticFilters,
+    onFilterChange: handleFilterChange,
+    onClearFilter: handleClearFilter,
+    onClearAll: handleClearAll,
+    hasActiveFilters: effectiveHasActiveFilters,
     searchSyncPending,
-    isFilterPending,
+    isFilterPending: isFilterPending || isOptimisticPending,
     anyPending,
     activeFilterCount,
     uid,
@@ -659,6 +774,16 @@ export default function TransactionFilterSidebar({
 
   return (
     <>
+      {rollbackAnnouncement && (
+        <span
+          role="alert"
+          aria-live="assertive"
+          className="sr-only"
+        >
+          {rollbackAnnouncement}
+        </span>
+      )}
+
       {/* Desktop: persistent sticky panel */}
       <div
         className="hidden lg:block w-[320px] h-fit sticky top-24"

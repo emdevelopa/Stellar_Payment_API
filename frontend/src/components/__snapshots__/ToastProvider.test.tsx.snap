@@ -1,0 +1,67 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ToastProvider > snapshot tests (#1833) > matches snapshot with custom configuration 1`] = `
+<section
+  aria-label="Stellar alerts"
+  data-close-button="false"
+  data-duration="6000"
+  data-expand="true"
+  data-gap="12"
+  data-position="bottom-left"
+  data-rich-colors="true"
+  data-testid="sonner-toaster"
+  data-theme="light"
+  data-visible-toasts="5"
+>
+  <ol
+    aria-live="polite"
+    data-testid="toast-list"
+    role="region"
+  >
+    <li
+      data-testid="sample-toast"
+      role="status"
+    >
+      <span>
+        Payment confirmed
+      </span>
+    </li>
+  </ol>
+</section>
+`;
+
+exports[`ToastProvider > snapshot tests (#1833) > matches snapshot with default configuration 1`] = `
+<section
+  aria-label="Notifications"
+  data-close-button="true"
+  data-duration="4500"
+  data-expand="false"
+  data-gap="8"
+  data-position="top-right"
+  data-rich-colors="false"
+  data-testid="sonner-toaster"
+  data-theme="dark"
+  data-visible-toasts="3"
+>
+  <ol
+    aria-live="polite"
+    data-testid="toast-list"
+    role="region"
+  >
+    <li
+      data-testid="sample-toast"
+      role="status"
+    >
+      <span>
+        Payment confirmed
+      </span>
+      <button
+        aria-label="Dismiss notification"
+        type="button"
+      >
+        Close
+      </button>
+    </li>
+  </ol>
+</section>
+`;

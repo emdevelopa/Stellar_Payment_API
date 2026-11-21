@@ -195,6 +195,8 @@ export function useBalanceSync(
       ? Date.now() - state.lastUpdated.getTime() > pollingInterval * 2
       : true,
     ariaLabel: "Real-time balance information",
+    ariaLive: "polite" as const,
+    ariaAtomic: true,
     liveRegionText,
   };
 }

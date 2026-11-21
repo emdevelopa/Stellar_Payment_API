@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-11-21T10:37:07.939Z",
+  "base": "http://127.0.0.1:8765/preview.html",
+  "shots": [
+    "00-gallery-desktop.png",
+    "01-desktop-ready.png",
+    "02-desktop-unavailable-install.png",
+    "03-desktop-connecting.png",
+    "04-desktop-error.png",
+    "05-desktop-walletconnect-qr.png",
+    "06-mobile-walletconnect-qr.png",
+    "00-gallery-mobile.png"
+  ]
+}

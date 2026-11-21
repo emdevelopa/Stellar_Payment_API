@@ -3,28 +3,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import { TransactionResultModal } from "./TransactionResultModal";
+import { SWIPE_DISMISS_DISTANCE_PX } from "@/hooks/useSwipeToDismiss";
+import { TransactionResultModal, stellarExpertTxUrl, truncateTransactionHash } from "./TransactionResultModal";
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
-}));
-
-// Animations are irrelevant here and would add unknown props to the DOM nodes.
-type MotionProps = React.HTMLAttributes<HTMLDivElement> & {
-  initial?: unknown;
-  animate?: unknown;
-  exit?: unknown;
-};
-vi.mock("framer-motion", () => ({
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  motion: {
-    div: ({ initial, animate, exit, ...rest }: MotionProps) => {
-      void initial;
-      void animate;
-      void exit;
-      return <div {...rest} />;
-    },
-  },
 }));
 
 const TX_HASH = "0123456789abcdef".repeat(4);
@@ -284,5 +267,160 @@ describe("TransactionResultModal copy link", () => {
     unmount();
 
     expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+  });
+});
+
+function swipe(el: Element, from: { x: number; y: number }, to: { x: number; y: number }) {
+  fireEvent.touchStart(el, { touches: [{ clientX: from.x, clientY: from.y }] });
+  fireEvent.touchMove(el, { touches: [{ clientX: to.x, clientY: to.y }] });
+  fireEvent.touchEnd(el, { changedTouches: [{ clientX: to.x, clientY: to.y }] });
+}
+
+describe("TransactionResultModal drawer", () => {
+  it("truncates long hashes and leaves short ones intact", () => {
+    expect(truncateTransactionHash(TX_HASH)).toBe("01234567...89abcdef");
+    expect(truncateTransactionHash("abcd")).toBe("abcd");
+  });
+
+  it("keeps the explorer link on a fixed origin", () => {
+    const hostile = "abc/../?x=1#hash";
+    const url = new URL(stellarExpertTxUrl(hostile));
+
+    expect(url.origin).toBe("https://stellar.expert");
+    expect(url.pathname).toBe(`/explorer/testnet/tx/${encodeURIComponent(hostile)}`);
+    expect(url.search).toBe("");
+    expect(url.hash).toBe("");
+  });
+
+  it("is a bottom drawer on small screens and a centered dialog from sm up", () => {
+    renderModal();
+
+    const shell = screen.getByTestId("transaction-result-shell");
+    expect(shell.className).toContain("items-end");
+    expect(shell.className).toContain("sm:items-center");
+
+    const drawer = screen.getByTestId("transaction-result-drawer");
+    expect(drawer).toHaveAttribute("aria-modal", "true");
+    expect(drawer).toHaveAttribute("aria-describedby");
+    expect(drawer.className).toContain("rounded-t-3xl");
+    expect(drawer.className).toContain("sm:rounded-3xl");
+    expect(drawer.className).toContain("sm:max-w-sm");
+    expect(drawer.className).toContain("motion-safe:animate-drawer-in");
+    expect(drawer.className).toContain("motion-reduce:transition-none");
+
+    const handle = screen.getByTestId("transaction-result-drawer-handle");
+    expect(handle).toHaveAttribute("aria-hidden", "true");
+    expect(handle.className).toContain("sm:hidden");
+    expect(screen.getByText("Swipe down to close")).toHaveClass("sm:hidden");
+  });
+
+  it("moves focus into the dialog, traps Tab, and locks body scroll", () => {
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const { rerender } = renderModal();
+    const dialog = screen.getByRole("dialog", { name: "Transaction Successful" });
+    const close = screen.getByRole("button", { name: "Close dialog" });
+    const done = screen.getByRole("button", { name: "Done" });
+
+    expect(dialog).toHaveFocus();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    done.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(close).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(done).toHaveFocus();
+
+    rerender(
+      <TransactionResultModal
+        isOpen={false}
+        onClose={onClose}
+        txHash={TX_HASH}
+        amount="25.5"
+        assetCode="USDC"
+        recipientDisplayName="Ada"
+      />,
+    );
+
+    expect(document.body.style.overflow).toBe("");
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
+  it("swiping down past the threshold dismisses the drawer", () => {
+    renderModal();
+
+    swipe(
+      screen.getByTestId("transaction-result-drawer-handle"),
+      { x: 100, y: 100 },
+      { x: 108, y: 100 + SWIPE_DISMISS_DISTANCE_PX + 10 },
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows the finger and snaps back on a short, slow drag", () => {
+    const now = vi.spyOn(Date, "now");
+    let clock = 1_000_000;
+    now.mockImplementation(() => clock);
+
+    renderModal();
+    const drawer = screen.getByTestId("transaction-result-drawer");
+    const handle = screen.getByTestId("transaction-result-drawer-handle");
+    const backdrop = screen.getByTestId("transaction-result-backdrop");
+
+    fireEvent.touchStart(handle, { touches: [{ clientX: 100, clientY: 100 }] });
+    clock += 20;
+    fireEvent.touchMove(handle, { touches: [{ clientX: 100, clientY: 140 }] });
+
+    expect(drawer.style.transform).toContain("40px");
+    expect(drawer).toHaveAttribute("data-dragging", "true");
+    expect(backdrop.style.opacity).not.toBe("");
+
+    clock += 1000;
+    fireEvent.touchEnd(handle, { changedTouches: [{ clientX: 100, clientY: 140 }] });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(drawer.style.transform).toBe("");
+    expect(drawer).not.toHaveAttribute("data-dragging");
+    now.mockRestore();
+  });
+
+  it("does not dismiss a sideways swipe", () => {
+    renderModal();
+
+    swipe(
+      screen.getByTestId("transaction-result-drawer-handle"),
+      { x: 40, y: 80 },
+      { x: 240, y: 90 },
+    );
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("does not dismiss when the scrollable body is not at the top", () => {
+    renderModal();
+    const body = screen.getByTestId("transaction-result-body");
+    body.scrollTop = 80;
+
+    swipe(body, { x: 100, y: 40 }, { x: 100, y: 40 + SWIPE_DISMISS_DISTANCE_PX + 40 });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("still dismisses from the handle when the body is scrolled", () => {
+    renderModal();
+    screen.getByTestId("transaction-result-body").scrollTop = 80;
+
+    swipe(
+      screen.getByTestId("transaction-result-drawer-handle"),
+      { x: 100, y: 20 },
+      { x: 100, y: 20 + SWIPE_DISMISS_DISTANCE_PX + 20 },
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

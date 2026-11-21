@@ -17,8 +17,9 @@
  */
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/Button";
-import CopyButton from "./CopyButton";
+const CopyButton = dynamic(() => import("./CopyButton"), { ssr: false });
 
 export interface WebhookLog {
   id: string;

@@ -75,6 +75,13 @@ export function validateMemo(memo, memoType) {
     return { valid: true };
   }
 
+  if (typeof memo !== "string") {
+    return { valid: false, error: "Memo must be a string" };
+  }
+  if (typeof memoType !== "string") {
+    return { valid: false, error: "Memo type must be a string" };
+  }
+
   const normalizedType = memoType.toLowerCase();
 
   switch (normalizedType) {
@@ -205,9 +212,7 @@ export function classifyAmount(expected, received) {
   if (Number.isNaN(expectedNum) || Number.isNaN(receivedNum)) return "exact";
 
   const diff = receivedNum - expectedNum;
-  const tolerance = 0.0000001; // 1 stroop
-  
-  if (Math.abs(diff) <= tolerance) return "exact";
+  if (isWithinAmountTolerance(expectedNum, receivedNum)) return "exact";
   if (diff < 0) return "underpaid";
   return "overpaid";
 }
@@ -223,6 +228,11 @@ export function amountsMatch(expected, received) {
     return false;
   }
 
-  // Exact match within 1 stroop (0.0000001 XLM)
-  return Math.abs(expectedNum - receivedNum) <= 0.0000001;
+  return isWithinAmountTolerance(expectedNum, receivedNum);
+}
+
+function isWithinAmountTolerance(expected, received) {
+  const roundingAllowance =
+    Number.EPSILON * Math.max(1, Math.abs(expected), Math.abs(received));
+  return Math.abs(expected - received) <= 0.0000001 + roundingAllowance;
 }

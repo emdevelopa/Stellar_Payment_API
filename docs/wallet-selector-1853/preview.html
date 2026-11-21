@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multi-Wallet Connection Panel — #1853</title>
+    <style>
+      :root {
+        --pluto-50: #f0f6fb;
+        --pluto-200: #b8d4e8;
+        --pluto-300: #8aafd4;
+        --pluto-400: #6b8fbf;
+        --pluto-500: #4a6fa5;
+        --pluto-600: #3d6494;
+        --pluto-700: #2d4a7a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+        background: linear-gradient(180deg, #f5f8fc 0%, #e8eef5 100%);
+        color: #0a0a0a;
+        padding: 24px;
+      }
+      h1 { font-size: 1.25rem; margin: 0 0 8px; }
+      .lead { color: #6b6b6b; font-size: 0.875rem; margin: 0 0 24px; max-width: 40rem; }
+      .grid {
+        display: grid;
+        gap: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e8e8e8;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(13, 27, 46, 0.06);
+      }
+      .label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #6b6b6b;
+        margin-bottom: 12px;
+      }
+      .panel { display: flex; flex-direction: column; gap: 16px; }
+      .title { font-size: 0.875rem; font-weight: 700; margin: 0; }
+      .desc { font-size: 0.75rem; color: #6b6b6b; margin: 2px 0 0; }
+      .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+      .btn {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-height: 64px;
+        width: 100%;
+        padding: 0 20px;
+        border-radius: 16px;
+        border: 1px solid #e8e8e8;
+        background: #fff;
+        text-align: left;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      }
+      .btn[data-state="unavailable"], .btn[data-state="checking"] { opacity: 0.6; }
+      .btn[data-state="checking"] { opacity: 0.8; }
+      .icon {
+        width: 40px; height: 40px; border-radius: 12px; border: 1px solid #e8e8e8;
+        background: #f9f9f9; display: grid; place-items: center; flex-shrink: 0;
+      }
+      .icon svg { width: 20px; height: 20px; }
+      .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+      .name { font-size: 0.875rem; font-weight: 700; }
+      .sub { font-size: 0.75rem; color: #6b6b6b; }
+      .arrow { color: #c0c0c0; }
+      .spin {
+        width: 16px; height: 16px; border: 2px solid var(--pluto-500);
+        border-right-color: transparent; border-radius: 50%;
+        display: inline-block; animation: spin 1s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .qr {
+        display: flex; flex-direction: column; align-items: center; gap: 12px;
+        border: 1px solid #e8e8e8; background: #f9f9f9; border-radius: 16px; padding: 24px;
+      }
+      .qr-box {
+        width: 160px; height: 160px; background:
+          repeating-linear-gradient(0deg, #0a0a0a 0 8px, #fff 8px 16px),
+          repeating-linear-gradient(90deg, #0a0a0a 0 8px, #fff 8px 16px);
+        background-blend-mode: difference; border-radius: 12px; border: 1px solid #e8e8e8;
+      }
+      .alert {
+        border: 1px solid #fecaca; background: #fef2f2; color: #991b1b;
+        border-radius: 12px; padding: 12px; text-align: center; font-size: 0.875rem;
+      }
+      .install {
+        text-align: center; font-size: 0.625rem; font-weight: 700;
+        letter-spacing: 0.14em; text-transform: uppercase; color: var(--pluto-500);
+        text-decoration: underline;
+      }
+      .connecting .name { display: flex; align-items: center; gap: 8px; }
+      @media (max-width: 639px) {
+        body { padding: 16px; }
+        .btn { padding: 0 16px; gap: 12px; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Multi-Wallet Connection Provider Modal</h1>
+    <p class="lead">
+      Visual states for Freighter, xBull, Albedo, and WalletConnect. Matching markup and tokens from
+      <code>WalletSelector</code> for PR #1853 screenshots (desktop + compact).
+    </p>
+
+    <div class="grid">
+      <section class="card" data-shot="ready">
+        <div class="label">Ready — desktop</div>
+        <div class="panel" data-testid="wallet-selector" data-viewport="regular">
+          <div>
+            <p class="title">Choose a wallet</p>
+            <p class="desc">Connect your Stellar wallet to complete this payment.</p>
+          </div>
+          <ul class="list" aria-label="Available wallets">
+            <li><button class="btn" data-state="ready" type="button"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#7B61FF"/><path d="M8 16h16M16 8l8 8-8 8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg></span><span class="meta"><span class="name">Freighter</span><span class="sub">Browser extension wallet</span></span><span class="arrow">›</span></button></li>
+            <li><button class="btn" data-state="ready" type="button"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#F5A623"/><path d="M9 22 L16 8 L23 22" stroke="#0A0A0A" stroke-width="2.5" fill="none"/><path d="M12.2 16.5h7.6" stroke="#0A0A0A" stroke-width="2.5"/></svg></span><span class="meta"><span class="name">xBull</span><span class="sub">xBull browser extension</span></span><span class="arrow">›</span></button></li>
+            <li><button class="btn" data-state="ready" type="button"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#111827"/><circle cx="16" cy="16" r="6.5" stroke="#fff" stroke-width="2" fill="none"/><circle cx="16" cy="16" r="2" fill="#fff"/></svg></span><span class="meta"><span class="name">Albedo</span><span class="sub">Web wallet, no extension</span></span><span class="arrow">›</span></button></li>
+            <li><button class="btn" data-state="ready" type="button"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#3B99FC"/><path d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0" stroke="#fff" fill="#fff"/></svg></span><span class="meta"><span class="name">WalletConnect</span><span class="sub">Mobile &amp; desktop wallets</span></span><span class="arrow">›</span></button></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card" data-shot="unavailable">
+        <div class="label">Unavailable + Freighter install</div>
+        <div class="panel" data-testid="wallet-selector" data-viewport="regular">
+          <div>
+            <p class="title">Choose a wallet</p>
+            <p class="desc">Connect your Stellar wallet to complete this payment.</p>
+          </div>
+          <ul class="list">
+            <li><button class="btn" data-state="unavailable" type="button" aria-disabled="true"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#7B61FF"/></svg></span><span class="meta"><span class="name">Freighter</span><span class="sub">(not installed)</span></span></button></li>
+            <li><button class="btn" data-state="unavailable" type="button" aria-disabled="true"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#3B99FC"/></svg></span><span class="meta"><span class="name">WalletConnect</span><span class="sub">(no project ID)</span></span></button></li>
+          </ul>
+          <a class="install" href="https://freighter.app">Don't have Freighter? Install it →</a>
+        </div>
+      </section>
+
+      <section class="card" data-shot="connecting">
+        <div class="label">Connecting</div>
+        <div class="panel" data-testid="wallet-selector" data-viewport="regular" aria-busy="true">
+          <div>
+            <p class="title">Choose a wallet</p>
+            <p class="desc">Connect your Stellar wallet to complete this payment.</p>
+          </div>
+          <ul class="list">
+            <li><button class="btn connecting" data-state="connecting" type="button" aria-busy="true"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#7B61FF"/></svg></span><span class="meta"><span class="name"><span class="spin" aria-hidden="true"></span>Connecting...</span></span></button></li>
+            <li><button class="btn" data-state="ready" type="button" disabled style="opacity:.4"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#F5A623"/></svg></span><span class="meta"><span class="name">xBull</span><span class="sub">xBull browser extension</span></span></button></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card" data-shot="error">
+        <div class="label">Error alert</div>
+        <div class="panel" data-testid="wallet-selector">
+          <div>
+            <p class="title">Choose a wallet</p>
+            <p class="desc">Connect your Stellar wallet to complete this payment.</p>
+          </div>
+          <ul class="list">
+            <li><button class="btn" data-state="ready" type="button"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#7B61FF"/></svg></span><span class="meta"><span class="name">Freighter</span><span class="sub">Browser extension wallet</span></span><span class="arrow">›</span></button></li>
+          </ul>
+          <div class="alert" role="alert">We couldn't connect to that wallet right now. Please try again.</div>
+        </div>
+      </section>
+
+      <section class="card" data-shot="qr-desktop">
+        <div class="label">WalletConnect QR — desktop</div>
+        <div class="panel" data-testid="wallet-selector" data-viewport="regular">
+          <div>
+            <p class="title">Choose a wallet</p>
+            <p class="desc">Connect your Stellar wallet to complete this payment.</p>
+          </div>
+          <ul class="list">
+            <li><button class="btn connecting" data-state="connecting" type="button"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#3B99FC"/></svg></span><span class="meta"><span class="name"><span class="spin"></span>Waiting for wallet...</span></span></button></li>
+          </ul>
+          <div class="qr" data-testid="wallet-connect-qr" aria-live="polite">
+            <div class="label" style="margin:0">Scan with your compatible wallet app</div>
+            <div class="qr-box" role="img" aria-label="WalletConnect pairing QR code" style="width:200px;height:200px"></div>
+            <p class="desc" style="text-align:center;max-width:18rem">Scan with Freighter mobile or any WalletConnect-compatible wallet</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" data-shot="qr-mobile">
+        <div class="label">WalletConnect QR — compact / mobile</div>
+        <div class="panel" data-testid="wallet-selector" data-viewport="compact" style="max-width:360px">
+          <div>
+            <p class="title">Choose a wallet</p>
+            <p class="desc">Connect your Stellar wallet to complete this payment.</p>
+          </div>
+          <ul class="list">
+            <li><button class="btn connecting" data-state="connecting" type="button"><span class="icon"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#3B99FC"/></svg></span><span class="meta"><span class="name"><span class="spin"></span>Waiting for wallet...</span></span></button></li>
+          </ul>
+          <div class="qr" data-testid="wallet-connect-qr">
+            <div class="label" style="margin:0">Scan with your compatible wallet app</div>
+            <div class="qr-box" role="img" aria-label="WalletConnect pairing QR code"></div>
+            <p class="desc" style="text-align:center">Scan with Freighter mobile or any WalletConnect-compatible wallet</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

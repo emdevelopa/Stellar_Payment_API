@@ -60,7 +60,7 @@ export default function WebhookHealthIndicator({
   if (loading || !health) {
     return (
       <div className="flex items-center gap-2">
-        <div className="h-2 w-2 animate-pulse rounded-full bg-[#1F1F1F]" />
+        <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#1F1F1F]" data-testid="health-loading-dot" role="status" aria-live="polite" />
         <span className="text-[10px] font-black uppercase tracking-widest text-[#A0A0A0]">Checking...</span>
       </div>
     );

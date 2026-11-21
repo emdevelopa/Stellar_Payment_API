@@ -11,6 +11,10 @@
 import { motion } from "framer-motion";
 
 export default function TransactionFilterSidebarSkeleton() {
+  // Accessible loading skeleton for the sidebar
+  // Test ID used in lazy component tests
+  // Role "status" and aria-label provide screen‑reader description
+
   const shimmerVariants = {
     initial: { opacity: 0.6 },
     animate: {
@@ -20,7 +24,7 @@ export default function TransactionFilterSidebarSkeleton() {
   };
 
   return (
-    <div className="hidden lg:block w-[320px] h-fit sticky top-24">
+    <div data-testid="transaction-filter-sidebar-skeleton" role="status" aria-label="Loading filters…" className="hidden lg:block w-[320px] h-fit sticky top-24">
       <div className="relative flex h-full flex-col rounded-2xl bg-white p-6 shadow-xl border border-[#E8E8E8]">
         {/* Header skeleton */}
         <div className="mb-8 flex items-center gap-3">

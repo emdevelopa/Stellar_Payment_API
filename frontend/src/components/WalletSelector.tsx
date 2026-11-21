@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useWallet } from "@/lib/wallet-context";
 import { connectWalletConnect } from "@/lib/wallet-walletconnect";
-import { QRCodeSVG } from "qrcode.react";
+import LazyQRCodeSVG from "./LazyQRCodeSVG";
 import { Spinner } from "./ui/Spinner";
 
 interface WalletSelectorProps {
@@ -15,7 +15,7 @@ interface WalletSelectorProps {
 // Freighter icon SVG
 function FreighterIcon() {
   return (
-    <svg viewBox="0 0 32 32" className="h-5 w-5" fill="none">
+    <svg viewBox="0 0 32 32" className="h-5 w-5" fill="none" aria-hidden="true" focusable="false">
       <rect width="32" height="32" rx="8" fill="#7B61FF" />
       <path
         d="M8 16h16M16 8l8 8-8 8"
@@ -30,7 +30,7 @@ function FreighterIcon() {
 
 function WalletConnectIcon() {
   return (
-    <svg viewBox="0 0 32 32" className="h-5 w-5" fill="none">
+    <svg viewBox="0 0 32 32" className="h-5 w-5" fill="none" aria-hidden="true" focusable="false">
       <rect width="32" height="32" rx="8" fill="#3B99FC" />
       <path
         d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
@@ -63,6 +63,9 @@ export default function WalletSelector({
   const [wcUri, setWcUri] = useState<string | null>(null);
   const [wcError, setWcError] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const headingId = useId();
+  const descriptionId = useId();
+  const optionIdPrefix = useId();
 
   useEffect(() => {
     let cancelled = false;
@@ -170,28 +173,48 @@ export default function WalletSelector({
     }
   }
 
+  // What a screen reader is told while a connection is in progress. The Spinner inside the
+  // button is hidden from assistive technology, so this live region carries the progress.
+  const connectingProvider = providers.find((p) => p.id === connecting);
+  const progressMessage = connectingProvider
+    ? `${connectingProvider.id === "walletconnect" ? t("walletConnectWaiting") : t("connecting")} ${connectingProvider.name}`
+    : "";
+
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-bold text-[#0A0A0A]">{t("chooseWallet")}</p>
-        <p className="mt-0.5 text-xs text-[#6B6B6B]">{t("description")}</p>
+        <p id={headingId} className="text-sm font-bold text-[#0A0A0A]">{t("chooseWallet")}</p>
+        <p id={descriptionId} className="mt-0.5 text-xs text-[#6B6B6B]">{t("description")}</p>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div
+        role="group"
+        aria-labelledby={headingId}
+        aria-describedby={descriptionId}
+        className="flex flex-col gap-3"
+      >
         {providers.map((p) => {
           const isWc = p.id === "walletconnect";
           const isConnecting = connecting === p.id;
           const isInstalled = installed[p.id] ?? false;
           const isDisabled = !isInstalled;
+          const nameId = `${optionIdPrefix}-${p.id}-name`;
+          const statusId = `${optionIdPrefix}-${p.id}-status`;
 
           return (
             <button
               key={p.id}
               type="button"
-              disabled={isDisabled || connecting !== null}
-              onClick={() => handleSelect(p.id)}
+              // A wallet that is not installed stays focusable and says why it cannot be
+              // used, instead of being skipped silently by keyboard and screen reader users.
+              // It is inert, and the real `disabled` is kept for "another wallet is connecting".
+              disabled={connecting !== null}
+              aria-disabled={isDisabled ? true : undefined}
+              onClick={isDisabled ? undefined : () => handleSelect(p.id)}
               aria-busy={isConnecting}
-              className="group relative flex h-16 w-full items-center gap-4 rounded-2xl border border-[#E8E8E8] bg-white px-5 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-[var(--pluto-400)] hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-labelledby={nameId}
+              aria-describedby={statusId}
+              className="group relative flex h-16 w-full items-center gap-4 rounded-2xl border border-[#E8E8E8] bg-white px-5 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-[var(--pluto-400)] hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:pointer-events-none aria-disabled:opacity-40"
             >
               {/* Icon */}
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)]">
@@ -201,6 +224,8 @@ export default function WalletSelector({
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
                   >
                     <path
                       strokeLinecap="round"
@@ -215,16 +240,33 @@ export default function WalletSelector({
               {/* Label */}
               <div className="flex flex-1 flex-col gap-0.5">
                 {isConnecting ? (
-                  <span className="flex items-center gap-2 text-sm font-bold text-[#0A0A0A]">
-                    <Spinner size="sm" />
-                    {isWc ? t("walletConnectWaiting") : "Connecting…"}
-                  </span>
-                ) : (
                   <>
-                    <span className="text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]">
+                    {/* The wallet's name stays available as the button's name while the
+                        progress text is shown in its place. */}
+                    <span id={nameId} className="sr-only">
                       {p.name}
                     </span>
-                    <span className="text-[10px] font-medium text-[#6B6B6B]">
+                    <span
+                      id={statusId}
+                      className="flex items-center gap-2 text-sm font-bold text-[#0A0A0A]"
+                    >
+                      {/* Decorative: the Spinner has its own status role, which inside a
+                          button would be read as part of the button's name. */}
+                      <span aria-hidden="true">
+                        <Spinner size="sm" />
+                      </span>
+                      {isWc ? t("walletConnectWaiting") : t("connecting")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      id={nameId}
+                      className="text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+                    >
+                      {p.name}
+                    </span>
+                    <span id={statusId} className="text-[10px] font-medium text-[#6B6B6B]">
                       {isDisabled
                         ? isWc
                           ? t("noProjectId")
@@ -242,6 +284,8 @@ export default function WalletSelector({
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
                 >
                   <path
                     strokeLinecap="round"
@@ -256,22 +300,30 @@ export default function WalletSelector({
         })}
       </div>
 
+      {/* Tells screen reader users that a connection is in progress; the buttons'
+          visible spinner is hidden from them. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {progressMessage}
+      </p>
+
       {/* WalletConnect QR */}
       {wcUri && (
         <div
           className="flex flex-col items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-[#F9F9F9] p-6"
-          aria-live="polite"
+          role="group"
+          aria-label={t("scanTitle")}
         >
           <p className="text-xs font-bold uppercase tracking-widest text-[#6B6B6B]">
             {t("scanTitle")}
           </p>
           <div className="rounded-xl bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-[#E8E8E8]">
-            <QRCodeSVG
+            <LazyQRCodeSVG
               value={wcUri}
               size={200}
               level="M"
               fgColor="#0A0A0A"
               bgColor="#ffffff"
+              title={t("scanTitle")}
             />
           </div>
           <p className="text-center text-[10px] text-[#6B6B6B] font-medium">
@@ -284,7 +336,6 @@ export default function WalletSelector({
         <div
           className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400"
           role="alert"
-          aria-live="polite"
         >
           {wcError || connectError}
         </div>
@@ -296,9 +347,10 @@ export default function WalletSelector({
           href="https://freighter.app"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-500)] transition-colors duration-150 hover:text-[var(--pluto-700)]"
+          className="text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-500)] transition-colors duration-150 hover:text-[var(--pluto-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)]"
         >
-          Don&apos;t have Freighter? Install it →
+          Don&apos;t have Freighter? Install it →{" "}
+          <span className="sr-only">(opens in a new tab)</span>
         </a>
       )}
     </div>

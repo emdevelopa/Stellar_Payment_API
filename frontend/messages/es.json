@@ -296,7 +296,19 @@
     "extensionNotFound": "No pudimos encontrar esa billetera en este dispositivo. Instala la extensión e inténtalo de nuevo.",
     "noAccountFound": "La billetera se conectó, pero no devolvió ninguna cuenta Stellar. Abre una cuenta Stellar en la billetera y vuelve a intentarlo.",
     "walletConnectFailed": "No pudimos completar la conexión con WalletConnect. Inténtalo de nuevo.",
-    "connectionFailed": "No pudimos conectar esa billetera en este momento. Inténtalo de nuevo."
+    "connectionFailed": "No pudimos conectar esa billetera en este momento. Inténtalo de nuevo.",
+    "networkFailure": "No se pudo contactar la red. Se revirtió la billetera elegida. Revisa tu conexión e inténtalo de nuevo.",
+    "networkFailureHint": "No se conectó ninguna billetera.",
+    "reverted": "Selección revertida",
+    "subtitleFreighter": "Billetera de extensión del navegador",
+    "subtitleXbull": "Extensión de navegador xBull",
+    "subtitleAlbedo": "Billetera web, sin extensión",
+    "subtitleWalletConnect": "Billeteras móviles y de escritorio",
+    "walletListLabel": "Billeteras disponibles",
+    "installFreighter": "¿No tienes Freighter? Instálala",
+    "opensNewTab": "(se abre en una pestaña nueva)",
+    "checkingAvailability": "Comprobando disponibilidad…",
+    "qrLabel": "Código QR de emparejamiento de WalletConnect"
   },
   "support": {
     "panelAriaLabel": "Panel de ayuda y soporte",

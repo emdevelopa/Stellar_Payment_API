@@ -69,6 +69,28 @@ export const validateMemo = validators.validateMemo;
 export const resolveAsset = validators.resolveAsset;
 export const isValidTransactionHash = validators.isValidTransactionHash;
 export const classifyAmount = validators.classifyAmount;
+export const amountsMatch = validators.amountsMatch;
+export const isValidMuxedAccount = validators.isValidMuxedAccount;
+export const isValidContractId = validators.isValidContractId;
+export const isValidPreAuthTx = validators.isValidPreAuthTx;
+export const isValidSha256Hash = validators.isValidSha256Hash;
+export const isValidLedgerKey = validators.isValidLedgerKey;
+export const classifyStrKey = validators.classifyStrKey;
+export const sanitizeStrKey = validators.sanitizeStrKey;
+export const isValidEd25519Signature = validators.isValidEd25519Signature;
+export const sanitizeSignature = validators.sanitizeSignature;
+export const verifyEd25519Signature = validators.verifyEd25519Signature;
+export const isValidFederatedAddress = validators.isValidFederatedAddress;
+export const sanitizeFederatedAddress = validators.sanitizeFederatedAddress;
+export const resolveFederatedAddress = validators.resolveFederatedAddress;
+export const sanitizePayload = validators.sanitizePayload;
+export const StellarValidationError = validators.StellarValidationError;
+export const ValidatorDeadLetterQueue = validators.ValidatorDeadLetterQueue;
+export const validatorDlq = validators.validatorDlq;
+export const recoverDeadLetterQueue = validators.recoverDeadLetterQueue;
+export const recoverValidatorDeadLetterQueue = validators.recoverValidatorDeadLetterQueue;
+export const getDeadLetterQueueStats = validators.getDeadLetterQueueStats;
+export const clearDeadLetterQueue = validators.clearDeadLetterQueue;
 
 // Export payment operations
 export const findMatchingPayment = (params) => 

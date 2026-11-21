@@ -1,0 +1,2215 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`WalletSelector > snapshots > matches the checking snapshot 1`] = `
+<div>
+  <section
+    aria-describedby="wallet-selector-description"
+    aria-labelledby="wallet-selector-title"
+    class="flex w-full max-w-full flex-col gap-4"
+    data-testid="wallet-selector"
+    data-viewport="regular"
+  >
+    <div>
+      <p
+        class="text-sm font-bold text-[#0A0A0A] sm:text-base"
+        id="wallet-selector-title"
+      >
+        Choose a wallet
+      </p>
+      <p
+        class="mt-0.5 text-xs font-medium leading-relaxed text-[#6B6B6B] sm:text-sm"
+        id="wallet-selector-description"
+      >
+        Connect your Stellar wallet to complete this payment.
+      </p>
+    </div>
+    <ul
+      aria-label="Available wallets"
+      class="flex w-full flex-col gap-2 sm:gap-3"
+    >
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-freighter-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="checking"
+          data-testid="wallet-option-freighter"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#7B61FF"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M8 16h16M16 8l8 8-8 8"
+                stroke="white"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Freighter
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-freighter-status"
+            >
+              Checking availability…
+            </span>
+          </div>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-xbull-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="checking"
+          data-testid="wallet-option-xbull"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#F5A623"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9 22 L16 8 L23 22"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+              <path
+                d="M12.2 16.5h7.6"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              xBull
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-xbull-status"
+            >
+              Checking availability…
+            </span>
+          </div>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-albedo-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="checking"
+          data-testid="wallet-option-albedo"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#111827"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="6.5"
+                stroke="white"
+                stroke-width="2"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                fill="white"
+                r="2"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Albedo
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-albedo-status"
+            >
+              Checking availability…
+            </span>
+          </div>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-walletconnect-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="checking"
+          data-testid="wallet-option-walletconnect"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#3B99FC"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
+                fill="white"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              WalletConnect
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-walletconnect-status"
+            >
+              Checking availability…
+            </span>
+          </div>
+        </button>
+      </li>
+    </ul>
+  </section>
+</div>
+`;
+
+exports[`WalletSelector > snapshots > matches the compact mobile QR snapshot 1`] = `
+<div>
+  <section
+    aria-busy="true"
+    aria-describedby="wallet-selector-description"
+    aria-labelledby="wallet-selector-title"
+    class="flex w-full max-w-full flex-col gap-4"
+    data-testid="wallet-selector"
+    data-viewport="compact"
+  >
+    <div>
+      <p
+        class="text-sm font-bold text-[#0A0A0A] sm:text-base"
+        id="wallet-selector-title"
+      >
+        Choose a wallet
+      </p>
+      <p
+        class="mt-0.5 text-xs font-medium leading-relaxed text-[#6B6B6B] sm:text-sm"
+        id="wallet-selector-description"
+      >
+        Connect your Stellar wallet to complete this payment.
+      </p>
+    </div>
+    <ul
+      aria-label="Available wallets"
+      class="flex w-full flex-col gap-2 sm:gap-3"
+    >
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-freighter-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-freighter"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#7B61FF"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M8 16h16M16 8l8 8-8 8"
+                stroke="white"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Freighter
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-freighter-status"
+            >
+              Browser extension wallet
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-xbull-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-xbull"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#F5A623"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9 22 L16 8 L23 22"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+              <path
+                d="M12.2 16.5h7.6"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              xBull
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-xbull-status"
+            >
+              xBull browser extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-albedo-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-albedo"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#111827"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="6.5"
+                stroke="white"
+                stroke-width="2"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                fill="white"
+                r="2"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Albedo
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-albedo-status"
+            >
+              Web wallet, no extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-busy="true"
+          aria-pressed="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-optimistic="true"
+          data-state="connecting"
+          data-testid="wallet-option-walletconnect"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#3B99FC"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
+                fill="white"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="flex items-center gap-2 text-sm font-bold text-[#0A0A0A]"
+            >
+              <svg
+                aria-hidden="true"
+                class="h-4 w-4 shrink-0 animate-spin text-[var(--pluto-500)] motion-reduce:animate-none"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  fill="none"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  fill="currentColor"
+                />
+              </svg>
+              <span
+                id="wallet-selector-title-walletconnect-status"
+              >
+                Waiting for wallet...
+              </span>
+            </span>
+          </div>
+        </button>
+      </li>
+    </ul>
+    <div
+      aria-live="polite"
+      class="flex w-full flex-col items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-[#F9F9F9] p-4 sm:p-6"
+      data-testid="wallet-connect-qr"
+    >
+      <p
+        class="text-center text-xs font-bold uppercase tracking-widest text-[#6B6B6B]"
+      >
+        Scan with your compatible wallet app
+      </p>
+      <div
+        aria-label="WalletConnect pairing QR code"
+        class="w-full max-w-[200px] rounded-xl border border-[#E8E8E8] bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.05)]"
+        role="img"
+      >
+        <svg
+          aria-hidden="true"
+          data-size="160"
+          data-testid="wallet-qr-code"
+          data-value="wc:snapshot-mobile"
+        />
+      </div>
+      <p
+        class="max-w-xs text-center text-xs font-medium leading-relaxed text-[#6B6B6B]"
+      >
+        Scan with Freighter mobile or any WalletConnect-compatible wallet
+      </p>
+    </div>
+  </section>
+</div>
+`;
+
+exports[`WalletSelector > snapshots > matches the connected snapshot, which renders nothing 1`] = `<div />`;
+
+exports[`WalletSelector > snapshots > matches the connecting snapshot 1`] = `
+<div>
+  <section
+    aria-busy="true"
+    aria-describedby="wallet-selector-description"
+    aria-labelledby="wallet-selector-title"
+    class="flex w-full max-w-full flex-col gap-4"
+    data-testid="wallet-selector"
+    data-viewport="regular"
+  >
+    <div>
+      <p
+        class="text-sm font-bold text-[#0A0A0A] sm:text-base"
+        id="wallet-selector-title"
+      >
+        Choose a wallet
+      </p>
+      <p
+        class="mt-0.5 text-xs font-medium leading-relaxed text-[#6B6B6B] sm:text-sm"
+        id="wallet-selector-description"
+      >
+        Connect your Stellar wallet to complete this payment.
+      </p>
+    </div>
+    <ul
+      aria-label="Available wallets"
+      class="flex w-full flex-col gap-2 sm:gap-3"
+    >
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-busy="true"
+          aria-pressed="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-optimistic="true"
+          data-state="connecting"
+          data-testid="wallet-option-freighter"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#7B61FF"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M8 16h16M16 8l8 8-8 8"
+                stroke="white"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="flex items-center gap-2 text-sm font-bold text-[#0A0A0A]"
+            >
+              <svg
+                aria-hidden="true"
+                class="h-4 w-4 shrink-0 animate-spin text-[var(--pluto-500)] motion-reduce:animate-none"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  fill="none"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  fill="currentColor"
+                />
+              </svg>
+              <span
+                id="wallet-selector-title-freighter-status"
+              >
+                Connecting...
+              </span>
+            </span>
+          </div>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-xbull-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-xbull"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#F5A623"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9 22 L16 8 L23 22"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+              <path
+                d="M12.2 16.5h7.6"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              xBull
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-xbull-status"
+            >
+              xBull browser extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-albedo-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-albedo"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#111827"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="6.5"
+                stroke="white"
+                stroke-width="2"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                fill="white"
+                r="2"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Albedo
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-albedo-status"
+            >
+              Web wallet, no extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-walletconnect-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-walletconnect"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#3B99FC"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
+                fill="white"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              WalletConnect
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-walletconnect-status"
+            >
+              Mobile & desktop wallets
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+    </ul>
+  </section>
+</div>
+`;
+
+exports[`WalletSelector > snapshots > matches the desktop WalletConnect QR snapshot 1`] = `
+<div>
+  <section
+    aria-busy="true"
+    aria-describedby="wallet-selector-description"
+    aria-labelledby="wallet-selector-title"
+    class="flex w-full max-w-full flex-col gap-4"
+    data-testid="wallet-selector"
+    data-viewport="regular"
+  >
+    <div>
+      <p
+        class="text-sm font-bold text-[#0A0A0A] sm:text-base"
+        id="wallet-selector-title"
+      >
+        Choose a wallet
+      </p>
+      <p
+        class="mt-0.5 text-xs font-medium leading-relaxed text-[#6B6B6B] sm:text-sm"
+        id="wallet-selector-description"
+      >
+        Connect your Stellar wallet to complete this payment.
+      </p>
+    </div>
+    <ul
+      aria-label="Available wallets"
+      class="flex w-full flex-col gap-2 sm:gap-3"
+    >
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-freighter-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-freighter"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#7B61FF"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M8 16h16M16 8l8 8-8 8"
+                stroke="white"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Freighter
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-freighter-status"
+            >
+              Browser extension wallet
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-xbull-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-xbull"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#F5A623"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9 22 L16 8 L23 22"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+              <path
+                d="M12.2 16.5h7.6"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              xBull
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-xbull-status"
+            >
+              xBull browser extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-albedo-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-albedo"
+          data-wallet-option="true"
+          disabled=""
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#111827"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="6.5"
+                stroke="white"
+                stroke-width="2"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                fill="white"
+                r="2"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Albedo
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-albedo-status"
+            >
+              Web wallet, no extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-busy="true"
+          aria-pressed="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-optimistic="true"
+          data-state="connecting"
+          data-testid="wallet-option-walletconnect"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#3B99FC"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
+                fill="white"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="flex items-center gap-2 text-sm font-bold text-[#0A0A0A]"
+            >
+              <svg
+                aria-hidden="true"
+                class="h-4 w-4 shrink-0 animate-spin text-[var(--pluto-500)] motion-reduce:animate-none"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  fill="none"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  fill="currentColor"
+                />
+              </svg>
+              <span
+                id="wallet-selector-title-walletconnect-status"
+              >
+                Waiting for wallet...
+              </span>
+            </span>
+          </div>
+        </button>
+      </li>
+    </ul>
+    <div
+      aria-live="polite"
+      class="flex w-full flex-col items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-[#F9F9F9] p-4 sm:p-6"
+      data-testid="wallet-connect-qr"
+    >
+      <p
+        class="text-center text-xs font-bold uppercase tracking-widest text-[#6B6B6B]"
+      >
+        Scan with your compatible wallet app
+      </p>
+      <div
+        aria-label="WalletConnect pairing QR code"
+        class="w-full max-w-[200px] rounded-xl border border-[#E8E8E8] bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.05)]"
+        role="img"
+      >
+        <svg
+          aria-hidden="true"
+          data-size="200"
+          data-testid="wallet-qr-code"
+          data-value="wc:snapshot-desktop"
+        />
+      </div>
+      <p
+        class="max-w-xs text-center text-xs font-medium leading-relaxed text-[#6B6B6B]"
+      >
+        Scan with Freighter mobile or any WalletConnect-compatible wallet
+      </p>
+    </div>
+  </section>
+</div>
+`;
+
+exports[`WalletSelector > snapshots > matches the desktop ready snapshot 1`] = `
+<div>
+  <section
+    aria-describedby="wallet-selector-description"
+    aria-labelledby="wallet-selector-title"
+    class="flex w-full max-w-full flex-col gap-4"
+    data-testid="wallet-selector"
+    data-viewport="regular"
+  >
+    <div>
+      <p
+        class="text-sm font-bold text-[#0A0A0A] sm:text-base"
+        id="wallet-selector-title"
+      >
+        Choose a wallet
+      </p>
+      <p
+        class="mt-0.5 text-xs font-medium leading-relaxed text-[#6B6B6B] sm:text-sm"
+        id="wallet-selector-description"
+      >
+        Connect your Stellar wallet to complete this payment.
+      </p>
+    </div>
+    <ul
+      aria-label="Available wallets"
+      class="flex w-full flex-col gap-2 sm:gap-3"
+    >
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-freighter-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-freighter"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#7B61FF"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M8 16h16M16 8l8 8-8 8"
+                stroke="white"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Freighter
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-freighter-status"
+            >
+              Browser extension wallet
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-xbull-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-xbull"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#F5A623"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9 22 L16 8 L23 22"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+              <path
+                d="M12.2 16.5h7.6"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              xBull
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-xbull-status"
+            >
+              xBull browser extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-albedo-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-albedo"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#111827"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="6.5"
+                stroke="white"
+                stroke-width="2"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                fill="white"
+                r="2"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Albedo
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-albedo-status"
+            >
+              Web wallet, no extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-walletconnect-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-walletconnect"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#3B99FC"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
+                fill="white"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              WalletConnect
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-walletconnect-status"
+            >
+              Mobile & desktop wallets
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+    </ul>
+  </section>
+</div>
+`;
+
+exports[`WalletSelector > snapshots > matches the error snapshot 1`] = `
+<div>
+  <section
+    aria-describedby="wallet-selector-description"
+    aria-labelledby="wallet-selector-title"
+    class="flex w-full max-w-full flex-col gap-4"
+    data-testid="wallet-selector"
+    data-viewport="regular"
+  >
+    <div>
+      <p
+        class="text-sm font-bold text-[#0A0A0A] sm:text-base"
+        id="wallet-selector-title"
+      >
+        Choose a wallet
+      </p>
+      <p
+        class="mt-0.5 text-xs font-medium leading-relaxed text-[#6B6B6B] sm:text-sm"
+        id="wallet-selector-description"
+      >
+        Connect your Stellar wallet to complete this payment.
+      </p>
+    </div>
+    <ul
+      aria-label="Available wallets"
+      class="flex w-full flex-col gap-2 sm:gap-3"
+    >
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-freighter-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-rolled-back="true"
+          data-state="rolled-back"
+          data-testid="wallet-option-freighter"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#7B61FF"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M8 16h16M16 8l8 8-8 8"
+                stroke="white"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Freighter
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-freighter-status"
+            >
+              Choice reverted
+            </span>
+          </div>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-xbull-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-xbull"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#F5A623"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9 22 L16 8 L23 22"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+              <path
+                d="M12.2 16.5h7.6"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              xBull
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-xbull-status"
+            >
+              xBull browser extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-albedo-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-albedo"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#111827"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="6.5"
+                stroke="white"
+                stroke-width="2"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                fill="white"
+                r="2"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Albedo
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-albedo-status"
+            >
+              Web wallet, no extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-walletconnect-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-walletconnect"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#3B99FC"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
+                fill="white"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              WalletConnect
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-walletconnect-status"
+            >
+              Mobile & desktop wallets
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+    </ul>
+    <div
+      aria-live="assertive"
+      class="rounded-xl border border-red-200 bg-red-50 p-3 text-center text-sm font-medium leading-relaxed text-red-800"
+      data-testid="wallet-selector-error"
+      role="alert"
+    >
+      Couldn't reach the network. Your wallet choice was reverted. Check your connection and try again.
+    </div>
+  </section>
+</div>
+`;
+
+exports[`WalletSelector > snapshots > matches the unavailable snapshot, including the Freighter install link 1`] = `
+<div>
+  <section
+    aria-describedby="wallet-selector-description"
+    aria-labelledby="wallet-selector-title"
+    class="flex w-full max-w-full flex-col gap-4"
+    data-testid="wallet-selector"
+    data-viewport="regular"
+  >
+    <div>
+      <p
+        class="text-sm font-bold text-[#0A0A0A] sm:text-base"
+        id="wallet-selector-title"
+      >
+        Choose a wallet
+      </p>
+      <p
+        class="mt-0.5 text-xs font-medium leading-relaxed text-[#6B6B6B] sm:text-sm"
+        id="wallet-selector-description"
+      >
+        Connect your Stellar wallet to complete this payment.
+      </p>
+    </div>
+    <ul
+      aria-label="Available wallets"
+      class="flex w-full flex-col gap-2 sm:gap-3"
+    >
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-freighter-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="unavailable"
+          data-testid="wallet-option-freighter"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#7B61FF"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M8 16h16M16 8l8 8-8 8"
+                stroke="white"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Freighter
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-freighter-status"
+            >
+              (not installed)
+            </span>
+          </div>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-xbull-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-xbull"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#F5A623"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9 22 L16 8 L23 22"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+              />
+              <path
+                d="M12.2 16.5h7.6"
+                stroke="#0A0A0A"
+                stroke-linecap="round"
+                stroke-width="2.5"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              xBull
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-xbull-status"
+            >
+              xBull browser extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-albedo-status"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="ready"
+          data-testid="wallet-option-albedo"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#111827"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                r="6.5"
+                stroke="white"
+                stroke-width="2"
+              />
+              <circle
+                cx="16"
+                cy="16"
+                fill="white"
+                r="2"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              Albedo
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-albedo-status"
+            >
+              Web wallet, no extension
+            </span>
+          </div>
+          <svg
+            aria-hidden="true"
+            class="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)] motion-reduce:transition-none"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M9 5l7 7-7 7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+      </li>
+      <li
+        class="min-w-0"
+      >
+        <button
+          aria-describedby="wallet-selector-title-walletconnect-status"
+          aria-disabled="true"
+          class="group relative flex min-h-16 w-full touch-manipulation items-center gap-3 rounded-2xl border border-[#E8E8E8] bg-white px-4 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transition-none data-[state=ready]:hover:-translate-y-px data-[state=ready]:hover:border-[var(--pluto-400)] data-[state=ready]:hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] data-[state=ready]:active:translate-y-0 data-[state=ready]:active:scale-[0.99] motion-reduce:data-[state=ready]:hover:translate-y-0 data-[state=unavailable]:cursor-not-allowed data-[state=unavailable]:opacity-60 data-[state=checking]:cursor-progress data-[state=checking]:opacity-80 data-[optimistic=true]:border-[var(--pluto-400)] data-[optimistic=true]:shadow-[0_8px_24px_rgba(74,111,165,0.16)] data-[state=rolled-back]:border-red-300 data-[state=rolled-back]:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 sm:gap-4 sm:px-5"
+          data-state="unavailable"
+          data-testid="wallet-option-walletconnect"
+          data-wallet-option="true"
+          type="button"
+        >
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)] motion-reduce:transition-none"
+          >
+            <svg
+              aria-hidden="true"
+              class="h-5 w-5"
+              fill="none"
+              focusable="false"
+              viewBox="0 0 32 32"
+            >
+              <rect
+                fill="#3B99FC"
+                height="32"
+                rx="8"
+                width="32"
+              />
+              <path
+                d="M9.5 13.5c3.6-3.5 9.4-3.5 13 0l.4.4a.4.4 0 010 .6l-1.5 1.4a.2.2 0 01-.3 0l-.6-.6c-2.5-2.4-6.5-2.4-9 0l-.6.6a.2.2 0 01-.3 0L9 14.5a.4.4 0 010-.6l.5-.4zm16 3 1.3 1.3a.4.4 0 010 .6l-6 5.8a.4.4 0 01-.6 0l-4.2-4.1a.1.1 0 00-.2 0l-4.2 4.1a.4.4 0 01-.6 0l-6-5.8a.4.4 0 010-.6L6.5 16.5a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0l4.2 4.1c.1.1.1.1.2 0l4.2-4.1a.4.4 0 01.6 0z"
+                fill="white"
+              />
+            </svg>
+          </div>
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-0.5"
+          >
+            <span
+              class="truncate text-sm font-bold text-[#0A0A0A] transition-colors group-hover:text-[var(--pluto-600)]"
+            >
+              WalletConnect
+            </span>
+            <span
+              class="text-xs font-medium leading-relaxed text-[#6B6B6B]"
+              id="wallet-selector-title-walletconnect-status"
+            >
+              (no project ID)
+            </span>
+          </div>
+        </button>
+      </li>
+    </ul>
+    <a
+      aria-label="Don't have Freighter? Install it (opens in a new tab)"
+      class="rounded-sm text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-500)] underline decoration-[var(--pluto-200)] underline-offset-4 transition-colors duration-150 hover:text-[var(--pluto-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] focus-visible:ring-offset-2"
+      data-testid="wallet-install-freighter"
+      href="https://freighter.app"
+      referrerpolicy="no-referrer"
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      Don't have Freighter? Install it
+      <span
+        aria-hidden="true"
+      >
+         →
+      </span>
+    </a>
+  </section>
+</div>
+`;

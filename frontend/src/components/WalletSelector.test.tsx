@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 /**
- * Interaction coverage for the multi-wallet connection panel.
+ * Snapshot and interaction coverage for the multi-wallet connection panel.
  *
  * The panel is the checkout surface for Freighter, xBull, Albedo, and
  * WalletConnect. These tests lock rendering, keyboard and pointer behavior,
@@ -898,6 +898,90 @@ describe("WalletSelector", () => {
       fireEvent.click(option("walletconnect"));
       await screen.findByTestId("wallet-connect-qr");
       await expectNoAxeViolations(qr.container);
+    });
+  });
+
+  describe("snapshots", () => {
+    it("matches the checking snapshot", () => {
+      const providers = mountWallets();
+      providers.forEach((provider) => {
+        provider.isAvailable.mockReturnValue(new Promise(() => {}));
+      });
+      const { container } = renderSelector();
+      expect(container).toMatchSnapshot();
+    });
+
+    it("matches the desktop ready snapshot", async () => {
+      mountWallets();
+      const { container } = renderSelector();
+      await settleReady();
+      expect(container).toMatchSnapshot();
+    });
+
+    it("matches the unavailable snapshot, including the Freighter install link", async () => {
+      mountWallets({ freighter: false, walletconnect: false });
+      const { container } = renderSelector();
+      await screen.findByTestId("wallet-install-freighter");
+      expect(container).toMatchSnapshot();
+    });
+
+    it("matches the connecting snapshot", async () => {
+      const providers = mountWallets();
+      providers[0].getPublicKey.mockReturnValue(new Promise(() => {}));
+      const { container } = renderSelector();
+      await settleReady();
+      fireEvent.click(option("freighter"));
+      await waitFor(() => expect(option("freighter")).toHaveTextContent(copy.connecting));
+      expect(container).toMatchSnapshot();
+    });
+
+    it("matches the error snapshot", async () => {
+      const providers = mountWallets();
+      providers[0].getPublicKey.mockRejectedValue(new Error("socket hang up"));
+      const { container } = renderSelector();
+      await settleReady();
+      fireEvent.click(option("freighter"));
+      await screen.findByRole("alert");
+      expect(container).toMatchSnapshot();
+    });
+
+    it("matches the desktop WalletConnect QR snapshot", async () => {
+      mountWallets();
+      mocks.connectWalletConnect.mockResolvedValue({
+        uri: "wc:snapshot-desktop",
+        approval: new Promise(() => {}),
+      });
+      const { container } = renderSelector();
+      await settleReady("walletconnect");
+      fireEvent.click(option("walletconnect"));
+      await screen.findByTestId("wallet-qr-code");
+      expect(container).toMatchSnapshot();
+    });
+
+    it("matches the compact mobile QR snapshot", async () => {
+      setViewport(390);
+      mountWallets();
+      mocks.connectWalletConnect.mockResolvedValue({
+        uri: "wc:snapshot-mobile",
+        approval: new Promise(() => {}),
+      });
+      const { container } = renderSelector();
+      await waitFor(() => {
+        expect(screen.getByTestId("wallet-selector")).toHaveAttribute("data-viewport", "compact");
+      });
+      await settleReady("walletconnect");
+      fireEvent.click(option("walletconnect"));
+      const code = await screen.findByTestId("wallet-qr-code");
+      expect(code).toHaveAttribute("data-size", "160");
+      expect(container).toMatchSnapshot();
+    });
+
+    it("matches the connected snapshot, which renders nothing", () => {
+      mountWallets();
+      mocks.walletState.activeProvider = { id: "freighter", name: "Freighter" };
+      const { container } = renderSelector();
+      expect(screen.queryByTestId("wallet-selector")).not.toBeInTheDocument();
+      expect(container).toMatchSnapshot();
     });
   });
 });

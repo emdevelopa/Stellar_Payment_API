@@ -2,6 +2,7 @@ import express from "express";
 import { Horizon } from "stellar-sdk";
 import { supabase } from "../lib/supabase.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
+import { fetchTxMetaWithRecovery } from "../lib/payment-details-recovery.js";
 
 // ─── Horizon client ───────────────────────────────────────────────────────────
 // Mirrors the network selection used elsewhere in the project.
@@ -16,30 +17,27 @@ const HORIZON_URL =
 const horizonServer = new Horizon.Server(HORIZON_URL);
 
 // ─── Helper: fetch tx metadata from Horizon ───────────────────────────────────
-// Returns null (non-throwing) when:
-//   • tx_id is falsy
+// Never throws; resolves to null when the metadata is unavailable:
+//   • tx_id is falsy or not a 64-hex transaction hash
 //   • Horizon 404s (tx not yet propagated)
-//   • any transient network error
+//   • a non-retryable Horizon error
+// Transient Horizon failures (network errors, 408, 429, 5xx) are retried with
+// backoff, and if they still fail the lookup is dead-lettered and recovered in
+// the background (#1776), so a later request is served from the recovery cache.
 // The payment record is always returned regardless.
+
+async function loadTxMeta(txId) {
+  const tx = await horizonServer.transactions().transaction(txId).call();
+  return {
+    tx_hash: tx.hash,
+    ledger: tx.ledger, // integer ledger sequence number
+    timestamp: tx.created_at, // ISO-8601 string from Horizon
+  };
+}
 
 async function fetchStellarMeta(txId) {
   if (!txId) return null;
-
-  try {
-    const tx = await horizonServer.transactions().transaction(txId).call();
-    return {
-      tx_hash: tx.hash,
-      ledger: tx.ledger, // integer ledger sequence number
-      timestamp: tx.created_at, // ISO-8601 string from Horizon
-    };
-  } catch (err) {
-    // 404 = tx not visible on Horizon yet — silent
-    // anything else is unexpected but non-fatal
-    if (err?.response?.status !== 404) {
-      console.warn("[stellar] tx fetch failed", { txId, err: err.message });
-    }
-    return null;
-  }
+  return fetchTxMetaWithRecovery(txId, { fetchTx: loadTxMeta });
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────

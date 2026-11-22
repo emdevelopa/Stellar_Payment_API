@@ -21,6 +21,8 @@ import { dbRlsRegister } from "../lib/db-rls-telemetry.js";
 // Stellar Account & Ledger Key Validator metrics live in their own registry (issue #1764)
 // and are merged into the scrape output below.
 import { validatorRegister } from "../lib/stellar/validators-metrics.js";
+import { paymentDetailsRegister } from "../lib/payment-details-metrics.js";
+import { merchantLifecycleRegister } from "../lib/merchant-lifecycle-metrics.js";
 import { logger } from "../lib/logger.js";
 
 const metricRegisters = [
@@ -32,6 +34,8 @@ const metricRegisters = [
   exchangeRateOracleRegister,
   dbRlsRegister,
   validatorRegister,
+  paymentDetailsRegister,
+  merchantLifecycleRegister,
 ];
 
 export function createPrometheusRouter(registries = metricRegisters, contentType = register.contentType) {

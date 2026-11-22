@@ -19,9 +19,18 @@ import {
   validatorRejectionsTotal,
   validatorDlqDepth,
   validatorDlqOperationsTotal,
+  validatorCacheOperationsTotal,
+  validatorThroughputPerSecond,
+  recordValidatorThroughput,
+  getValidatorThroughput,
   validatorRegister,
   resetValidatorMetrics,
 } from "./validators-metrics.js";
+import {
+  ValidatorCache,
+  validatorCache,
+  buildValidatorCacheKey,
+} from "./validators-cache.js";
 
 // Re-export metrics and registry for observability scrapers
 export {
@@ -32,7 +41,19 @@ export {
   validatorDuration,
   validatorDlqDepth,
   validatorDlqOperationsTotal,
+  validatorCacheOperationsTotal,
+  validatorThroughputPerSecond,
+  getValidatorThroughput,
 };
+export { ValidatorCache, validatorCache, buildValidatorCacheKey };
+
+/**
+ * Count an evaluation outcome and feed the throughput window (#1765).
+ */
+function recordEvaluation(operation, outcome) {
+  validatorEvaluationsTotal.inc({ operation, outcome });
+  recordValidatorThroughput(operation);
+}
 
 // ─── Constants & Patterns ───────────────────────────────────────────────────
 
@@ -285,21 +306,21 @@ export function sanitizeStrKey(value, options = {}) {
 export function isValidStellarPublicKey(value) {
   const start = Date.now();
   if (typeof value !== "string") {
-    validatorEvaluationsTotal.inc({ operation: "public_key", outcome: "invalid" });
+    recordEvaluation("public_key", "invalid");
     return false;
   }
 
   const publicKey = value.trim();
 
   if (!STELLAR_PUBLIC_KEY_PATTERN.test(publicKey)) {
-    validatorEvaluationsTotal.inc({ operation: "public_key", outcome: "invalid" });
+    recordEvaluation("public_key", "invalid");
     return false;
   }
 
   // SDK verification if available
   if (typeof StellarSdk.StrKey?.isValidEd25519PublicKey === "function") {
     const valid = StellarSdk.StrKey.isValidEd25519PublicKey(publicKey);
-    validatorEvaluationsTotal.inc({ operation: "public_key", outcome: valid ? "valid" : "invalid" });
+    recordEvaluation("public_key", valid ? "valid" : "invalid");
     validatorDuration.observe({ operation: "public_key" }, (Date.now() - start) / 1000);
     return valid;
   }
@@ -308,11 +329,11 @@ export function isValidStellarPublicKey(value) {
   try {
     const decoded = decodeStrKey(publicKey);
     const valid = decoded.versionByte === STRKEY_VERSION_BYTES.ed25519PublicKey;
-    validatorEvaluationsTotal.inc({ operation: "public_key", outcome: valid ? "valid" : "invalid" });
+    recordEvaluation("public_key", valid ? "valid" : "invalid");
     validatorDuration.observe({ operation: "public_key" }, (Date.now() - start) / 1000);
     return valid;
   } catch {
-    validatorEvaluationsTotal.inc({ operation: "public_key", outcome: "invalid" });
+    recordEvaluation("public_key", "invalid");
     return false;
   }
 }
@@ -533,7 +554,7 @@ export function isValidEd25519Signature(signature) {
     }
 
     if (!sigBuf || sigBuf.length !== 64) {
-      validatorEvaluationsTotal.inc({ operation: "signature_format", outcome: "invalid" });
+      recordEvaluation("signature_format", "invalid");
       return false;
     }
 
@@ -541,15 +562,15 @@ export function isValidEd25519Signature(signature) {
     const s = readLittleEndianBigInt(sigBuf, 32, 32);
     if (s >= ED25519_L) {
       validatorRejectionsTotal.inc({ operation: "signature_format", reason: "malleable_scalar" });
-      validatorEvaluationsTotal.inc({ operation: "signature_format", outcome: "invalid" });
+      recordEvaluation("signature_format", "invalid");
       return false;
     }
 
-    validatorEvaluationsTotal.inc({ operation: "signature_format", outcome: "valid" });
+    recordEvaluation("signature_format", "valid");
     validatorDuration.observe({ operation: "signature_format" }, (Date.now() - start) / 1000);
     return true;
   } catch {
-    validatorEvaluationsTotal.inc({ operation: "signature_format", outcome: "invalid" });
+    recordEvaluation("signature_format", "invalid");
     return false;
   }
 }
@@ -612,10 +633,7 @@ export function verifyEd25519Signature(publicKey, data, signature) {
     const keypair = StellarSdk.Keypair.fromPublicKey(publicKey.trim());
     const valid = keypair.verify(dataBuf, sigBuf);
 
-    validatorEvaluationsTotal.inc({
-      operation: "signature_verify",
-      outcome: valid ? "valid" : "invalid",
-    });
+    recordEvaluation("signature_verify", valid ? "valid" : "invalid");
     validatorDuration.observe({ operation: "signature_verify" }, (Date.now() - start) / 1000);
 
     if (!valid) {
@@ -624,7 +642,7 @@ export function verifyEd25519Signature(publicKey, data, signature) {
 
     return { valid: true };
   } catch (err) {
-    validatorEvaluationsTotal.inc({ operation: "signature_verify", outcome: "error" });
+    recordEvaluation("signature_verify", "error");
     return { valid: false, reason: err.message || "Signature verification error" };
   }
 }
@@ -716,7 +734,7 @@ export function sanitizeFederatedAddress(value) {
  * @param {ValidatorDeadLetterQueue} [options.dlq] - Dead-letter queue
  * @returns {Promise<{ account_id: string, memo?: string, memo_type?: string }>}
  */
-export async function resolveFederatedAddress(federatedAddress, options = {}) {
+async function resolveFederatedAddressUncached(federatedAddress, options = {}) {
   const start = Date.now();
   const {
     fetchFn = globalThis.fetch,
@@ -851,7 +869,7 @@ export async function resolveFederatedAddress(federatedAddress, options = {}) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const result = await executeResolution();
-      validatorEvaluationsTotal.inc({ operation: "federation_resolve", outcome: "valid" });
+      recordEvaluation("federation_resolve", "valid");
       validatorDuration.observe({ operation: "federation_resolve" }, (Date.now() - start) / 1000);
       return result;
     } catch (err) {
@@ -873,8 +891,94 @@ export async function resolveFederatedAddress(federatedAddress, options = {}) {
     );
   }
 
-  validatorEvaluationsTotal.inc({ operation: "federation_resolve", outcome: "error" });
+  recordEvaluation("federation_resolve", "error");
   throw lastError;
+}
+
+// ─── Federated address resolution: Redis cache + request coalescing (#1765) ──
+
+/** Concurrent identical lookups share one resolution: cacheKey -> Promise. */
+const inFlightResolutions = new Map();
+
+/**
+ * Re-validate a cached federation result. A poisoned or corrupt cache entry
+ * (wrong shape, invalid account id, bad memo) is rejected, never returned.
+ */
+function parseCachedFederationResult(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const accountId = typeof raw.account_id === "string" ? raw.account_id.trim() : "";
+  if (!isValidStellarPublicKey(accountId)) return null;
+  const result = { account_id: accountId };
+  if (raw.memo !== undefined) {
+    const memoType = typeof raw.memo_type === "string" ? raw.memo_type : "text";
+    if (typeof raw.memo !== "string" || !validateMemo(raw.memo, memoType).valid) return null;
+    result.memo = raw.memo;
+    result.memo_type = memoType;
+  }
+  return result;
+}
+
+function resolveFederationCache(option, env = process.env) {
+  if (option === false || option === null) return null;
+  if (option && typeof option.get === "function" && typeof option.set === "function") return option;
+  // Opt-in default: enable with VALIDATOR_CACHE_ENABLED=true (Redis when
+  // REDIS_URL is reachable, otherwise a bounded in-memory cache).
+  return env.VALIDATOR_CACHE_ENABLED === "true" ? validatorCache : null;
+}
+
+/**
+ * Resolve a federated address (`name*domain`) to an account id.
+ *
+ * Successful results are cached (Redis, with an in-memory fallback) and
+ * concurrent identical lookups are coalesced into one network resolution.
+ * Failures are never cached. Pass `{ cache: false }` to bypass, or
+ * `{ cache: <ValidatorCache> }` to supply a store; see resolveFederationCache.
+ *
+ * Throughput and cache effectiveness are exported as Prometheus metrics
+ * (`stellar_validator_throughput_per_second`, `stellar_validator_cache_operations_total`).
+ */
+export async function resolveFederatedAddress(federatedAddress, options = {}) {
+  const cache = resolveFederationCache(options.cache);
+  let cacheKey = null;
+  if (cache) {
+    try {
+      cacheKey = buildValidatorCacheKey("federation", sanitizeFederatedAddress(federatedAddress).address);
+    } catch {
+      // Invalid syntax: let the uncached path record the rejection and throw.
+      return resolveFederatedAddressUncached(federatedAddress, options);
+    }
+  }
+  if (!cache || !cacheKey) {
+    return resolveFederatedAddressUncached(federatedAddress, options);
+  }
+
+  const start = Date.now();
+  const cached = await cache.get("federation_resolve", cacheKey, parseCachedFederationResult);
+  if (cached) {
+    recordEvaluation("federation_resolve", "valid");
+    validatorDuration.observe({ operation: "federation_resolve" }, (Date.now() - start) / 1000);
+    return cached;
+  }
+
+  const inFlight = inFlightResolutions.get(cacheKey);
+  if (inFlight) {
+    validatorCacheOperationsTotal.inc({
+      operation: "federation_resolve",
+      result: "coalesced",
+      backend: "memory",
+    });
+    return inFlight;
+  }
+
+  const pending = (async () => {
+    const result = await resolveFederatedAddressUncached(federatedAddress, options);
+    await cache.set("federation_resolve", cacheKey, result);
+    return result;
+  })().finally(() => {
+    inFlightResolutions.delete(cacheKey);
+  });
+  inFlightResolutions.set(cacheKey, pending);
+  return pending;
 }
 
 // ─── Payload Sanitization & Anti-Tampering ──────────────────────────────────

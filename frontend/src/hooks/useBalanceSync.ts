@@ -1,9 +1,13 @@
-import { useEffect, useReducer, useCallback, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useSwipeToDismiss } from "./useSwipeToDismiss";
 
 export interface Balance {
   code: string;
   balance: string;
 }
+
+export const BALANCE_SYNC_ERROR_TOAST_ID = "balance-sync-error";
 
 interface UseBalanceSyncOptions {
   pollingInterval?: number;
@@ -19,13 +23,19 @@ export interface BalanceSyncState {
   lastUpdated: Date | null;
   error: string | null;
   optimisticBalances: Record<string, string>;
+  rollbackMessage: string | null;
+  isDrawerOpen: boolean;
 }
 
 export type BalanceSyncAction =
   | { type: "FETCH_START" }
   | { type: "FETCH_SUCCESS"; balances: Balance[]; at: Date }
-  | { type: "FETCH_ERROR"; error: string }
+  | { type: "FETCH_ERROR"; error: string; rolledBack?: boolean }
   | { type: "OPTIMISTIC_UPDATE"; code: string; balance: string }
+  | { type: "ROLLBACK_OPTIMISTIC"; reason?: string }
+  | { type: "OPEN_DRAWER" }
+  | { type: "CLOSE_DRAWER" }
+  | { type: "TOGGLE_DRAWER" }
   | { type: "RESET" };
 
 export const initialBalanceSyncState: BalanceSyncState = {
@@ -34,15 +44,17 @@ export const initialBalanceSyncState: BalanceSyncState = {
   lastUpdated: null,
   error: null,
   optimisticBalances: {},
+  rollbackMessage: null,
+  isDrawerOpen: false,
 };
 
-function balanceSyncReducer(
+export function balanceSyncReducer(
   state: BalanceSyncState,
   action: BalanceSyncAction,
 ): BalanceSyncState {
   switch (action.type) {
     case "FETCH_START":
-      return { ...state, isLoading: true, error: null };
+      return { ...state, isLoading: true, error: null, rollbackMessage: null };
     case "FETCH_SUCCESS":
       return {
         ...state,
@@ -51,9 +63,21 @@ function balanceSyncReducer(
         lastUpdated: action.at,
         error: null,
         optimisticBalances: {},
+        rollbackMessage: null,
       };
-    case "FETCH_ERROR":
-      return { ...state, isLoading: false, error: action.error };
+    case "FETCH_ERROR": {
+      const hadOptimistic = Object.keys(state.optimisticBalances).length > 0;
+      return {
+        ...state,
+        isLoading: false,
+        error: action.error,
+        optimisticBalances: {},
+        rollbackMessage:
+          hadOptimistic || action.rolledBack
+            ? `${action.error}. Optimistic balances were rolled back.`
+            : null,
+      };
+    }
     case "OPTIMISTIC_UPDATE":
       return {
         ...state,
@@ -61,7 +85,20 @@ function balanceSyncReducer(
           ...state.optimisticBalances,
           [action.code]: action.balance,
         },
+        rollbackMessage: null,
       };
+    case "ROLLBACK_OPTIMISTIC":
+      return {
+        ...state,
+        optimisticBalances: {},
+        rollbackMessage: action.reason ?? "Optimistic balances were rolled back.",
+      };
+    case "OPEN_DRAWER":
+      return { ...state, isDrawerOpen: true };
+    case "CLOSE_DRAWER":
+      return { ...state, isDrawerOpen: false };
+    case "TOGGLE_DRAWER":
+      return { ...state, isDrawerOpen: !state.isDrawerOpen };
     case "RESET":
       return { ...initialBalanceSyncState };
     default:
@@ -99,9 +136,53 @@ export function useBalanceSync(
   } = options;
 
   const [state, dispatch] = useReducer(balanceSyncReducer, initialBalanceSyncState);
+  const [isMobile, setIsMobile] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const onUpdateRef = useRef(onUpdate);
+  const stateRef = useRef(state);
   onUpdateRef.current = onUpdate;
+  stateRef.current = state;
+
+  const closeDrawer = useCallback(() => {
+    dispatch({ type: "CLOSE_DRAWER" });
+  }, []);
+
+  const openDrawer = useCallback(() => {
+    dispatch({ type: "OPEN_DRAWER" });
+  }, []);
+
+  const toggleDrawer = useCallback(() => {
+    dispatch({ type: "TOGGLE_DRAWER" });
+  }, []);
+
+  const {
+    offset: drawerOffset,
+    dragging: drawerDragging,
+    handlers: drawerHandlers,
+  } = useSwipeToDismiss({
+    onDismiss: closeDrawer,
+    enabled: state.isDrawerOpen,
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const query = window.matchMedia("(max-width: 639px)");
+    const update = () => setIsMobile(query.matches);
+    update();
+
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", update);
+      return () => query.removeEventListener("change", update);
+    }
+
+    if (typeof query.addListener === "function") {
+      query.addListener(update);
+      return () => query.removeListener(update);
+    }
+  }, []);
 
   const fetchBalances = useCallback(async () => {
     if (!enabled) return;
@@ -144,14 +225,26 @@ export function useBalanceSync(
       onUpdateRef.current?.(newBalances);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
-      const message = error instanceof Error ? error.message : "Balance sync failed";
+      const rawMessage = error instanceof Error ? error.message : "Balance sync failed";
+      const message = error instanceof TypeError ? `Network error: ${rawMessage}` : rawMessage;
+      const hadOptimistic = Object.keys(stateRef.current.optimisticBalances).length > 0;
       console.error("Balance sync error:", error);
-      dispatch({ type: "FETCH_ERROR", error: message });
+      dispatch({ type: "FETCH_ERROR", error: message, rolledBack: hadOptimistic });
+      toast.error(
+        hadOptimistic
+          ? `Balance sync failed: ${message}. Optimistic balances were rolled back.`
+          : `Balance sync failed: ${message}`,
+      );
     }
   }, [merchantId, apiKey, enabled, address, horizonUrl]);
 
   const applyOptimistic = useCallback((code: string, balance: string) => {
     dispatch({ type: "OPTIMISTIC_UPDATE", code, balance });
+  }, []);
+
+  const rollbackOptimistic = useCallback(() => {
+    if (Object.keys(stateRef.current.optimisticBalances).length === 0) return;
+    dispatch({ type: "ROLLBACK_OPTIMISTIC" });
   }, []);
 
   const reset = useCallback(() => {
@@ -178,7 +271,7 @@ export function useBalanceSync(
   const liveRegionText = state.isLoading
     ? "Syncing balances\u2026"
     : state.error
-      ? `Balance sync error: ${state.error}`
+      ? `Balance sync error: ${state.error}${state.rollbackMessage ? ` ${state.rollbackMessage}` : ""}`
       : state.lastUpdated
         ? `Balances updated at ${state.lastUpdated.toLocaleTimeString()}.`
         : "";
@@ -190,7 +283,9 @@ export function useBalanceSync(
     error: state.error,
     refresh: fetchBalances,
     applyOptimistic,
+    rollbackOptimistic,
     reset,
+    rollbackMessage: state.rollbackMessage,
     isStale: state.lastUpdated
       ? Date.now() - state.lastUpdated.getTime() > pollingInterval * 2
       : true,
@@ -198,5 +293,23 @@ export function useBalanceSync(
     ariaLive: "polite" as const,
     ariaAtomic: true,
     liveRegionText,
+    isDrawerOpen: state.isDrawerOpen,
+    openDrawer,
+    closeDrawer,
+    toggleDrawer,
+    isMobile,
+    drawerOffset,
+    drawerDragging,
+    drawerHandlers,
+    drawer: {
+      isOpen: state.isDrawerOpen,
+      offset: drawerOffset,
+      dragging: drawerDragging,
+      handlers: drawerHandlers,
+      isMobile,
+      open: openDrawer,
+      close: closeDrawer,
+      toggle: toggleDrawer,
+    },
   };
 }

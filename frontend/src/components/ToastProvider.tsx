@@ -1,199 +1,425 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Toaster, toast } from "sonner";
+import React, { useEffect, useRef, useCallback, useState, createContext, useContext } from "react";
+import { Toaster, toast as sonnerToast } from "sonner";
 
-const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
-const SWIPE_DISMISS_THRESHOLD_PX = 60;
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+export type ToastType = "info" | "success" | "warning" | "error";
+
+export interface ActionableToastOptions {
+  id?: string;
+  description?: string;
+  duration?: number;
+  action?: {
+    label: string;
+    onClick: () => void;
+    ariaLabel?: string;
+  };
+  cancel?: {
+    label?: string;
+    onClick?: () => void;
+    ariaLabel?: string;
+  };
+  onDismiss?: () => void;
+}
+
+export interface QueuedToast {
+  id: string | number;
+  type: ToastType;
+  title: string;
+  description?: string;
+  timestamp: number;
+}
+
+export interface ToastContextValue {
+  showSuccess: (message: string, options?: ActionableToastOptions) => string | number;
+  showError: (message: string, options?: ActionableToastOptions) => string | number;
+  showInfo: (message: string, options?: ActionableToastOptions) => string | number;
+  showWarning: (message: string, options?: ActionableToastOptions) => string | number;
+  showActionable: (title: string, options: ActionableToastOptions & { type?: ToastType }) => string | number;
+  dismiss: (id?: string | number) => void;
+  activeCount: number;
+}
+
+// ─── Toast Context & Singleton ──────────────────────────────────────────────
+
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+export function useToast(): ToastContextValue {
+  const context = useContext(ToastContext);
+  if (!context) {
+    // Return standalone fallback if used outside Provider
+    return {
+      showSuccess: (msg, opts) => notify.success(msg, opts),
+      showError: (msg, opts) => notify.error(msg, opts),
+      showInfo: (msg, opts) => notify.info(msg, opts),
+      showWarning: (msg, opts) => notify.warning(msg, opts),
+      showActionable: (title, opts) => notify.actionable(title, opts),
+      dismiss: (id) => sonnerToast.dismiss(id),
+      activeCount: 0,
+    };
+  }
+  return context;
+}
+
+// ─── Global Notification Utility (Actionable Toast Manager) ────────────────
+
+export const notify = {
+  success(message: string, options?: ActionableToastOptions) {
+    return sonnerToast.success(message, {
+      id: options?.id,
+      description: options?.description,
+      duration: options?.duration ?? 4500,
+      action: options?.action
+        ? {
+            label: options.action.label,
+            onClick: options.action.onClick,
+          }
+        : undefined,
+      cancel: options?.cancel
+        ? {
+            label: options.cancel.label || "Dismiss",
+            onClick: options.cancel.onClick || (() => {}),
+          }
+        : undefined,
+      onDismiss: options?.onDismiss,
+    });
+  },
+
+  error(message: string, options?: ActionableToastOptions) {
+    return sonnerToast.error(message, {
+      id: options?.id,
+      description: options?.description,
+      duration: options?.duration ?? 6000,
+      action: options?.action
+        ? {
+            label: options.action.label,
+            onClick: options.action.onClick,
+          }
+        : undefined,
+      cancel: options?.cancel
+        ? {
+            label: options.cancel.label || "Dismiss",
+            onClick: options.cancel.onClick || (() => {}),
+          }
+        : undefined,
+      onDismiss: options?.onDismiss,
+    });
+  },
+
+  info(message: string, options?: ActionableToastOptions) {
+    return sonnerToast.info(message, {
+      id: options?.id,
+      description: options?.description,
+      duration: options?.duration ?? 4500,
+      action: options?.action
+        ? {
+            label: options.action.label,
+            onClick: options.action.onClick,
+          }
+        : undefined,
+      onDismiss: options?.onDismiss,
+    });
+  },
+
+  warning(message: string, options?: ActionableToastOptions) {
+    return sonnerToast.warning(message, {
+      id: options?.id,
+      description: options?.description,
+      duration: options?.duration ?? 5000,
+      action: options?.action
+        ? {
+            label: options.action.label,
+            onClick: options.action.onClick,
+          }
+        : undefined,
+      onDismiss: options?.onDismiss,
+    });
+  },
+
+  actionable(title: string, options: ActionableToastOptions & { type?: ToastType }) {
+    const fn = options.type ? sonnerToast[options.type] : sonnerToast;
+    return fn(title, {
+      id: options.id,
+      description: options.description,
+      duration: options.duration ?? 7000,
+      action: options.action
+        ? {
+            label: options.action.label,
+            onClick: options.action.onClick,
+          }
+        : undefined,
+      cancel: options.cancel
+        ? {
+            label: options.cancel.label || "Dismiss",
+            onClick: options.cancel.onClick || (() => {}),
+          }
+        : undefined,
+      onDismiss: options.onDismiss,
+    });
+  },
+
+  dismiss(id?: string | number) {
+    sonnerToast.dismiss(id);
+  },
+};
+
+// ─── ToastProvider Component ────────────────────────────────────────────────
 
 export interface ToastProviderProps {
-  /** Optional controlled open state for the mobile notification drawer. */
-  drawerOpen?: boolean;
-  /** Callback invoked when the mobile notification drawer open state changes. */
-  onDrawerOpenChange?: (open: boolean) => void;
-  /** Whether to render the mobile drawer handle trigger. Defaults to false for unobtrusive layout. */
-  showDrawerTrigger?: boolean;
+  children?: React.ReactNode;
+  hotkey?: string[];
+  duration?: number;
+  position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top-center" | "bottom-center";
+  maxVisibleToasts?: number;
 }
 
 export default function ToastProvider({
-  drawerOpen,
-  onDrawerOpenChange,
-  showDrawerTrigger = false,
-}: ToastProviderProps = {}) {
-  const [isMobile, setIsMobile] = useState(false);
-  const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
-  const [dragOffsetY, setDragOffsetY] = useState(0);
-  const touchStartYRef = useRef<number | null>(null);
+  children,
+  hotkey = ["altKey", "KeyT"],
+  duration = 4500,
+  position = "top-right",
+  maxVisibleToasts = 5,
+}: ToastProviderProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElement = useRef<HTMLElement | null>(null);
+  const [activeCount, setActiveCount] = useState<number>(0);
+  const [lastAnnouncement, setLastAnnouncement] = useState<{
+    text: string;
+    type: "polite" | "assertive";
+  }>({ text: "", type: "polite" });
 
-  const isDrawerOpen = drawerOpen !== undefined ? drawerOpen : internalDrawerOpen;
+  // ── Keyboard Focus Management (WCAG 2.1 AA) ──────────────────────────────
+  // 1. Hotkey (Alt+T): Jumps focus directly to the first focusable control inside the toast region
+  // 2. Escape: Dismisses the focused toast and restores focus cleanly
+  // 3. ArrowUp / ArrowDown: Moves focus between queued toasts
 
-  const setDrawerOpen = useCallback(
-    (next: boolean) => {
-      if (drawerOpen === undefined) {
-        setInternalDrawerOpen(next);
-      }
-      onDrawerOpenChange?.(next);
-    },
-    [drawerOpen, onDrawerOpenChange],
-  );
+  const focusToastRegion = useCallback(() => {
+    previouslyFocusedElement.current = document.activeElement as HTMLElement | null;
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return;
+    if (!containerRef.current) return;
+
+    // Prioritize actionable button or close button inside toasts, fallback to toast container
+    const preferredFocusable = containerRef.current.querySelector<HTMLElement>(
+      'button:not([disabled]), [href], input, select, textarea'
+    ) || containerRef.current.querySelector<HTMLElement>(
+      '[tabindex]:not([tabindex="-1"])'
+    );
+
+    if (preferredFocusable) {
+      preferredFocusable.focus();
+      setLastAnnouncement({
+        text: "Focused notifications container. Press Escape to return.",
+        type: "polite",
+      });
     }
+  }, []);
 
-    const mediaQuery = window.matchMedia(MOBILE_MEDIA_QUERY);
-    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
-      setIsMobile(event.matches);
-    };
-
-    handleChange(mediaQuery);
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
+  const restoreFocus = useCallback(() => {
+    if (previouslyFocusedElement.current && typeof previouslyFocusedElement.current.focus === "function") {
+      previouslyFocusedElement.current.focus();
+      previouslyFocusedElement.current = null;
     }
-
-    mediaQuery.addListener(handleChange);
-    return () => mediaQuery.removeListener(handleChange);
   }, []);
 
   useEffect(() => {
-    if (!isDrawerOpen) return;
-
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setDrawerOpen(false);
+      // Hotkey check (default: Alt + T)
+      if (event.altKey && (event.key === "t" || event.key === "T" || event.code === "KeyT")) {
+        event.preventDefault();
+        focusToastRegion();
+        return;
+      }
+
+      // Check if active focus is inside our container
+      if (containerRef.current && containerRef.current.contains(document.activeElement)) {
+        // Escape dismisses current toast or restores focus
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+
+          // Find the active toast element to dismiss
+          const activeToastEl = (document.activeElement as HTMLElement)?.closest("[data-sonner-toast]");
+          if (activeToastEl) {
+            const closeBtn = activeToastEl.querySelector<HTMLButtonElement>(
+              'button[aria-label*="Close"], [data-close-button]'
+            );
+            if (closeBtn) {
+              closeBtn.click();
+            } else {
+              sonnerToast.dismiss();
+            }
+          } else {
+            sonnerToast.dismiss();
+          }
+
+          restoreFocus();
+          return;
+        }
+
+        // Arrow navigation between queued toasts
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          const toasts = Array.from(
+            containerRef.current.querySelectorAll<HTMLElement>("[data-sonner-toast]")
+          );
+          if (toasts.length > 1) {
+            event.preventDefault();
+            const currentIndex = toasts.findIndex((t) => t.contains(document.activeElement));
+            const nextIndex =
+              event.key === "ArrowDown"
+                ? (currentIndex + 1) % toasts.length
+                : (currentIndex - 1 + toasts.length) % toasts.length;
+
+            const nextFocusable = toasts[nextIndex].querySelector<HTMLElement>(
+              'button, [tabindex]:not([tabindex="-1"])'
+            ) || toasts[nextIndex];
+            nextFocusable?.focus();
+          }
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isDrawerOpen, setDrawerOpen]);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [focusToastRegion, restoreFocus]);
 
-  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    if (!touch) return;
-    touchStartYRef.current = touch.clientY;
-    setDragOffsetY(0);
-  };
-
-  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    if (touchStartYRef.current === null || !touch) return;
-    const deltaY = touch.clientY - touchStartYRef.current;
-    if (deltaY > 0) {
-      setDragOffsetY(deltaY);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (dragOffsetY >= SWIPE_DISMISS_THRESHOLD_PX) {
-      setDrawerOpen(false);
-    }
-    touchStartYRef.current = null;
-    setDragOffsetY(0);
-  };
-
-  const handleClearAll = () => {
-    toast.dismiss();
-    setDrawerOpen(false);
+  const contextValue: ToastContextValue = {
+    showSuccess: (msg, opts) => {
+      setActiveCount((c) => c + 1);
+      setLastAnnouncement({ text: `Success: ${msg}`, type: "polite" });
+      return notify.success(msg, {
+        ...opts,
+        onDismiss: () => {
+          setActiveCount((c) => Math.max(0, c - 1));
+          opts?.onDismiss?.();
+        },
+      });
+    },
+    showError: (msg, opts) => {
+      setActiveCount((c) => c + 1);
+      setLastAnnouncement({ text: `Error: ${msg}`, type: "assertive" });
+      return notify.error(msg, {
+        ...opts,
+        onDismiss: () => {
+          setActiveCount((c) => Math.max(0, c - 1));
+          opts?.onDismiss?.();
+        },
+      });
+    },
+    showInfo: (msg, opts) => {
+      setActiveCount((c) => c + 1);
+      setLastAnnouncement({ text: `Information: ${msg}`, type: "polite" });
+      return notify.info(msg, {
+        ...opts,
+        onDismiss: () => {
+          setActiveCount((c) => Math.max(0, c - 1));
+          opts?.onDismiss?.();
+        },
+      });
+    },
+    showWarning: (msg, opts) => {
+      setActiveCount((c) => c + 1);
+      setLastAnnouncement({ text: `Warning: ${msg}`, type: "polite" });
+      return notify.warning(msg, {
+        ...opts,
+        onDismiss: () => {
+          setActiveCount((c) => Math.max(0, c - 1));
+          opts?.onDismiss?.();
+        },
+      });
+    },
+    showActionable: (title, opts) => {
+      setActiveCount((c) => c + 1);
+      const level = opts.type === "error" ? "assertive" : "polite";
+      setLastAnnouncement({ text: `Actionable notification: ${title}. ${opts.description || ""}`, type: level });
+      return notify.actionable(title, {
+        ...opts,
+        onDismiss: () => {
+          setActiveCount((c) => Math.max(0, c - 1));
+          opts?.onDismiss?.();
+        },
+      });
+    },
+    dismiss: (id) => {
+      sonnerToast.dismiss(id);
+      setActiveCount((c) => Math.max(0, c - 1));
+    },
+    activeCount,
   };
 
   return (
-    <>
-      <Toaster
-        position={isMobile ? "bottom-center" : "top-right"}
-        theme="dark"
-        closeButton
-        richColors
-        expand={isMobile || isDrawerOpen}
-        visibleToasts={isMobile ? 3 : 5}
-        gap={isMobile ? 10 : 8}
-        swipeDirections={isMobile ? ["down", "left", "right"] : ["right"]}
-        toastOptions={{
-          duration: 4500,
-          className: isMobile
-            ? "touch-pan-y select-none rounded-2xl border border-white/10 shadow-2xl"
-            : "select-none rounded-xl border border-white/10 shadow-lg",
-          style: {
-            fontFamily: "var(--font-sans)",
-            fontSize: "13.5px",
-          },
-        }}
-      />
-
-      {isMobile && showDrawerTrigger && !isDrawerOpen && (
-        <div className="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 md:hidden">
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Open notifications drawer"
-            aria-expanded={false}
-            aria-controls="toast-notification-drawer"
-            className="flex items-center gap-2 rounded-full border border-white/15 bg-slate-900/90 px-4 py-1.5 text-xs font-medium text-slate-200 shadow-lg backdrop-blur-md transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-mint/60"
-          >
-            <span className="h-1 w-6 rounded-full bg-white/40" aria-hidden="true" />
-            <span>Notifications</span>
-          </button>
-        </div>
-      )}
-
-      {isMobile && isDrawerOpen && (
+    <ToastContext.Provider value={contextValue}>
+      {/* ── Screen Reader Live Announcement Regions (WCAG 2.1 AA) ── */}
+      <div className="sr-only">
+        {/* Polite region for success/info/warning */}
         <div
-          className="fixed inset-0 z-[55] flex items-end justify-center md:hidden"
-          role="presentation"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          id="toast-announcer-polite"
         >
-          <div
-            data-testid="toast-drawer-backdrop"
-            onClick={() => setDrawerOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
-            aria-hidden="true"
-          />
-
-          <div
-            id="toast-notification-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Notification center drawer"
-            aria-live="polite"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            style={{
-              transform: dragOffsetY > 0 ? `translateY(${dragOffsetY}px)` : undefined,
-            }}
-            className="relative z-10 w-full max-w-lg touch-pan-y rounded-t-3xl border-t border-white/15 bg-slate-900 px-5 pb-6 pt-3 text-white shadow-2xl transition-transform"
-          >
-            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/25" aria-hidden="true" />
-
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h2 className="text-sm font-semibold text-white">Notifications</h2>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleClearAll}
-                  className="text-xs font-medium text-slate-300 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-mint/60"
-                >
-                  Clear all
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDrawerOpen(false)}
-                  aria-label="Close notifications drawer"
-                  className="rounded-lg px-2 py-1 text-xs font-medium text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-mint/60"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-
-            <p className="mt-3 text-xs text-slate-400">
-              Swipe down to dismiss this drawer, or swipe individual alerts to clear them.
-            </p>
-          </div>
+          {lastAnnouncement.type === "polite" ? lastAnnouncement.text : ""}
         </div>
-      )}
-    </>
+        {/* Assertive region for critical errors / failures */}
+        <div
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+          id="toast-announcer-assertive"
+        >
+          {lastAnnouncement.type === "assertive" ? lastAnnouncement.text : ""}
+        </div>
+        {/* Shortcut instructions */}
+        <span id="toast-keyboard-instructions">
+          Press Alt+T to focus notification banner, Escape to dismiss, Arrow keys to navigate.
+        </span>
+      </div>
+
+      {/* ── Optional Children for context consumption ── */}
+      {children}
+
+      {/* ── Toast Container Region ── */}
+      <div
+        ref={containerRef}
+        role="region"
+        aria-label="Global Feedback Notifications (Press Alt+T to focus)"
+        aria-describedby="toast-keyboard-instructions"
+        className="relative z-[9999]"
+      >
+        <Toaster
+          position={position}
+          theme="dark"
+          closeButton
+          expand={false}
+          gap={8}
+          maxScrolledToasts={maxVisibleToasts}
+          pauseWhenPageIsHidden
+          hotkey={hotkey}
+          toastOptions={{
+            duration,
+            style: {
+              fontFamily: "var(--font-sans)",
+              fontSize: "13.5px",
+              borderRadius: "0.75rem",
+              border: "1px solid #262626",
+              backgroundColor: "#0A0A0A",
+              color: "#FFFFFF",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)",
+            },
+            classNames: {
+              toast: "group focus-visible:ring-2 focus-visible:ring-blue-500 focus:outline-none transition-all duration-200",
+              title: "font-semibold text-white tracking-tight",
+              description: "text-gray-400 text-xs mt-0.5",
+              actionButton: "bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs px-3 py-1.5 rounded-lg focus-visible:ring-2 focus-visible:ring-blue-400 focus:outline-none",
+              cancelButton: "bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-xs px-3 py-1.5 rounded-lg focus-visible:ring-2 focus-visible:ring-gray-400 focus:outline-none",
+              closeButton: "focus-visible:ring-2 focus-visible:ring-blue-500 focus:outline-none text-gray-400 hover:text-white rounded-md",
+            },
+          }}
+        />
+      </div>
+    </ToastContext.Provider>
   );
 }

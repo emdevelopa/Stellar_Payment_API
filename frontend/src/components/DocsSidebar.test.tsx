@@ -1,81 +1,159 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import DocsSidebar from "./DocsSidebar";
 
-let mockPathname = "/docs";
-
+// Mock next/navigation
+let currentPathname = "/docs/api-guide";
 vi.mock("next/navigation", () => ({
-  usePathname: () => mockPathname,
-}));
-
-vi.mock("next/link", () => ({
-  default: ({
-    href,
-    children,
-    ...rest
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  ),
+  usePathname: () => currentPathname,
 }));
 
 describe("DocsSidebar", () => {
   beforeEach(() => {
-    mockPathname = "/docs";
-    document.body.style.overflow = "";
+    currentPathname = "/docs/api-guide";
+    vi.clearAllMocks();
   });
 
-  it("renders desktop navigation links with aria-current on the active route", () => {
-    mockPathname = "/docs/api-guide";
-    render(<DocsSidebar />);
+  describe("Documentation Navigation & Overview", () => {
+    it("renders navigation with proper aria-label and links", () => {
+      render(<DocsSidebar />);
 
-    const nav = screen.getByRole("navigation", { name: "Documentation navigation" });
-    expect(nav).toBeInTheDocument();
+      const nav = screen.getByRole("navigation", { name: /documentation navigation/i });
+      expect(nav).toBeInTheDocument();
 
-    const activeLink = screen.getByRole("link", { name: /API/i });
-    expect(activeLink).toHaveAttribute("aria-current", "page");
+      const overviewLink = screen.getByRole("link", { name: /overview/i });
+      expect(overviewLink).toBeInTheDocument();
+      expect(overviewLink).toHaveAttribute("href", "/docs");
+    });
+
+    it("marks active doc with aria-current='page'", () => {
+      currentPathname = "/docs/api-guide";
+      render(<DocsSidebar />);
+
+      const activeLink = screen.getByRole("link", { name: /subscription api guide/i });
+      expect(activeLink).toHaveAttribute("aria-current", "page");
+
+      const inactiveLink = screen.getByRole("link", { name: /how to verify hmac signatures/i });
+      expect(inactiveLink).not.toHaveAttribute("aria-current");
+    });
+
+    it("includes accessible screen reader text for 'New' badge", () => {
+      render(<DocsSidebar />);
+      const srNewText = screen.getByText(/new article:/i);
+      expect(srNewText).toHaveClass("sr-only");
+    });
   });
 
-  it("opens and closes the mobile drawer via trigger button, close button, and Escape", () => {
-    render(<DocsSidebar />);
+  describe("Collapsible Documentation Hierarchy (#1814)", () => {
+    it("auto-expands sections for current active page by default", () => {
+      currentPathname = "/docs/api-guide";
+      render(<DocsSidebar />);
 
-    const trigger = screen.getByRole("button", { name: "Open documentation menu" });
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
+      const toggleBtn = screen.getByRole("button", {
+        name: /toggle subscription api guide subsections/i,
+      });
+      expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
 
-    fireEvent.click(trigger);
-    expect(screen.getByRole("dialog", { name: "Documentation navigation drawer" })).toBeInTheDocument();
-    expect(document.body.style.overflow).toBe("hidden");
+      expect(screen.getByRole("link", { name: /integration architecture/i })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /backend environment/i })).toBeInTheDocument();
+    });
 
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Documentation navigation drawer" })).not.toBeInTheDocument();
-    expect(document.body.style.overflow).toBe("");
+    it("collapses and expands subsections when toggle button is clicked", async () => {
+      const user = userEvent.setup();
+      currentPathname = "/docs/api-guide";
+      render(<DocsSidebar />);
+
+      const toggleBtn = screen.getByRole("button", {
+        name: /toggle subscription api guide subsections/i,
+      });
+
+      // Collapse
+      await user.click(toggleBtn);
+      expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByRole("link", { name: /integration architecture/i })).not.toBeInTheDocument();
+
+      // Expand again
+      await user.click(toggleBtn);
+      expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("link", { name: /integration architecture/i })).toBeInTheDocument();
+    });
   });
 
-  it("supports left-edge swipe-right to open and swipe-left to close the drawer", () => {
-    render(<DocsSidebar />);
+  describe("Search Anchor Navigation (#1814)", () => {
+    it("filters documentation guides and sections by query", async () => {
+      const user = userEvent.setup();
+      render(<DocsSidebar />);
 
-    fireEvent.touchStart(window, { touches: [{ clientX: 12 }] });
-    fireEvent.touchEnd(window, { changedTouches: [{ clientX: 100 }] });
+      const searchInput = screen.getByRole("searchbox", { name: /search documentation/i });
+      await user.type(searchInput, "hmac");
 
-    const drawer = screen.getByRole("dialog", { name: "Documentation navigation drawer" });
-    expect(drawer).toBeInTheDocument();
+      // Matching guide should be visible and expanded
+      expect(screen.getByRole("link", { name: /how to verify hmac signatures/i })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /signing logic/i })).toBeInTheDocument();
 
-    fireEvent.touchStart(drawer, { touches: [{ clientX: 200 }] });
-    fireEvent.touchMove(drawer, { touches: [{ clientX: 110 }] });
-    fireEvent.touchEnd(drawer);
+      // Non-matching guide should be filtered out
+      expect(screen.queryByRole("link", { name: /subscription api guide/i })).not.toBeInTheDocument();
+    });
 
-    expect(screen.queryByRole("dialog", { name: "Documentation navigation drawer" })).not.toBeInTheDocument();
+    it("announces search match count to screen readers via live region", async () => {
+      const user = userEvent.setup();
+      render(<DocsSidebar />);
+
+      const searchInput = screen.getByRole("searchbox", { name: /search documentation/i });
+      await user.type(searchInput, "webhook");
+
+      const liveRegion = screen.getByRole("status");
+      expect(liveRegion).toHaveTextContent(/found matching "webhook"/i);
+    });
+
+    it("clears search query when clear button or Escape is pressed", async () => {
+      const user = userEvent.setup();
+      render(<DocsSidebar />);
+
+      const searchInput = screen.getByRole("searchbox", { name: /search documentation/i });
+      await user.type(searchInput, "agentic");
+
+      const clearBtn = screen.getByRole("button", { name: /clear search query/i });
+      await user.click(clearBtn);
+
+      expect(searchInput).toHaveValue("");
+      expect(screen.getByRole("link", { name: /subscription api guide/i })).toBeInTheDocument();
+
+      // Test Escape key
+      await user.type(searchInput, "something");
+      fireEvent.keyDown(searchInput, { key: "Escape" });
+      expect(searchInput).toHaveValue("");
+    });
+
+    it("moves focus from search box to first navigation item on ArrowDown", () => {
+      render(<DocsSidebar />);
+
+      const searchInput = screen.getByRole("searchbox", { name: /search documentation/i });
+      searchInput.focus();
+
+      fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+
+      const overviewLink = screen.getByRole("link", { name: /overview/i });
+      expect(document.activeElement).toBe(overviewLink);
+    });
   });
 
-  it("closes the drawer when the backdrop is clicked", () => {
-    render(<DocsSidebar />);
+  describe("Keyboard Navigation in List (WCAG 2.1 AA)", () => {
+    it("navigates between navigation links using ArrowDown and ArrowUp", () => {
+      render(<DocsSidebar />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open documentation menu" }));
-    fireEvent.click(screen.getByTestId("docs-drawer-backdrop"));
+      const overviewLink = screen.getByRole("link", { name: /overview/i });
+      overviewLink.focus();
 
-    expect(screen.queryByRole("dialog", { name: "Documentation navigation drawer" })).not.toBeInTheDocument();
+      fireEvent.keyDown(overviewLink, { key: "ArrowDown" });
+      const apiGuideLink = screen.getByRole("link", { name: /subscription api guide/i });
+      expect(document.activeElement).toBe(apiGuideLink);
+
+      // ArrowUp goes back to overview link
+      fireEvent.keyDown(apiGuideLink, { key: "ArrowUp" });
+      expect(document.activeElement).toBe(overviewLink);
+    });
   });
 });

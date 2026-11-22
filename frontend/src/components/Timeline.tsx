@@ -59,6 +59,10 @@ export interface AuditLog {
   old_value?: string;
   new_value?: string;
   created_at: string;
+  status?: TimelineStepStatus;
+  optimistic?: boolean;
+  tx_hash?: string;
+  ledger_sequence?: number;
 }
 
 export interface TimelineProps {

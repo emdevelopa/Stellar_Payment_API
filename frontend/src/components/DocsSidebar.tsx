@@ -31,6 +31,9 @@ const DOC_ICONS: Record<string, React.ReactNode> = {
 
 export default function DocsSidebar() {
   const pathname = usePathname();
+  const [search, setSearch] = React.useState('');
+  const [activeSlug, setActiveSlug] = React.useState('');
+  const listRef = React.useRef<HTMLUListElement>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSectionId, setActiveSectionId] = useState<string>("");

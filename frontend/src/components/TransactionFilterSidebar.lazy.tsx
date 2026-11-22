@@ -43,4 +43,6 @@ const TransactionFilterSidebarComponent = dynamic(
   },
 ) as ComponentType<TransactionFilterSidebarProps>;
 
+export { default as TransactionFilterSidebarSkeleton } from "./TransactionFilterSidebarSkeleton";
+
 export default TransactionFilterSidebarComponent;

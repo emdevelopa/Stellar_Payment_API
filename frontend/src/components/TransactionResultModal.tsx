@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckIcon, ClipboardIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
@@ -8,7 +9,7 @@ import { toast } from "sonner";
 // How long the optimistic "copied" confirmation stays visible after a successful copy.
 const COPIED_RESET_MS = 2000;
 
-interface TransactionResultModalProps {
+export interface TransactionResultModalProps {
   isOpen: boolean;
   onClose: () => void;
   txHash: string;
@@ -17,7 +18,33 @@ interface TransactionResultModalProps {
   recipientDisplayName: string;
 }
 
-export function TransactionResultModal({
+/**
+ * Dynamically loads and triggers the confetti celebration only when the modal
+ * opens and the user has not requested reduced motion, keeping `canvas-confetti`
+ * out of the initial JS bundle.
+ */
+async function triggerCelebrationConfetti(): Promise<void> {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    return;
+  }
+
+  try {
+    const { default: confetti } = await import("canvas-confetti");
+    confetti({
+      particleCount: 60,
+      spread: 65,
+      origin: { y: 0.6 },
+    });
+  } catch {
+    // Non-critical visual enhancement; ignore load failures in restricted environments.
+  }
+}
+
+export const TransactionResultModal = memo(function TransactionResultModal({
   isOpen,
   onClose,
   txHash,
@@ -25,8 +52,14 @@ export function TransactionResultModal({
   assetCode,
   recipientDisplayName,
 }: TransactionResultModalProps) {
-  const truncatedHash = `${txHash.slice(0, 8)}...${txHash.slice(-8)}`;
-  const stellarExpertUrl = `https://stellar.expert/explorer/testnet/tx/${txHash}`;
+  const truncatedHash = useMemo(
+    () => `${txHash.slice(0, 8)}...${txHash.slice(-8)}`,
+    [txHash],
+  );
+  const stellarExpertUrl = useMemo(
+    () => `https://stellar.expert/explorer/testnet/tx/${txHash}`,
+    [txHash],
+  );
 
   // The "copied" confirmation is shown optimistically, the moment the button is
   // pressed, and rolled back if the clipboard write turns out to fail, so the
@@ -41,6 +74,11 @@ export function TransactionResultModal({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void triggerCelebrationConfetti();
+  }, [isOpen]);
 
   const copyToClipboard = async () => {
     // Only the newest attempt may roll the state back, so a slow failure from an
@@ -68,7 +106,7 @@ export function TransactionResultModal({
 
   return (
     <AnimatePresence>
-      <div 
+      <div
         className="fixed inset-0 z-[60] flex items-center justify-center p-4"
         onKeyDown={(e) => e.key === "Escape" && onClose()}
       >
@@ -79,12 +117,13 @@ export function TransactionResultModal({
           onClick={onClose}
           className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         />
-        
+
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           role="dialog"
+          aria-modal="true"
           aria-labelledby="transaction-result-title"
           className="relative w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl"
         >
@@ -153,4 +192,21 @@ export function TransactionResultModal({
       </div>
     </AnimatePresence>
   );
+});
+
+/**
+ * Code-split dynamic wrapper for consumers that want automatic bundle splitting
+ * without manually wiring `React.lazy` and `Suspense`.
+ */
+export const DynamicTransactionResultModal = dynamic<TransactionResultModalProps>(
+  () => import("./TransactionResultModal").then((mod) => mod.TransactionResultModal),
+  { ssr: false },
+);
+
+/**
+ * Prefetches the `canvas-confetti` chunk on user intent (e.g. submit hover) so
+ * the celebration plays immediately upon confirmation.
+ */
+export function preloadTransactionResultAssets(): Promise<unknown> {
+  return import("canvas-confetti").catch(() => undefined);
 }

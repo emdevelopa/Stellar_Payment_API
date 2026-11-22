@@ -3,7 +3,16 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
-import { TransactionResultModal } from "./TransactionResultModal";
+import {
+  DynamicTransactionResultModal,
+  preloadTransactionResultAssets,
+  TransactionResultModal,
+} from "./TransactionResultModal";
+
+const confettiMock = vi.fn();
+vi.mock("canvas-confetti", () => ({
+  default: (...args: unknown[]) => confettiMock(...args),
+}));
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -79,6 +88,7 @@ beforeEach(() => {
   onClose = vi.fn();
   vi.mocked(toast.success).mockClear();
   vi.mocked(toast.error).mockClear();
+  confettiMock.mockClear();
   setClipboard(vi.fn().mockResolvedValue(undefined));
 });
 
@@ -284,5 +294,84 @@ describe("TransactionResultModal copy link", () => {
     unmount();
 
     expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+  });
+});
+
+describe("TransactionResultModal snapshots", () => {
+  it("matches snapshot when closed", () => {
+    const { container } = renderModal({ isOpen: false });
+    expect(container.firstChild).toMatchSnapshot();
+  });
+
+  it("matches snapshot when open with default USDC payment", () => {
+    const { container } = renderModal();
+    expect(container.firstChild).toMatchSnapshot();
+  });
+
+  it("matches snapshot in copied confirmation state", async () => {
+    const { container } = renderModal();
+    fireEvent.click(copyButton());
+    await flush();
+    expect(container.firstChild).toMatchSnapshot();
+  });
+
+  it("matches snapshot with XLM asset and long recipient name", () => {
+    const { container } = renderModal({
+      amount: "1250.00",
+      assetCode: "XLM",
+      recipientDisplayName: "Stellar Development Foundation Treasury",
+    });
+    expect(container.firstChild).toMatchSnapshot();
+  });
+});
+
+describe("TransactionResultModal interactions, accessibility, and dynamic imports", () => {
+  it("sets aria-modal=true on the dialog and does not close when clicking inside the card", () => {
+    renderModal();
+    const dialog = screen.getByRole("dialog", { name: "Transaction Successful" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+
+    fireEvent.click(dialog);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("dynamically loads and fires confetti when opened", async () => {
+    renderModal({ isOpen: true });
+    await flush();
+
+    expect(confettiMock).toHaveBeenCalledTimes(1);
+    expect(confettiMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        particleCount: 60,
+        spread: 65,
+      }),
+    );
+  });
+
+  it("skips confetti when prefers-reduced-motion is enabled", async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    try {
+      renderModal({ isOpen: true });
+      await flush();
+      expect(confettiMock).not.toHaveBeenCalled();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("exports DynamicTransactionResultModal and preloadTransactionResultAssets", async () => {
+    expect(DynamicTransactionResultModal).toBeDefined();
+    await expect(preloadTransactionResultAssets()).resolves.toBeDefined();
   });
 });

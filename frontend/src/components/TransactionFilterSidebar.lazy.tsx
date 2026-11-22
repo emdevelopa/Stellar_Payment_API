@@ -24,9 +24,10 @@ interface FilterState {
 
 interface TransactionFilterSidebarProps {
   filters: FilterState;
-  onFilterChange: (key: keyof FilterState, value: string) => void;
-  onClearFilter: (key: keyof FilterState) => void;
-  onClearAll: () => void;
+  onFilterChange: (key: keyof FilterState, value: string) => void | Promise<void>;
+  onClearFilter: (key: keyof FilterState) => void | Promise<void>;
+  onClearAll: () => void | Promise<void>;
+  onRollback?: (error: Error, previousFilters: FilterState) => void;
   hasActiveFilters: boolean;
   searchSyncPending?: boolean;
   isFilterPending?: boolean;

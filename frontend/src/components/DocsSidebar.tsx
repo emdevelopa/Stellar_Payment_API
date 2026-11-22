@@ -1,23 +1,29 @@
 "use client";
 
-import React from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { docsManifest } from "@/lib/docs-manifest";
+import { docsManifest, type DocEntry, type DocSection } from "@/lib/docs-manifest";
 
 const DOC_ICONS: Record<string, React.ReactNode> = {
   "api-guide": (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   ),
   "hmac-signatures": (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
     </svg>
   ),
   "x402-agentic-payments": (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
     </svg>
   ),
@@ -29,106 +35,403 @@ export default function DocsSidebar() {
   const [activeSlug, setActiveSlug] = React.useState('');
   const listRef = React.useRef<HTMLUListElement>(null);
 
-  // Filter docs based on search
-  const filteredDocs = React.useMemo(() => {
-    if (!search) return docsManifest;
-    return docsManifest.filter((doc) =>
-      doc.title.toLowerCase().includes(search.toLowerCase()) ||
-      doc.slug.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [search]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSectionId, setActiveSectionId] = useState<string>("");
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
 
-  // Keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    const items = listRef.current?.querySelectorAll('a[data-slug]');
-    if (!items?.length) return;
-    const currentIndex = Array.from(items).findIndex((el) => el.getAttribute('aria-current') === 'page');
-    if (e.key === 'ArrowDown') {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const navContainerRef = useRef<HTMLElement>(null);
+
+  // Expanded docs map
+  const [expandedDocs, setExpandedDocs] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const doc of docsManifest) {
+      // Auto-expand current active doc
+      if (pathname === `/docs/${doc.slug}` || pathname.startsWith(`/docs/${doc.slug}/`)) {
+        initial[doc.slug] = true;
+      }
+    }
+    return initial;
+  });
+
+  // Keep current page expanded when route changes
+  useEffect(() => {
+    for (const doc of docsManifest) {
+      if (pathname === `/docs/${doc.slug}` || pathname.startsWith(`/docs/${doc.slug}/`)) {
+        setExpandedDocs((prev) => ({ ...prev, [doc.slug]: true }));
+      }
+    }
+  }, [pathname]);
+
+  // Active section spy using IntersectionObserver (#1814)
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const headingElements = Array.from(
+      document.querySelectorAll<HTMLElement>("main h2[id], main h3[id], section h2[id], section h3[id]")
+    );
+
+    if (headingElements.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.target.id) {
+            setActiveSectionId(entry.target.id);
+            break;
+          }
+        }
+      },
+      {
+        rootMargin: "-20% 0px -70% 0px",
+        threshold: 0,
+      }
+    );
+
+    for (const el of headingElements) {
+      observer.observe(el);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [pathname]);
+
+  // Filtered docs and sub-sections based on search query (#1814)
+  const filteredDocs = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) {
+      return docsManifest.map((doc) => ({
+        ...doc,
+        matchingSections: doc.sections || [],
+      }));
+    }
+
+    const results: (DocEntry & { matchingSections: DocSection[] })[] = [];
+
+    for (const doc of docsManifest) {
+      const titleMatch = doc.title.toLowerCase().includes(q);
+      const descMatch = doc.description.toLowerCase().includes(q);
+      const matchingSections = (doc.sections || []).filter((s) =>
+        s.title.toLowerCase().includes(q)
+      );
+
+      if (titleMatch || descMatch || matchingSections.length > 0) {
+        results.push({
+          ...doc,
+          matchingSections: matchingSections.length > 0 ? matchingSections : doc.sections || [],
+        });
+      }
+    }
+
+    return results;
+  }, [searchQuery]);
+
+  // Auto-expand search results and update screen reader live region announcement
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setLiveAnnouncement("");
+      return;
+    }
+
+    const count = filteredDocs.length;
+    if (count === 0) {
+      setLiveAnnouncement(`No documentation matches found for "${q}"`);
+    } else {
+      setLiveAnnouncement(
+        `${count} documentation ${count === 1 ? "guide" : "guides"} found matching "${q}"`
+      );
+    }
+
+    // Auto expand all matched docs during search
+    const expanded: Record<string, boolean> = {};
+    for (const doc of filteredDocs) {
+      expanded[doc.slug] = true;
+    }
+    setExpandedDocs((prev) => ({ ...prev, ...expanded }));
+  }, [searchQuery, filteredDocs]);
+
+  // Toggle collapse state
+  const toggleDoc = useCallback((slug: string) => {
+    setExpandedDocs((prev) => ({
+      ...prev,
+      [slug]: !prev[slug],
+    }));
+  }, []);
+
+  // Keyboard focus management: ArrowDown from search box into navigation list (#1814)
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      const next = items[(currentIndex + 1) % items.length];
-      (next as HTMLElement).focus();
-    } else if (e.key === 'ArrowUp') {
+      if (!navContainerRef.current) return;
+      const firstInteractive = navContainerRef.current.querySelector<HTMLElement>(
+        "a, button"
+      );
+      firstInteractive?.focus();
+    } else if (e.key === "Escape") {
       e.preventDefault();
-      const prev = items[(currentIndex - 1 + items.length) % items.length];
-      (prev as HTMLElement).focus();
-    } else if (e.key === 'Escape') {
-      (e.target as HTMLElement).blur();
+      setSearchQuery("");
     }
   };
 
-  // Scroll spy via IntersectionObserver
-  React.useEffect(() => {
-    const callback: IntersectionObserverCallback = (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const slug = entry.target.getAttribute('data-slug');
-          if (slug) setActiveSlug(slug);
-        }
-      });
-    };
-    const observer = new IntersectionObserver(callback, { rootMargin: '0px 0px -80% 0px' });
-    const sections = document.querySelectorAll('section[data-slug]');
-    sections.forEach((sec) => observer.observe(sec));
-    return () => observer.disconnect();
-  }, []);
+  // Keyboard navigation within the sidebar list (Arrow keys, Home, End)
+  const handleNavKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    if (!target) return;
+
+    if (!navContainerRef.current) return;
+
+    const items = Array.from(
+      navContainerRef.current.querySelectorAll<HTMLElement>(
+        "a:not([tabindex='-1']), button:not([tabindex='-1'])"
+      )
+    ).filter((el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true");
+
+    const currentIndex = items.indexOf(target);
+    if (currentIndex === -1) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const nextIndex = (currentIndex + 1) % items.length;
+      items[nextIndex]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (currentIndex === 0) {
+        searchInputRef.current?.focus();
+      } else {
+        const prevIndex = (currentIndex - 1 + items.length) % items.length;
+        items[prevIndex]?.focus();
+      }
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      items[0]?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      items[items.length - 1]?.focus();
+    } else if (e.key === "ArrowRight") {
+      // Expand if targeted element has aria-expanded="false"
+      const expandBtn = target.closest("[data-doc-slug]")?.querySelector<HTMLButtonElement>("button[aria-expanded]");
+      if (expandBtn && expandBtn.getAttribute("aria-expanded") === "false") {
+        e.preventDefault();
+        expandBtn.click();
+      }
+    } else if (e.key === "ArrowLeft") {
+      // Collapse if targeted element has aria-expanded="true"
+      const expandBtn = target.closest("[data-doc-slug]")?.querySelector<HTMLButtonElement>("button[aria-expanded]");
+      if (expandBtn && expandBtn.getAttribute("aria-expanded") === "true") {
+        e.preventDefault();
+        expandBtn.click();
+      }
+    }
+  };
+
+  const isOverviewActive = pathname === "/docs";
 
   return (
-    <nav aria-label="Documentation sidebar" className="flex flex-col gap-1" onKeyDown={handleKeyDown}>
-      <input
-        type="search"
-        placeholder="Search…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        aria-label="Search documentation"
-        className="mb-2 rounded border px-2 py-1 text-sm"
-      />
-      <ul ref={listRef} className="flex flex-col gap-1" role="list">
-        <li>
-          <Link
-            href="/docs"
-            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
-              pathname === '/docs' ? 'bg-[var(--pluto-500)] text-white' : 'text-[#6B6B6B] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]'
-            }`}
-            aria-current={pathname === '/docs' ? 'page' : undefined}
-            data-slug="overview"
+    <nav
+      ref={navContainerRef}
+      aria-label="Documentation navigation"
+      className="flex flex-col gap-3"
+      onKeyDown={handleNavKeyDown}
+    >
+      {/* Screen reader live announcement for search results (WCAG 2.1 AA: #1814) */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveAnnouncement}
+      </div>
+
+      {/* Search Anchor Navigation input (#1814) */}
+      <div className="relative">
+        <label htmlFor="docs-search-input" className="sr-only">
+          Search documentation sections
+        </label>
+        <div className="relative flex items-center">
+          <svg
+            className="pointer-events-none absolute left-3 h-4 w-4 text-[#9CA3AF]"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
           >
-            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-            Overview
-          </Link>
-        </li>
-        {filteredDocs.map((doc) => {
-          const href = `/docs/${doc.slug}`;
-          const active = pathname === href;
-          const isNew = doc.slug === 'x402-agentic-payments';
-          return (
-            <li key={doc.slug}>
-              <Link
-                href={href}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${
-                  active
-                    ? 'bg-[var(--pluto-500)] text-white'
-                    : 'text-[#6B6B6B] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]'
-                }`}
-                aria-current={active ? 'page' : undefined}
-                aria-expanded="false"
-                data-slug={doc.slug}
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            id="docs-search-input"
+            ref={searchInputRef}
+            type="search"
+            role="searchbox"
+            aria-label="Search documentation"
+            placeholder="Filter documentation..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] py-2 pl-9 pr-8 text-xs font-medium text-[#111827] placeholder-[#6B7280] transition-colors focus:border-[var(--pluto-500)] focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)]"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search query"
+              className="absolute right-2.5 flex h-4 w-4 items-center justify-center rounded-full text-[#9CA3AF] hover:text-[#111827] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)]"
+            >
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Top Overview Link */}
+      {(!searchQuery || "overview".includes(searchQuery.toLowerCase())) && (
+        <Link
+          href="/docs"
+          aria-current={isOverviewActive ? "page" : undefined}
+          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-2 ${
+            isOverviewActive
+              ? "bg-[var(--pluto-500)] text-white shadow-sm"
+              : "text-[#4B5563] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]"
+          }`}
+        >
+          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          Overview
+        </Link>
+      )}
+
+      <div className="my-1 h-px bg-[#F0F0F0]" aria-hidden="true" />
+
+      {/* Collapsible Documentation Hierarchy (#1814) */}
+      <div className="flex flex-col gap-1.5" role="list">
+        {filteredDocs.length === 0 ? (
+          <p className="px-3 py-4 text-center text-xs text-[#6B7280]">
+            No documentation matching "{searchQuery}"
+          </p>
+        ) : (
+          filteredDocs.map((doc) => {
+            const href = `/docs/${doc.slug}`;
+            const isDocActive = pathname === href;
+            const isNew = doc.slug === "x402-agentic-payments";
+            const isExpanded = !!expandedDocs[doc.slug];
+            const hasSubsections = (doc.matchingSections?.length || 0) > 0;
+
+            return (
+              <div
+                key={doc.slug}
+                data-doc-slug={doc.slug}
+                className="flex flex-col rounded-xl"
+                role="listitem"
               >
-                <span className={`shrink-0 ${active ? 'text-white' : 'text-[#6B6B6B]'}`}>
-                  {DOC_ICONS[doc.slug] ?? (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                {/* Doc row: link and collapse/expand trigger */}
+                <div
+                  className={`group flex items-center justify-between gap-1 rounded-xl px-3 py-2 transition-all ${
+                    isDocActive
+                      ? "bg-[var(--pluto-500)] text-white shadow-sm"
+                      : "text-[#4B5563] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]"
+                  }`}
+                >
+                  <Link
+                    href={href}
+                    aria-current={isDocActive ? "page" : undefined}
+                    className="flex flex-1 items-center gap-3 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-2 rounded-lg"
+                  >
+                    <span className={`shrink-0 ${isDocActive ? "text-white" : "text-[#6B7280] group-hover:text-[var(--pluto-600)]"}`}>
+                      {DOC_ICONS[doc.slug] ?? (
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={`flex-1 text-sm font-semibold ${isDocActive ? "text-white" : "text-[#111827] group-hover:text-[var(--pluto-800)]"}`}>
+                      {doc.title}
+                    </span>
+                    {isNew && !isDocActive && (
+                      <span className="rounded-full bg-[var(--pluto-100)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-[var(--pluto-700)]">
+                        <span className="sr-only">New article: </span>
+                        New
+                      </span>
+                    )}
+                  </Link>
+
+                  {/* Hierarchy collapse/expand button (#1814) */}
+                  {hasSubsections && (
+                    <button
+                      type="button"
+                      aria-expanded={isExpanded}
+                      aria-controls={`sections-${doc.slug}`}
+                      aria-label={`Toggle ${doc.title} subsections`}
+                      onClick={() => toggleDoc(doc.slug)}
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] ${
+                        isDocActive
+                          ? "text-white/80 hover:bg-white/10 hover:text-white"
+                          : "text-[#6B7280] hover:bg-black/5 hover:text-[#111827]"
+                      }`}
+                    >
+                      <svg
+                        className={`h-3.5 w-3.5 transition-transform duration-200 motion-reduce:transition-none ${
+                          isExpanded ? "rotate-90" : ""
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
                   )}
-                </span>
-                <span className={`flex-1 text-sm font-semibold ${active ? 'text-white' : 'text-[#0A0A0A]'}`}> {doc.title} </span>
-                {isNew && !active && (
-                  <span className="rounded-full bg-[var(--pluto-100)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-[var(--pluto-600)]">
-                    New
-                  </span>
+                </div>
+
+                {/* Subsections list (Collapsible Hierarchy: #1814) */}
+                {hasSubsections && isExpanded && (
+                  <div
+                    id={`sections-${doc.slug}`}
+                    className="ml-6 mt-1 flex flex-col border-l-2 border-[#E5E7EB] pl-3 py-1 space-y-1"
+                    role="list"
+                  >
+                    {doc.matchingSections.map((section) => {
+                      const sectionHref = `/docs/${doc.slug}#${section.id}`;
+                      const isSectionActive = isDocActive && activeSectionId === section.id;
+
+                      return (
+                        <div key={section.id} role="listitem">
+                          <Link
+                            href={sectionHref}
+                            aria-current={isSectionActive ? "location" : undefined}
+                            className={`group flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] ${
+                              isSectionActive
+                                ? "text-[var(--pluto-700)] font-bold bg-[var(--pluto-50)]"
+                                : "text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6]"
+                            }`}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                                isSectionActive
+                                  ? "bg-[var(--pluto-600)] scale-125"
+                                  : "bg-[#9CA3AF] group-hover:bg-[#4B5563]"
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">{section.title}</span>
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+              </div>
+            );
+          })
+        )}
+      </div>
     </nav>
   );
 }

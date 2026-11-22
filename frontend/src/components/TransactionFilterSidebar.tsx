@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useId } from "react";
+import React, { useId, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
+import { toast } from "sonner";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-interface FilterState {
+export interface FilterState {
   search: string;
   status: string;
   asset: string;
@@ -14,12 +15,22 @@ interface FilterState {
   dateTo: string;
 }
 
+const EMPTY_FILTERS: FilterState = {
+  search: "",
+  status: "all",
+  asset: "all",
+  dateFrom: "",
+  dateTo: "",
+};
+
 interface TransactionFilterSidebarProps {
   /** Optimistic filter state; updates synchronously on every interaction. */
   filters: FilterState;
-  onFilterChange: (key: keyof FilterState, value: string) => void;
-  onClearFilter: (key: keyof FilterState) => void;
-  onClearAll: () => void;
+  onFilterChange: (key: keyof FilterState, value: string) => void | Promise<void>;
+  onClearFilter: (key: keyof FilterState) => void | Promise<void>;
+  onClearAll: () => void | Promise<void>;
+  /** Optional callback invoked when an optimistic filter update rolls back on network failure. */
+  onRollback?: (error: Error, previousFilters: FilterState) => void;
   /** Reflects draft filters — keeps actions like Clear All responsive before URL sync. */
   hasActiveFilters: boolean;
   /**
@@ -307,6 +318,13 @@ function FilterContent({
               type="text"
               value={filters.search}
               onChange={(e) => onFilterChange("search", e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && filters.search) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onClearFilter("search");
+                }
+              }}
               aria-busy={searchSyncPending}
               aria-describedby={
                 searchSyncPending ? `sidebar-search-hint${suffix}` : undefined
@@ -314,7 +332,7 @@ function FilterContent({
               placeholder={t("search.placeholder")}
               className={[
                 "w-full rounded-xl border bg-[#F9F9F9] py-2.5 pl-10 pr-9 text-sm text-[#0A0A0A]",
-                "placeholder:text-[#6B6B6B] focus:bg-white focus:outline-none transition-all duration-200",
+                "placeholder:text-[#6B6B6B] focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 transition-all duration-200",
                 searchSyncPending
                   ? "border-dashed border-[var(--pluto-400)] focus:border-[var(--pluto-500)]"
                   : "border-[#E8E8E8] focus:border-[var(--pluto-500)]",
@@ -349,7 +367,7 @@ function FilterContent({
                   type="button"
                   onClick={() => onClearFilter("search")}
                   aria-label={t("ariaLabel")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#A0A0A0] hover:bg-[#F0F0F0] hover:text-[#0A0A0A] transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#A0A0A0] hover:bg-[#F0F0F0] hover:text-[#0A0A0A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] transition-colors"
                 >
                   <svg
                     className="h-3.5 w-3.5"
@@ -418,7 +436,7 @@ function FilterContent({
               aria-busy={isFilterPending}
               className={[
                 "w-full rounded-xl border bg-[#F9F9F9] px-4 py-2.5 text-sm text-[#0A0A0A] appearance-none cursor-pointer",
-                "focus:bg-white focus:outline-none transition-all duration-200",
+                "focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 transition-all duration-200",
                 isFilterPending
                   ? "border-dashed border-[var(--pluto-400)]"
                   : "border-[#E8E8E8] focus:border-[var(--pluto-500)]",
@@ -462,19 +480,34 @@ function FilterContent({
             role="group"
             aria-label={t("asset.label")}
           >
-            {ASSET_OPTIONS.map((a) => {
+            {ASSET_OPTIONS.map((a, idx) => {
               const isActive = filters.asset === a;
               return (
                 <motion.button
                   key={a}
                   type="button"
                   onClick={() => onFilterChange("asset", a)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                      e.preventDefault();
+                      const nextIdx = (idx + 1) % ASSET_OPTIONS.length;
+                      onFilterChange("asset", ASSET_OPTIONS[nextIdx]);
+                      const btns = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("button");
+                      btns?.[nextIdx]?.focus();
+                    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                      e.preventDefault();
+                      const prevIdx = (idx - 1 + ASSET_OPTIONS.length) % ASSET_OPTIONS.length;
+                      onFilterChange("asset", ASSET_OPTIONS[prevIdx]);
+                      const btns = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("button");
+                      btns?.[prevIdx]?.focus();
+                    }
+                  }}
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.93 }}
                   aria-pressed={isActive}
                   aria-busy={isFilterPending && isActive}
                   className={[
-                    "rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest transition-all duration-200",
+                    "rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-2 transition-all duration-200",
                     isActive
                       ? "bg-[var(--pluto-500)] text-white shadow-md shadow-[var(--pluto-500)]/20"
                       : "border border-[#E8E8E8] bg-[#F9F9F9] text-[#6B6B6B] hover:border-[var(--pluto-300)] hover:bg-[var(--pluto-50,#f0f4ff)]",
@@ -532,7 +565,7 @@ function FilterContent({
                 aria-busy={isFilterPending}
                 className={[
                   "w-full rounded-xl border bg-[#F9F9F9] px-3 py-2 text-sm text-[#0A0A0A]",
-                  "focus:outline-none [color-scheme:light] transition-all duration-200",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 [color-scheme:light] transition-all duration-200",
                   isFilterPending && filters.dateFrom
                     ? "border-dashed border-[var(--pluto-400)]"
                     : "border-[#E8E8E8] focus:border-[var(--pluto-500)]",
@@ -570,7 +603,7 @@ function FilterContent({
                 aria-busy={isFilterPending}
                 className={[
                   "w-full rounded-xl border bg-[#F9F9F9] px-3 py-2 text-sm text-[#0A0A0A]",
-                  "focus:outline-none [color-scheme:light] transition-all duration-200",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 [color-scheme:light] transition-all duration-200",
                   isFilterPending && filters.dateTo
                     ? "border-dashed border-[var(--pluto-400)]"
                     : "border-[#E8E8E8] focus:border-[var(--pluto-500)]",
@@ -596,7 +629,7 @@ function FilterContent({
           }
           className={[
             "w-full rounded-xl py-3 text-[10px] font-bold uppercase tracking-widest transition-all duration-200",
-            "bg-[#0A0A0A] text-white hover:bg-[#2A2A2A] active:scale-[0.98]",
+            "bg-[#0A0A0A] text-white hover:bg-[#2A2A2A] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0A0A0A]",
             "disabled:cursor-not-allowed disabled:opacity-20",
           ].join(" ")}
         >
@@ -621,6 +654,7 @@ export default function TransactionFilterSidebar({
   onFilterChange,
   onClearFilter,
   onClearAll,
+  onRollback,
   hasActiveFilters,
   searchSyncPending = false,
   isFilterPending = false,
@@ -632,24 +666,186 @@ export default function TransactionFilterSidebar({
 
   // Stable IDs for desktop vs mobile duplicate inputs (avoids duplicate-id a11y violations)
   const uid = useId();
-  const anyPending = searchSyncPending || isFilterPending;
+
+  // Optimistic filter state with automatic rollback & toast feedback on network failure
+  const [optimisticFilters, setOptimisticFilters] = useState<FilterState>(filters);
+  const [isOptimisticPending, setIsOptimisticPending] = useState(false);
+  const [rollbackAnnouncement, setRollbackAnnouncement] = useState<string>("");
+  const filtersRef = useRef<FilterState>(filters);
+
+  useEffect(() => {
+    setOptimisticFilters(filters);
+    filtersRef.current = filters;
+  }, [filters]);
+
+  const runOptimisticMutation = useCallback(
+    (
+      nextFilters: FilterState,
+      actionLabel: string,
+      mutate: () => void | Promise<void>,
+    ) => {
+      const previousFilters = filtersRef.current;
+
+      const handleFailure = (error: unknown) => {
+        const err =
+          error instanceof Error
+            ? error
+            : new Error(`Network failure while ${actionLabel}.`);
+
+        setOptimisticFilters(previousFilters);
+        filtersRef.current = previousFilters;
+        setRollbackAnnouncement(
+          `Failed ${actionLabel}. Reverted to previous filters.`,
+        );
+        onRollback?.(err, previousFilters);
+
+        toast.error(
+          err.message || `Failed ${actionLabel}. Reverted to previous filters.`,
+          {
+            description: "Your previous filter selection has been restored.",
+            action: {
+              label: "Retry",
+              onClick: () => {
+                runOptimisticMutation(nextFilters, actionLabel, mutate);
+              },
+            },
+          },
+        );
+      };
+
+      try {
+        const result = mutate();
+        if (result && typeof (result as Promise<void>).then === "function") {
+          setOptimisticFilters(nextFilters);
+          filtersRef.current = nextFilters;
+          setIsOptimisticPending(true);
+          setRollbackAnnouncement("");
+
+          (result as Promise<void>)
+            .catch(handleFailure)
+            .finally(() => {
+              setIsOptimisticPending(false);
+            });
+        }
+      } catch (error) {
+        handleFailure(error);
+      }
+    },
+    [onRollback],
+  );
+
+  const handleFilterChange = useCallback(
+    (key: keyof FilterState, value: string) => {
+      const nextFilters: FilterState = {
+        ...filtersRef.current,
+        [key]: value,
+      };
+      runOptimisticMutation(nextFilters, `updating ${key} filter`, () =>
+        onFilterChange(key, value),
+      );
+    },
+    [onFilterChange, runOptimisticMutation],
+  );
+
+  const handleClearFilter = useCallback(
+    (key: keyof FilterState) => {
+      const clearedValue = key === "status" || key === "asset" ? "all" : "";
+      const nextFilters: FilterState = {
+        ...filtersRef.current,
+        [key]: clearedValue,
+      };
+      runOptimisticMutation(nextFilters, `clearing ${key} filter`, () =>
+        onClearFilter(key),
+      );
+    },
+    [onClearFilter, runOptimisticMutation],
+  );
+
+  const handleClearAll = useCallback(() => {
+    runOptimisticMutation(EMPTY_FILTERS, "clearing all filters", () =>
+      onClearAll(),
+    );
+  }, [onClearAll, runOptimisticMutation]);
+
+  const anyPending = searchSyncPending || isFilterPending || isOptimisticPending;
+
+  // Focus trap & focus restoration in mobile drawer (WCAG 2.1 AA)
+  const drawerRef = useRef<HTMLElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElement.current = document.activeElement as HTMLElement | null;
+
+      // Focus first focusable element inside drawer (or close button)
+      const timer = setTimeout(() => {
+        if (drawerRef.current) {
+          const firstFocusable = drawerRef.current.querySelector<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          firstFocusable?.focus();
+        }
+      }, 30);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose?.();
+          return;
+        }
+
+        if (e.key === "Tab" && drawerRef.current) {
+          const focusables = Array.from(
+            drawerRef.current.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          );
+
+          if (focusables.length > 0) {
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    } else if (previousActiveElement.current) {
+      previousActiveElement.current.focus();
+      previousActiveElement.current = null;
+    }
+  }, [isOpen, onClose]);
 
   const activeFilterCount = [
-    filters.search !== "",
-    filters.status !== "all",
-    filters.asset !== "all",
-    filters.dateFrom !== "",
-    filters.dateTo !== "",
+    optimisticFilters.search !== "",
+    optimisticFilters.status !== "all",
+    optimisticFilters.asset !== "all",
+    optimisticFilters.dateFrom !== "",
+    optimisticFilters.dateTo !== "",
   ].filter(Boolean).length;
 
+  const effectiveHasActiveFilters = hasActiveFilters || activeFilterCount > 0;
+
   const sharedProps = {
-    filters,
-    onFilterChange,
-    onClearFilter,
-    onClearAll,
-    hasActiveFilters,
+    filters: optimisticFilters,
+    onFilterChange: handleFilterChange,
+    onClearFilter: handleClearFilter,
+    onClearAll: handleClearAll,
+    hasActiveFilters: effectiveHasActiveFilters,
     searchSyncPending,
-    isFilterPending,
+    isFilterPending: isFilterPending || isOptimisticPending,
     anyPending,
     activeFilterCount,
     uid,
@@ -659,6 +855,16 @@ export default function TransactionFilterSidebar({
 
   return (
     <>
+      {rollbackAnnouncement && (
+        <span
+          role="alert"
+          aria-live="assertive"
+          className="sr-only"
+        >
+          {rollbackAnnouncement}
+        </span>
+      )}
+
       {/* Desktop: persistent sticky panel */}
       <div
         className="hidden lg:block w-[320px] h-fit sticky top-24"
@@ -684,6 +890,7 @@ export default function TransactionFilterSidebar({
 
             {/* Drawer */}
             <motion.aside
+              ref={drawerRef as any}
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}

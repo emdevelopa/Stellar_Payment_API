@@ -34,6 +34,10 @@
  * to skip invalidation.
  *
  * Fail-open: a Redis problem means a database read, never an error.
+ *
+ * Before storing, the generation is read again; if it moved while the
+ * database was being read, the (possibly superseded) body is not stored
+ * (#1777, counted as `stale_skip`).
  */
 
 import { logger as defaultLogger } from "./logger.js";
@@ -143,7 +147,15 @@ export async function readThroughPaymentDetails(merchantId, paymentId, loader, o
   const value = await loader();
   if (value !== null && value !== undefined) {
     const ttl = resolvePaymentDetailsTtlSeconds(value, env);
-    if (ttl > 0) {
+    // #1777: if a writer invalidated while we were loading, this body may
+    // predate the write. Storing it under the old generation is harmless,
+    // but skipping the write keeps Redis free of entries nobody can read.
+    const current = ttl > 0
+      ? await cacheGetGeneration(client, paymentDetailsGenerationKey(paymentId))
+      : generation;
+    if (current !== generation) {
+      record("stale_skip");
+    } else if (ttl > 0) {
       const stored = await cacheSetJson(client, key, value, ttl);
       record(stored ? "store" : "store_error");
     } else {

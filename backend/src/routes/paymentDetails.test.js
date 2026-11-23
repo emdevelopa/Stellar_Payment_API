@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { db, fake, horizon } = vi.hoisted(() => ({
   db: { rows: new Map(), reads: 0, fail: false },
   fake: { redis: null },
-  horizon: { calls: 0 },
+  horizon: { calls: 0, gate: null, returnHash: null },
 }));
 
 vi.mock("../lib/supabase.js", () => ({
@@ -45,6 +45,8 @@ vi.mock("../lib/redis.js", async (importOriginal) => {
 vi.mock("../lib/payment-details-recovery.js", () => ({
   fetchTxMetaWithRecovery: vi.fn(async (txId) => {
     horizon.calls += 1;
+    if (horizon.gate) await horizon.gate;
+    if (horizon.returnHash) return { tx_hash: horizon.returnHash, ledger: 1, timestamp: "x" };
     return { tx_hash: txId, ledger: 42, timestamp: "2026-01-01T00:00:00Z" };
   }),
 }));
@@ -87,6 +89,8 @@ beforeEach(() => {
   db.reads = 0;
   db.fail = false;
   horizon.calls = 0;
+  horizon.gate = null;
+  horizon.returnHash = null;
   db.rows = new Map([
     [PAID, { id: PAID, merchant_id: M, status: "completed", tx_id: TX, amount: 5, metadata: null, merchants: { branding_config: { primary_color: "#000000" } } }],
     [PENDING, { id: PENDING, merchant_id: M, status: "pending", tx_id: null, amount: 1, metadata: null, merchants: null }],
@@ -176,5 +180,44 @@ describe("GET /api/payments/:id", () => {
 
     const ops = await metric("payment_details_cache_operations_total");
     expect(ops.find((v) => v.labels.result === "hit").value).toBe(1);
+  });
+});
+
+describe("concurrency control (#1777)", () => {
+  it("coalesces a burst of identical polls into one DB read and one Horizon call", async () => {
+    const app = buildApp();
+    let open;
+    horizon.gate = new Promise((r) => { open = r; });
+
+    const burst = Array.from({ length: 6 }, () => request(app).get(`/api/payments/${PAID}`).then((r) => r));
+    await new Promise((r) => setTimeout(r, 50));
+    open();
+    const responses = await Promise.all(burst);
+
+    expect(responses.every((r) => r.status === 200)).toBe(true);
+    expect(new Set(responses.map((r) => JSON.stringify(r.body))).size).toBe(1);
+    expect(db.reads).toBe(1);
+    expect(horizon.calls).toBe(1);
+    expect(responses.filter((r) => r.headers["x-cache"] === "COALESCED").length).toBeGreaterThan(0);
+  });
+
+  it("never coalesces across merchants", async () => {
+    const app = buildApp();
+    let open;
+    horizon.gate = new Promise((r) => { open = r; });
+    const mine = request(app).get(`/api/payments/${PAID}`).then((r) => r);
+    const theirs = request(app).get(`/api/payments/${PAID}`).set("x-test-merchant", OTHER).then((r) => r);
+    await new Promise((r) => setTimeout(r, 30));
+    open();
+    expect((await mine).status).toBe(200);
+    expect((await theirs).status).toBe(404);
+  });
+
+  it("drops stellar_tx when Horizon returns a different transaction", async () => {
+    horizon.returnHash = "b".repeat(64);
+    const res = await request(buildApp()).get(`/api/payments/${PAID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.payment.status).toBe("completed");
+    expect(res.body.stellar_tx).toBeNull();
   });
 });

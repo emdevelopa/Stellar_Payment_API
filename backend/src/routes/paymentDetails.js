@@ -4,6 +4,11 @@ import { supabase } from "../lib/supabase.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import { fetchTxMetaWithRecovery } from "../lib/payment-details-recovery.js";
 import { readThroughPaymentDetails } from "../lib/payment-details-cache.js";
+import {
+  paymentDetailsSingleFlight,
+  paymentDetailsFlightKey,
+  enrichStellarTx,
+} from "../lib/payment-details-concurrency.js";
 import { createRouteThroughputTelemetry } from "../lib/route-throughput-telemetry.js";
 import {
   paymentDetailsRequestsTotal,
@@ -83,8 +88,14 @@ async function loadPaymentDetails(paymentId, merchantId) {
   // Only fetch from Horizon when the payment is completed and has a tx hash.
   // "confirmed" is intentionally excluded — the tx exists on-chain but Horizon
   // may not have it fully indexed yet, so the fetch would likely 404.
+  //
+  // #1777: status and tx_id come from the single row read above, so they are
+  // one consistent snapshot. Enrichment runs under a bulkhead and a deadline
+  // and is only attached when Horizon returns exactly that snapshot's tx.
   const stellarTx =
-    data.status === "completed" ? await fetchStellarMeta(data.tx_id) : null;
+    data.status === "completed"
+      ? (await enrichStellarTx(data.tx_id, fetchStellarMeta)).stellarTx
+      : null;
 
   return { payment, stellar_tx: stellarTx };
 }
@@ -114,7 +125,10 @@ router.use(
  *       Responses are cached in Redis per merchant (#1775): terminal payments
  *       for up to 5 minutes, in-progress payments for about 2 seconds, and
  *       every payment write invalidates the entry. Responses carry
- *       `Cache-Control: private, no-store` and `X-Cache: HIT | MISS | BYPASS`.
+ *       `Cache-Control: private, no-store` and
+ *       `X-Cache: HIT | MISS | BYPASS | COALESCED` (COALESCED = this request
+ *       joined an identical in-flight lookup, #1777). `stellar_tx` is null
+ *       when Horizon is slow, saturated, or returns a different transaction.
  *     tags: [Payments]
  *     security:
  *       - ApiKeyAuth: []
@@ -171,16 +185,23 @@ router.get("/:id", validateUuidParam(), async (req, res, next) => {
     const merchantId = req.merchant.id;
     const paymentId = req.params.id;
 
-    // Redis read-through cache (#1775); see lib/payment-details-cache.js.
-    const { value, cache } = await readThroughPaymentDetails(
-      merchantId,
-      paymentId,
-      () => loadPaymentDetails(paymentId, merchantId),
+    // Identical concurrent lookups share one run (#1777), and that run goes
+    // through the Redis read-through cache (#1775).
+    const { value: result, shared } = await paymentDetailsSingleFlight.run(
+      paymentDetailsFlightKey(merchantId, paymentId),
+      () =>
+        readThroughPaymentDetails(merchantId, paymentId, () =>
+          loadPaymentDetails(paymentId, merchantId),
+        ),
     );
+    const { value, cache } = result;
+
+    // A client that disconnected while we waited gets nothing written.
+    if (res.headersSent || res.writableEnded || req.socket?.destroyed) return undefined;
 
     // Per-merchant data: shared caches (CDN/proxy) must never store it.
     res.setHeader("Cache-Control", "private, no-store");
-    res.setHeader("X-Cache", cache.toUpperCase());
+    res.setHeader("X-Cache", shared ? "COALESCED" : cache.toUpperCase());
 
     if (!value) {
       return res.status(404).json({ error: "Payment not found" });

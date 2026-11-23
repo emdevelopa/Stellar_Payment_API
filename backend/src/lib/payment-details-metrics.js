@@ -2,7 +2,8 @@ import client from "prom-client";
 
 /**
  * Metrics for the Public Hosted Checkout Session Route's Horizon lookups,
- * dead-letter recovery (#1776), and caching and throughput telemetry (#1775). Isolated registry, merged into /metrics by
+ * dead-letter recovery (#1776), caching and throughput telemetry (#1775),
+ * and concurrency control (#1777). Isolated registry, merged into /metrics by
  * routes/prometheus.js.
  */
 export const paymentDetailsRegister = new client.Registry();
@@ -38,7 +39,7 @@ export const paymentDetailsDlqOperationsTotal = new client.Counter({
 
 /**
  * Distributed cache operations (#1775).
- * result: hit | miss | bypass | error | store | store_error | skip_store
+ * result: hit | miss | bypass | error | store | store_error | skip_store | stale_skip
  */
 export const paymentDetailsCacheOperationsTotal = new client.Counter({
   name: "payment_details_cache_operations_total",
@@ -70,6 +71,30 @@ export const paymentDetailsInFlight = new client.Gauge({
   registers: [paymentDetailsRegister],
 });
 
+/** Lookups that joined an identical in-flight lookup instead of running (#1777). */
+export const paymentDetailsCoalescedTotal = new client.Counter({
+  name: "payment_details_coalesced_total",
+  help: "Payment details lookups served by joining an identical in-flight lookup",
+  registers: [paymentDetailsRegister],
+});
+
+export const paymentDetailsSingleFlightInFlight = new client.Gauge({
+  name: "payment_details_single_flight_in_flight",
+  help: "Distinct payment details lookups currently in flight on this node",
+  registers: [paymentDetailsRegister],
+});
+
+/**
+ * On-chain enrichment outcome (#1777).
+ * outcome: ok | skipped | unavailable | shed | timeout | mismatch
+ */
+export const paymentDetailsEnrichmentTotal = new client.Counter({
+  name: "payment_details_enrichment_total",
+  help: "Payment details Horizon enrichment outcomes",
+  labelNames: ["outcome"],
+  registers: [paymentDetailsRegister],
+});
+
 export function resetPaymentDetailsMetrics() {
   paymentDetailsHorizonFetchTotal.reset();
   paymentDetailsHorizonRetriesTotal.reset();
@@ -79,4 +104,7 @@ export function resetPaymentDetailsMetrics() {
   paymentDetailsRequestsTotal.reset();
   paymentDetailsRequestDurationSeconds.reset();
   paymentDetailsInFlight.reset();
+  paymentDetailsCoalescedTotal.reset();
+  paymentDetailsSingleFlightInFlight.reset();
+  paymentDetailsEnrichmentTotal.reset();
 }

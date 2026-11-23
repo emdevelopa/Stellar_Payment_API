@@ -127,6 +127,10 @@ describe("readThroughPaymentDetails", () => {
     release();
     await slow;
 
+    // #1777: the superseded body is not even written.
+    expect(await count("stale_skip")).toBe(1);
+    expect(redis.keys(paymentDetailsCacheKey(M, P, "0"))).toHaveLength(0);
+
     const next = await readThroughPaymentDetails(M, P, async () => body("refunded"), opts);
     expect(next).toEqual({ value: body("refunded"), cache: "miss" });
   });

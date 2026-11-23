@@ -38,6 +38,9 @@ import {
   horizonClientBackpressure,
   horizonClientQueueDepth,
   horizonClientRateLimitWaitTime,
+  horizonClientConsecutiveFailures,
+  horizonClientLastSuccessTimestamp,
+  horizonClientHealthState,
 } from "../../metrics.js";
 import { classifyError, getErrorStatus, handleError, isRetryableError } from "./error-handler.js";
 import { computeBackoffDelay, parseRetryAfterMs, resolveBackoffOptions } from "./backoff.js";
@@ -66,6 +69,28 @@ function recordMetric(fn) {
   }
 }
 
+export const HealthStatus = Object.freeze({
+  HEALTHY: "healthy",
+  DEGRADED: "degraded",
+  UNHEALTHY: "unhealthy",
+});
+
+const HEALTH_STATE_VALUE = Object.freeze({
+  [HealthStatus.HEALTHY]: 0,
+  [HealthStatus.DEGRADED]: 1,
+  [HealthStatus.UNHEALTHY]: 2,
+});
+
+export const DEFAULT_UNHEALTHY_AFTER_FAILURES = 5;
+// Bound the per-operation health table; operation names are validated, but a
+// caller generating names dynamically must not grow it without limit.
+const MAX_TRACKED_OPERATIONS = 64;
+
+function resolveUnhealthyThreshold(value) {
+  const raw = Number(value ?? DEFAULT_UNHEALTHY_AFTER_FAILURES);
+  if (!Number.isInteger(raw) || raw < 1) return DEFAULT_UNHEALTHY_AFTER_FAILURES;
+  return Math.min(raw, 1_000);
+}
 const defaultSleep = (ms) =>
   new Promise((resolve) => {
     if (ms <= 0) {

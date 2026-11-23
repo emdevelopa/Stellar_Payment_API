@@ -3,6 +3,18 @@ import { Horizon } from "stellar-sdk";
 import { supabase } from "../lib/supabase.js";
 import { validateUuidParam } from "../lib/validate-uuid.js";
 import { fetchTxMetaWithRecovery } from "../lib/payment-details-recovery.js";
+import { readThroughPaymentDetails } from "../lib/payment-details-cache.js";
+import {
+  paymentDetailsSingleFlight,
+  paymentDetailsFlightKey,
+  enrichStellarTx,
+} from "../lib/payment-details-concurrency.js";
+import { createRouteThroughputTelemetry } from "../lib/route-throughput-telemetry.js";
+import {
+  paymentDetailsRequestsTotal,
+  paymentDetailsRequestDurationSeconds,
+  paymentDetailsInFlight,
+} from "../lib/payment-details-metrics.js";
 
 // ─── Horizon client ───────────────────────────────────────────────────────────
 // Mirrors the network selection used elsewhere in the project.
@@ -42,7 +54,63 @@ async function fetchStellarMeta(txId) {
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
+/**
+ * Load the response body for one payment, or null when it does not exist for
+ * this merchant. The merchant filter is part of the query, and cache keys are
+ * scoped by the same merchant id, so a cache hit never widens access.
+ */
+async function loadPaymentDetails(paymentId, merchantId) {
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "id, amount, asset, asset_issuer, recipient, description, memo, memo_type, status, tx_id, metadata, created_at, merchants(branding_config)"
+    )
+    .eq("id", paymentId)
+    .eq("merchant_id", merchantId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) {
+    error.status = 500;
+    throw error;
+  }
+
+  if (!data) return null;
+
+  // Resolve branding the same way payment-status does
+  const metadataBranding = data.metadata?.branding_config || null;
+  const merchantBranding = data.merchants?.branding_config || null;
+  const brandingConfig = metadataBranding || merchantBranding || null;
+
+  const payment = { ...data, branding_config: brandingConfig };
+  delete payment.merchants;
+
+  // Only fetch from Horizon when the payment is completed and has a tx hash.
+  // "confirmed" is intentionally excluded — the tx exists on-chain but Horizon
+  // may not have it fully indexed yet, so the fetch would likely 404.
+  //
+  // #1777: status and tx_id come from the single row read above, so they are
+  // one consistent snapshot. Enrichment runs under a bulkhead and a deadline
+  // and is only attached when Horizon returns exactly that snapshot's tx.
+  const stellarTx =
+    data.status === "completed"
+      ? (await enrichStellarTx(data.tx_id, fetchStellarMeta)).stellarTx
+      : null;
+
+  return { payment, stellar_tx: stellarTx };
+}
+
 const router = express.Router();
+
+// Throughput telemetry (#1775): count, latency and in-flight by route pattern.
+router.use(
+  createRouteThroughputTelemetry({
+    router,
+    requests: paymentDetailsRequestsTotal,
+    duration: paymentDetailsRequestDurationSeconds,
+    inFlight: paymentDetailsInFlight,
+  }),
+);
 
 /**
  * @swagger
@@ -54,6 +122,13 @@ const router = express.Router();
  *       When status is "completed", a `stellar_tx` block is also included
  *       containing the on-chain tx_hash, ledger sequence, and timestamp
  *       sourced directly from Horizon.
+ *       Responses are cached in Redis per merchant (#1775): terminal payments
+ *       for up to 5 minutes, in-progress payments for about 2 seconds, and
+ *       every payment write invalidates the entry. Responses carry
+ *       `Cache-Control: private, no-store` and
+ *       `X-Cache: HIT | MISS | BYPASS | COALESCED` (COALESCED = this request
+ *       joined an identical in-flight lookup, #1777). `stellar_tx` is null
+ *       when Horizon is slow, saturated, or returns a different transaction.
  *     tags: [Payments]
  *     security:
  *       - ApiKeyAuth: []
@@ -107,43 +182,32 @@ const router = express.Router();
  */
 router.get("/:id", validateUuidParam(), async (req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from("payments")
-      .select(
-        "id, amount, asset, asset_issuer, recipient, description, memo, memo_type, status, tx_id, metadata, created_at, merchants(branding_config)"
-      )
-      .eq("id", req.params.id)
-      .eq("merchant_id", req.merchant.id)
-      .is("deleted_at", null)
-      .maybeSingle();
+    const merchantId = req.merchant.id;
+    const paymentId = req.params.id;
 
-    if (error) {
-      error.status = 500;
-      throw error;
-    }
+    // Identical concurrent lookups share one run (#1777), and that run goes
+    // through the Redis read-through cache (#1775).
+    const { value: result, shared } = await paymentDetailsSingleFlight.run(
+      paymentDetailsFlightKey(merchantId, paymentId),
+      () =>
+        readThroughPaymentDetails(merchantId, paymentId, () =>
+          loadPaymentDetails(paymentId, merchantId),
+        ),
+    );
+    const { value, cache } = result;
 
-    if (!data) {
+    // A client that disconnected while we waited gets nothing written.
+    if (res.headersSent || res.writableEnded || req.socket?.destroyed) return undefined;
+
+    // Per-merchant data: shared caches (CDN/proxy) must never store it.
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Cache", shared ? "COALESCED" : cache.toUpperCase());
+
+    if (!value) {
       return res.status(404).json({ error: "Payment not found" });
     }
 
-    // Resolve branding the same way payment-status does
-    const metadataBranding = data.metadata?.branding_config || null;
-    const merchantBranding = data.merchants?.branding_config || null;
-    const brandingConfig = metadataBranding || merchantBranding || null;
-
-    const payment = { ...data, branding_config: brandingConfig };
-    delete payment.merchants;
-
-    // Only fetch from Horizon when the payment is completed and has a tx hash.
-    // "confirmed" is intentionally excluded — the tx exists on-chain but Horizon
-    // may not have it fully indexed yet, so the fetch would likely 404.
-    const stellarTx =
-      data.status === "completed" ? await fetchStellarMeta(data.tx_id) : null;
-
-    return res.json({
-      payment,
-      stellar_tx: stellarTx,
-    });
+    return res.json(value);
   } catch (err) {
     next(err);
   }

@@ -18,6 +18,7 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 const CopyButton = dynamic(() => import("./CopyButton"), { ssr: false });
 
@@ -43,6 +44,7 @@ interface WebhookDetailModalProps {
   onNext?: () => void;
   /** Human-readable position, e.g. "3 of 12". */
   positionLabel?: string;
+  onReplay?: () => void | Promise<void>;
 }
 
 /** Minimum downward drag (px) that dismisses the drawer. */
@@ -113,14 +115,19 @@ export default function WebhookDetailModal({
   onPrevious,
   onNext,
   positionLabel,
+  onReplay,
 }: WebhookDetailModalProps) {
   const titleId = useId();
+  const descriptionId = useId();
+  const requestPayloadId = useId();
+  const responseBodyId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const touch = useRef<TouchState | null>(null);
   const [dragY, setDragY] = useState(0);
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [replaying, setReplaying] = useState(false);
 
   const generateCurl = (log: WebhookLog) => {
     const headers = log.request_headers || {};
@@ -141,9 +148,17 @@ export default function WebhookDetailModal({
     setDragX(0);
   }, []);
 
-  const handleReplayAction = useCallback(() => {
-    toast.error("Replay failed. Rolled back optimistic state.");
-  }, []);
+  const handleReplayAction = useCallback(async () => {
+    if (!onReplay || replaying) return;
+    setReplaying(true);
+    try {
+      await onReplay();
+    } catch {
+      toast.error("Replay failed. Rolled back optimistic state.");
+    } finally {
+      setReplaying(false);
+    }
+  }, [onReplay, replaying]);
 
   // Keyboard: Escape closes, arrows navigate, Tab is trapped in the dialog.
   useEffect(() => {
@@ -155,39 +170,66 @@ export default function WebhookDetailModal({
         onClose();
         return;
       }
-      if (event.key === "ArrowLeft" && onPrevious) {
-        event.preventDefault();
-        onPrevious();
-        return;
+
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const active = document.activeElement;
+      const inCodeRegion = active instanceof Element && !!active.closest("pre, code");
+
+      if (
+        !inCodeRegion &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey
+      ) {
+        if (event.key === "ArrowLeft" && onPrevious) {
+          event.preventDefault();
+          onPrevious();
+          return;
+        }
+        if (event.key === "ArrowRight" && onNext) {
+          event.preventDefault();
+          onNext();
+          return;
+        }
       }
-      if (event.key === "ArrowRight" && onNext) {
-        event.preventDefault();
-        onNext();
-        return;
-      }
-      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      if (event.key !== "Tab") return;
 
       const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+        dialog.querySelectorAll<HTMLElement>(FOCUSABLE),
       );
       if (focusable.length === 0) {
         event.preventDefault();
-        dialogRef.current.focus();
+        dialog.focus();
         return;
       }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (!dialog.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && (active === first || active === dialog)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && active === last) {
         event.preventDefault();
         first.focus();
       }
     };
 
+    const handleFocusIn = (event: FocusEvent) => {
+      const dialog = dialogRef.current;
+      if (!dialog || dialog.contains(event.target as Node)) return;
+      dialog.focus();
+    };
+
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("focusin", handleFocusIn);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("focusin", handleFocusIn);
+    };
   }, [isOpen, onClose, onPrevious, onNext]);
 
   // Focus the dialog on open, restore focus and body scroll on close.
@@ -202,7 +244,9 @@ export default function WebhookDetailModal({
 
     return () => {
       document.body.style.overflow = originalOverflow;
-      previousActiveElement?.focus();
+      if (previousActiveElement?.isConnected) {
+        previousActiveElement.focus();
+      }
     };
   }, [isOpen]);
 
@@ -290,6 +334,9 @@ export default function WebhookDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        aria-keyshortcuts="Escape ArrowLeft ArrowRight"
+        aria-busy={replaying || undefined}
         tabIndex={-1}
         data-testid="webhook-detail-drawer"
         data-dragging={dragging || undefined}
@@ -317,13 +364,22 @@ export default function WebhookDetailModal({
           />
         </div>
 
+        <p id={descriptionId} className="sr-only">
+          Inspect the webhook request and response payload. Press Escape to close. Use the
+          left and right arrow keys to browse deliveries.
+        </p>
+
         <div className="flex shrink-0 touch-none items-center justify-between gap-2 border-b border-white/10 px-4 pb-3 pt-2 sm:px-6 sm:pt-5">
           <div className="min-w-0">
             <h2 id={titleId} className="font-mono text-xs uppercase tracking-[0.3em] text-mint">
               Webhook Delivery Detail
             </h2>
             {positionLabel && (
-              <p className="mt-1 text-xs text-slate-500" aria-live="polite">
+              <p
+                className="mt-1 text-xs text-slate-500"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 Delivery {positionLabel}
               </p>
             )}
@@ -357,6 +413,19 @@ export default function WebhookDetailModal({
             )}
             <button
               type="button"
+              onClick={() => void handleReplayAction()}
+              className={navButtonClasses}
+              data-testid="replay-delivery"
+              disabled={!onReplay || replaying}
+              aria-label={replaying ? "Replaying delivery" : "Replay delivery"}
+              aria-busy={replaying || undefined}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M5.64 9A7 7 0 0119 7.35M18.36 15A7 7 0 015 16.65" />
+              </svg>
+            </button>
+            <button
+              type="button"
               onClick={onClose}
               className={navButtonClasses}
               data-testid="modal-close"
@@ -383,7 +452,10 @@ export default function WebhookDetailModal({
                 </div>
                 <div className="shrink-0 space-y-1 text-right">
                   <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Status</p>
-                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses(log.status_code)}`}>
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses(log.status_code)}`}
+                    aria-label={`HTTP status ${log.status_code}`}
+                  >
                     HTTP {log.status_code}
                   </span>
                 </div>
@@ -405,17 +477,32 @@ export default function WebhookDetailModal({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-white">Payload (Request Body)</p>
                   <div className="flex gap-2">
-                    <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                    <div
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1"
+                      role="group"
+                      aria-label="Copy request payload as cURL"
+                    >
                       <span className="text-[10px] font-medium text-slate-400">cURL</span>
                       <CopyButton text={generateCurl(log)} />
                     </div>
-                    <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                    <div
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1"
+                      role="group"
+                      aria-label="Copy request payload as JSON"
+                    >
                       <span className="text-[10px] font-medium text-slate-400">JSON</span>
                       <CopyButton text={JSON.stringify(log.request_payload, null, 2)} />
                     </div>
                   </div>
                 </div>
-                <pre className="max-h-60 overflow-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-sky-300 ring-1 ring-inset ring-white/5">
+                <pre
+                  id={requestPayloadId}
+                  role="region"
+                  tabIndex={0}
+                  aria-label="Webhook request payload"
+                  data-testid="webhook-request-payload"
+                  className="max-h-60 overflow-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-sky-300 ring-1 ring-inset ring-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-mint"
+                >
                   {JSON.stringify(log.request_payload || {}, null, 2)}
                 </pre>
               </div>
@@ -423,7 +510,14 @@ export default function WebhookDetailModal({
               {log.response_body && (
                 <div className="space-y-3">
                   <p className="text-sm font-semibold text-white">Server Response</p>
-                  <div className="max-h-40 overflow-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-slate-400 ring-1 ring-inset ring-white/5">
+                  <div
+                    id={responseBodyId}
+                    role="region"
+                    tabIndex={0}
+                    aria-label="Webhook server response"
+                    data-testid="webhook-response-body"
+                    className="max-h-40 overflow-auto rounded-xl border border-white/10 bg-black/40 p-4 font-mono text-xs text-slate-400 ring-1 ring-inset ring-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-mint"
+                  >
                     {log.response_body}
                   </div>
                 </div>

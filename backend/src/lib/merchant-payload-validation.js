@@ -24,6 +24,11 @@
 
 import { z } from "zod";
 import { logger } from "./logger.js";
+import { HEX_COLOR_REGEX } from "./branding.js";
+import {
+  merchantPayloadRejectionsTotal,
+  merchantPayloadKeysDroppedTotal,
+} from "./merchant-lifecycle-metrics.js";
 
 export const SANITIZE_LIMITS = Object.freeze({
   maxDepth: 6,
@@ -132,22 +137,42 @@ export function sanitizePayload(value, limits = {}, report = {}) {
 }
 
 /**
+ * Low-cardinality route label for metrics/logs. Route-level middleware sees
+ * `req.route.path` (the pattern, e.g. "/merchant-branding"), never the raw
+ * URL, so user input cannot mint new label values.
+ */
+export function merchantRouteLabel(req) {
+  return typeof req?.route?.path === "string" ? req.route.path : "unknown";
+}
+
+function recordRejection(route, reason) {
+  try {
+    merchantPayloadRejectionsTotal.inc({ route, reason });
+  } catch {
+    // Metrics must never break the request path.
+  }
+}
+
+/**
  * Express middleware: sanitize req.body in place before schema validation.
  * Structural violations are rejected with 400; dropped keys are logged
- * (without values) so abuse attempts are observable.
+ * (without values) so abuse attempts are observable. Both are counted in
+ * merchant_payload_rejections_total / merchant_payload_keys_dropped_total.
  */
 export function sanitizeMerchantPayload(req, res, next) {
   if (req.body === undefined || req.body === null) {
     return next();
   }
 
+  const route = merchantRouteLabel(req);
   const report = {};
   try {
     req.body = sanitizePayload(req.body, {}, report);
   } catch (err) {
     if (err instanceof PayloadSanitizationError) {
+      recordRejection(route, "sanitize");
       logger.warn(
-        { merchantId: req.merchant?.id, path: err.path, route: req.originalUrl },
+        { merchantId: req.merchant?.id, path: err.path, route },
         "Rejected merchant payload: sanitization limit exceeded",
       );
       return res.status(400).json({ error: "Validation failed", message: err.message });
@@ -156,12 +181,54 @@ export function sanitizeMerchantPayload(req, res, next) {
   }
 
   if (report.droppedKeys.length > 0) {
+    try {
+      merchantPayloadKeysDroppedTotal.inc({ route }, report.droppedKeys.length);
+    } catch {
+      // ignore
+    }
     logger.warn(
-      { merchantId: req.merchant?.id, droppedKeys: report.droppedKeys, route: req.originalUrl },
+      { merchantId: req.merchant?.id, droppedKeys: report.droppedKeys, route },
       "Dropped unsafe keys from merchant payload",
     );
   }
   return next();
+}
+
+/**
+ * Validate req.body / req.query / req.params against Zod schemas (#1769).
+ *
+ * Same 400 response contract as lib/validation.js#validateRequest (so
+ * existing clients see no change), plus a `merchant_payload_rejections_total`
+ * metric and a structured warning that records WHICH fields failed but never
+ * their values (bodies can carry passwords and secrets).
+ *
+ * @param {{ body?: import("zod").ZodTypeAny, query?: import("zod").ZodTypeAny, params?: import("zod").ZodTypeAny }} schemas
+ */
+export function validateMerchantRequest(schemas) {
+  return async function merchantRequestValidator(req, res, next) {
+    try {
+      if (schemas.body) req.body = await schemas.body.parseAsync(req.body ?? {});
+      if (schemas.query) req.query = await schemas.query.parseAsync(req.query ?? {});
+      if (schemas.params) req.params = await schemas.params.parseAsync(req.params ?? {});
+      return next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const route = merchantRouteLabel(req);
+        recordRejection(route, "schema");
+        logger.warn(
+          {
+            merchantId: req.merchant?.id,
+            route,
+            fields: [...new Set(error.issues.map((i) => i.path.join(".") || "body"))],
+            codes: [...new Set(error.issues.map((i) => i.code))],
+          },
+          "Rejected merchant payload: schema validation failed",
+        );
+        return res.status(400).json({ error: "Validation failed", errors: error.format() });
+      }
+      return next(error);
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -331,3 +398,174 @@ export const paymentLimitsSchema = z
   .refine((limits) => Object.keys(limits).length <= 50, {
     message: "At most 50 asset limits may be configured",
   });
+
+// ---------------------------------------------------------------------------
+// Merchant Onboarding and Key Lifecycle Route schemas (#1769)
+// ---------------------------------------------------------------------------
+
+/**
+ * Credential routes (rotate-key, regenerate-webhook-secret, generate-api-key,
+ * webhook-settings/verify) take no input. Rejecting any body stops clients
+ * from believing a field like `api_key` or `expires_at` was honoured.
+ */
+export const emptyBodySchema = z.object({}).strict();
+
+/** bcrypt only hashes the first 72 bytes; longer input is silently ignored. */
+export const MAX_PASSWORD_BYTES = 72;
+export const MIN_PASSWORD_LENGTH = 8;
+export const MAX_EMAIL_LENGTH = 254; // RFC 5321 path limit
+export const MAX_BUSINESS_NAME_LENGTH = 120;
+export const MAX_URL_LENGTH = 2048;
+
+// eslint-disable-next-line no-control-regex
+const ANY_CONTROL_CHAR = /[\u0000-\u001F\u007F]/;
+// Characters that would break out of an HTML attribute or text node.
+const HTML_META_CHARS = /[<>"'`]/;
+
+const emailSchema = (field) =>
+  z
+    .string({
+      required_error: `${field} is required`,
+      invalid_type_error: `${field} must be a string`,
+    })
+    .trim()
+    .min(1, `${field} is required`)
+    .max(MAX_EMAIL_LENGTH, `${field} must be at most ${MAX_EMAIL_LENGTH} characters`)
+    .email(`Invalid ${field} format`)
+    // Emails are case-insensitive in practice; storing them lower-cased
+    // closes the "A@x.com" / "a@x.com" duplicate-account gap, because the
+    // registration lock and the existence check now see the same value.
+    .transform((value) => value.toLowerCase());
+
+export const merchantPasswordSchema = z
+  .string({
+    required_error: "password is required",
+    invalid_type_error: "password must be a string",
+  })
+  .min(MIN_PASSWORD_LENGTH, `password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+  .refine(
+    (value) => Buffer.byteLength(value, "utf8") <= MAX_PASSWORD_BYTES,
+    `password must be at most ${MAX_PASSWORD_BYTES} bytes`,
+  );
+
+const businessNameSchema = z
+  .string({ invalid_type_error: "business_name must be a string" })
+  .trim()
+  .max(MAX_BUSINESS_NAME_LENGTH, `business_name must be at most ${MAX_BUSINESS_NAME_LENGTH} characters`)
+  .refine((value) => !ANY_CONTROL_CHAR.test(value), "business_name must not contain control characters")
+  .refine((value) => !HTML_META_CHARS.test(value), "business_name must not contain < > \" ' or `")
+  .transform((value) => (value === "" ? undefined : value));
+
+/**
+ * An outbound HTTPS URL a merchant controls (webhook endpoint).
+ * Embedded credentials are rejected: they would be stored and logged in
+ * plain text and sent to every redirect target.
+ */
+export const merchantWebhookUrlSchema = z
+  .string({
+    required_error: "webhook_url is required",
+    invalid_type_error: "webhook_url must be a string",
+  })
+  .trim()
+  .max(MAX_URL_LENGTH, `webhook_url must be at most ${MAX_URL_LENGTH} characters`)
+  .url("webhook_url must be a valid URL")
+  .superRefine((value, ctx) => {
+    let parsed;
+    try {
+      parsed = new URL(value);
+    } catch {
+      return; // .url() already reported it
+    }
+    if (parsed.protocol !== "https:") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "webhook_url must use HTTPS" });
+    }
+    if (parsed.username || parsed.password) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "webhook_url must not contain embedded credentials",
+      });
+    }
+  });
+
+const DATA_IMAGE_URI = /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * Logo URLs are interpolated into the hosted checkout page and receipt
+ * e-mails. Only `https:` URLs and base64 raster data URIs are accepted;
+ * `javascript:`, `data:text/html`, SVG (which can carry script) and any
+ * value containing HTML meta characters are rejected.
+ */
+export const logoUrlSchema = z
+  .string({ invalid_type_error: "logo_url must be a string" })
+  .trim()
+  .refine((value) => !HTML_META_CHARS.test(value) && !ANY_CONTROL_CHAR.test(value), {
+    message: "logo_url contains characters that are not allowed",
+  })
+  .refine(
+    (value) => {
+      if (value === "") return true;
+      if (DATA_IMAGE_URI.test(value)) return true;
+      if (value.length > MAX_URL_LENGTH) return false;
+      try {
+        const parsed = new URL(value);
+        return parsed.protocol === "https:" && !parsed.username && !parsed.password;
+      } catch {
+        return false;
+      }
+    },
+    { message: "logo_url must be an https:// URL or a base64 PNG/JPEG/GIF/WebP data URI" },
+  )
+  .transform((value) => (value === "" ? null : value));
+
+const hexColor = (field) =>
+  z
+    .string({ invalid_type_error: `${field} must be a string` })
+    .trim()
+    .regex(HEX_COLOR_REGEX, `${field} must be a valid hex color`);
+
+export const merchantBrandingSchema = z
+  .object({
+    primary_color: hexColor("primary_color").optional(),
+    secondary_color: hexColor("secondary_color").optional(),
+    background_color: hexColor("background_color").optional(),
+    logo_url: logoUrlSchema.nullable().optional(),
+  })
+  .strict();
+
+/**
+ * Registration body. `.strict()` turns mass-assignment attempts
+ * (`api_key`, `webhook_secret`, `id`, `password_hash`, ...) into a 400
+ * instead of silently ignoring them.
+ */
+export const registerMerchantSchema = z
+  .object({
+    email: emailSchema("email"),
+    password: merchantPasswordSchema,
+    business_name: businessNameSchema.optional(),
+    notification_email: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      emailSchema("notification_email").optional(),
+    ),
+    branding_config: merchantBrandingSchema.optional(),
+    merchant_settings: merchantSettingsSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+export const testWebhookRequestSchema = z
+  .object({ webhook_url: merchantWebhookUrlSchema })
+  .strict();
+
+/** Upper bound on the receiver's response body echoed back by /test-webhook. */
+export const MAX_TEST_WEBHOOK_BODY_CHARS = 2048;
+
+/**
+ * Clip and strip control characters from a third-party response body before
+ * it is returned to the caller.
+ */
+export function clipEchoedBody(body, max = MAX_TEST_WEBHOOK_BODY_CHARS) {
+  if (body === null || body === undefined) return null;
+  const text = typeof body === "string" ? body : JSON.stringify(body);
+  const clean = text.replace(UNSAFE_CONTROL_CHARS, "");
+  return clean.length > max ? `${clean.slice(0, max)}…[truncated]` : clean;
+}

@@ -2,7 +2,7 @@ import client from "prom-client";
 
 /**
  * Metrics for the Merchant Onboarding and Key Lifecycle Route: concurrency
- * control (#1772) and dead-letter recovery (#1771). Isolated registry, merged
+ * control (#1772), dead-letter recovery (#1771) and payload validation (#1769). Isolated registry, merged
  * into /metrics by routes/prometheus.js.
  */
 export const merchantLifecycleRegister = new client.Registry();
@@ -55,6 +55,26 @@ export const merchantDlqOperationsTotal = new client.Counter({
   registers: [merchantLifecycleRegister],
 });
 
+/**
+ * Payloads rejected before reaching a handler (#1769).
+ * route:  Express route pattern (fixed set, never the raw URL)
+ * reason: sanitize | schema
+ */
+export const merchantPayloadRejectionsTotal = new client.Counter({
+  name: "merchant_payload_rejections_total",
+  help: "Merchant route payloads rejected by sanitization or schema validation",
+  labelNames: ["route", "reason"],
+  registers: [merchantLifecycleRegister],
+});
+
+/** Unsafe keys (prototype-pollution, control characters) stripped from payloads. */
+export const merchantPayloadKeysDroppedTotal = new client.Counter({
+  name: "merchant_payload_keys_dropped_total",
+  help: "Unsafe keys dropped from merchant route payloads",
+  labelNames: ["route"],
+  registers: [merchantLifecycleRegister],
+});
+
 export function resetMerchantLifecycleMetrics() {
   merchantLockTotal.reset();
   merchantLockHeldSeconds.reset();
@@ -62,4 +82,6 @@ export function resetMerchantLifecycleMetrics() {
   merchantPersistRetriesTotal.reset();
   merchantDlqDepth.reset();
   merchantDlqOperationsTotal.reset();
+  merchantPayloadRejectionsTotal.reset();
+  merchantPayloadKeysDroppedTotal.reset();
 }

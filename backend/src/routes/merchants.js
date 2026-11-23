@@ -5,24 +5,29 @@ import { supabase } from "../lib/supabase.js";
 import { requireApiKeyAuth, requireSessionAuth, hashPassword } from "../lib/auth.js";
 import { generateSessionToken } from "../lib/sep10-auth.js";
 import { getMerchantApiUsage } from "../lib/api-usage.js";
-import { validateRequest } from "../lib/validation.js";
 import { createMerchantSecurityActionRateLimit } from "../lib/rate-limit.js";
 import {
-  registerMerchantZodSchema,
-  sessionBrandingSchema,
   webhookSettingsSchema,
-  testWebhookSchema,
   VALID_WEBHOOK_EVENTS,
 } from "../lib/request-schemas.js";
 import { merchantService } from "../services/merchantService.js";
 import { resolveMerchantSettings } from "../lib/merchant-settings.js";
 import {
   sanitizeMerchantPayload,
+  validateMerchantRequest,
   rotateApiKeySchema,
   rotateWebhookSecretSchema,
   setApiKeyExpirySchema,
+  emptyBodySchema,
+  registerMerchantSchema,
+  merchantBrandingSchema,
+  testWebhookRequestSchema,
+  clipEchoedBody,
 } from "../lib/merchant-payload-validation.js";
 import { renderReceiptEmail } from "../lib/email-templates.js";
+import { resolveBrandingConfig } from "../lib/branding.js";
+import { sendWebhook } from "../lib/webhooks.js";
+import { getPayloadForVersion } from "../webhooks/resolver.js";
 import {
   createWebhookDomainVerificationState,
   readWebhookDomainVerification,
@@ -122,7 +127,7 @@ function createMerchantsRouter({
     "/register-merchant",
     merchantRegistrationRateLimit,
     sanitizeMerchantPayload,
-    validateRequest({ body: registerMerchantZodSchema }),
+    validateMerchantRequest({ body: registerMerchantSchema }),
     async (req, res, next) => {
       try {
         const body = req.body;
@@ -234,7 +239,11 @@ function createMerchantsRouter({
    *       401:
    *         description: Missing or invalid x-api-key header
    */
-  router.post("/rotate-key", async (req, res, next) => {
+  router.post(
+    "/rotate-key",
+    sanitizeMerchantPayload,
+    validateMerchantRequest({ body: emptyBodySchema }),
+    async (req, res, next) => {
     try {
       const newApiKey = `sk_${randomBytes(24).toString("hex")}`;
 
@@ -254,7 +263,8 @@ function createMerchantsRouter({
     } catch (err) {
       next(err);
     }
-  });
+  },
+  );
 
   /**
    * @swagger
@@ -297,7 +307,7 @@ function createMerchantsRouter({
     requireApiKeyAuth({ requireSignature: true }),
     merchantSecurityActionRateLimit,
     sanitizeMerchantPayload,
-    validateRequest({ body: rotateWebhookSecretSchema }),
+    validateMerchantRequest({ body: rotateWebhookSecretSchema }),
     async (req, res, next) => {
       try {
         const body = req.body;
@@ -364,7 +374,7 @@ function createMerchantsRouter({
   router.put(
     "/merchant-branding",
     sanitizeMerchantPayload,
-    validateRequest({ body: sessionBrandingSchema }),
+    validateMerchantRequest({ body: merchantBrandingSchema }),
     async (req, res, next) => {
       try {
         const brandingConfig = req.body;
@@ -417,7 +427,7 @@ function createMerchantsRouter({
     "/preview-receipt",
     requireApiKeyAuth(),
     sanitizeMerchantPayload,
-    validateRequest({ body: sessionBrandingSchema }),
+    validateMerchantRequest({ body: merchantBrandingSchema }),
     async (req, res) => {
       try {
         const brandingConfig = req.body;
@@ -492,7 +502,8 @@ function createMerchantsRouter({
     "/test-webhook",
     requireApiKeyAuth(),
     merchantSecurityActionRateLimit,
-    validateRequest({ body: testWebhookSchema }),
+    sanitizeMerchantPayload,
+    validateMerchantRequest({ body: testWebhookRequestSchema }),
     async (req, res, next) => {
       try {
         const { webhook_url } = req.body;
@@ -515,7 +526,8 @@ function createMerchantsRouter({
         res.json({
           ok: result.ok,
           status: result.status ?? null,
-          body: result.body ?? null,
+          // Third-party content: bounded and stripped of control characters.
+          body: clipEchoedBody(result.body),
           signed: result.signed,
         });
       } catch (err) {
@@ -600,7 +612,7 @@ function createMerchantsRouter({
     requireApiKeyAuth(),
     merchantSecurityActionRateLimit,
     sanitizeMerchantPayload,
-    validateRequest({ body: webhookSettingsSchema }),
+    validateMerchantRequest({ body: webhookSettingsSchema }),
     async (req, res, next) => {
       try {
         const body = req.body;
@@ -654,6 +666,8 @@ function createMerchantsRouter({
     "/webhook-settings/verify",
     requireApiKeyAuth({ requireSignature: true }),
     merchantSecurityActionRateLimit,
+    sanitizeMerchantPayload,
+    validateMerchantRequest({ body: emptyBodySchema }),
     async (req, res, next) => {
     try {
       const { data, error } = await supabase
@@ -720,6 +734,8 @@ function createMerchantsRouter({
     "/regenerate-webhook-secret",
     requireApiKeyAuth({ requireSignature: true }),
     merchantSecurityActionRateLimit,
+    sanitizeMerchantPayload,
+    validateMerchantRequest({ body: emptyBodySchema }),
     async (req, res, next) => {
     try {
       const newSecret = `whsec_${randomBytes(24).toString("hex")}`;
@@ -765,6 +781,8 @@ function createMerchantsRouter({
       "/merchants/generate-api-key",
       requireSessionAuth(),
       merchantSecurityActionRateLimit,
+      sanitizeMerchantPayload,
+      validateMerchantRequest({ body: emptyBodySchema }),
       async (req, res, next) => {
       try {
         const newApiKey = `sk_${randomBytes(24).toString("hex")}`;
@@ -817,7 +835,7 @@ function createMerchantsRouter({
       requireApiKeyAuth({ requireSignature: true }),
       merchantSecurityActionRateLimit,
       sanitizeMerchantPayload,
-      validateRequest({ body: rotateApiKeySchema }),
+      validateMerchantRequest({ body: rotateApiKeySchema }),
       async (req, res, next) => {
       try {
         const body = req.body;
@@ -880,7 +898,7 @@ function createMerchantsRouter({
       requireApiKeyAuth({ requireSignature: true }),
       merchantSecurityActionRateLimit,
       sanitizeMerchantPayload,
-      validateRequest({ body: setApiKeyExpirySchema }),
+      validateMerchantRequest({ body: setApiKeyExpirySchema }),
       async (req, res, next) => {
       try {
         const body = req.body;

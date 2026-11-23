@@ -73,6 +73,14 @@ vi.mock("../lib/api-usage.js", () => ({ getMerchantApiUsage: vi.fn() }));
 
 vi.mock("../lib/webhooks.js", () => ({ sendWebhook: sendWebhookMock }));
 
+// Locks and the merchant cache use an in-memory Redis, so this file never
+// shares state with other test files or a developer's local Redis.
+vi.mock("../lib/redis.js", async () => {
+  const { createFakeRedis } = await import("../../tests/helpers/fake-redis.js");
+  const fake = createFakeRedis();
+  return { connectRedisClient: async () => fake };
+});
+
 vi.mock("../lib/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));

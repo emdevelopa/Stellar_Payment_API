@@ -2,7 +2,8 @@ import client from "prom-client";
 
 /**
  * Metrics for the Merchant Onboarding and Key Lifecycle Route: concurrency
- * control (#1772), dead-letter recovery (#1771) and payload validation (#1769). Isolated registry, merged
+ * control (#1772), dead-letter recovery (#1771), payload validation (#1769), and caching
+ * and throughput telemetry (#1770). Isolated registry, merged
  * into /metrics by routes/prometheus.js.
  */
 export const merchantLifecycleRegister = new client.Registry();
@@ -75,6 +76,42 @@ export const merchantPayloadKeysDroppedTotal = new client.Counter({
   registers: [merchantLifecycleRegister],
 });
 
+/**
+ * Distributed cache operations (#1770).
+ * resource: profile | branding | webhook_settings | all (invalidation)
+ * result:   hit | miss | bypass | error | store | store_error |
+ *           invalidate | invalidate_error | invalidate_skipped
+ */
+export const merchantCacheOperationsTotal = new client.Counter({
+  name: "merchant_cache_operations_total",
+  help: "Merchant route Redis cache operations by resource and result",
+  labelNames: ["resource", "result"],
+  registers: [merchantLifecycleRegister],
+});
+
+/** Throughput telemetry for every merchant route (#1770). */
+export const merchantRouteRequestsTotal = new client.Counter({
+  name: "merchant_route_requests_total",
+  help: "Merchant Onboarding and Key Lifecycle Route requests by route, method and status class",
+  labelNames: ["route", "method", "status_class"],
+  registers: [merchantLifecycleRegister],
+});
+
+export const merchantRouteRequestDurationSeconds = new client.Histogram({
+  name: "merchant_route_request_duration_seconds",
+  help: "Merchant Onboarding and Key Lifecycle Route latency",
+  labelNames: ["route", "method"],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  registers: [merchantLifecycleRegister],
+});
+
+export const merchantRouteInFlight = new client.Gauge({
+  name: "merchant_route_in_flight_requests",
+  help: "Merchant Onboarding and Key Lifecycle Route requests currently being served",
+  labelNames: ["route"],
+  registers: [merchantLifecycleRegister],
+});
+
 export function resetMerchantLifecycleMetrics() {
   merchantLockTotal.reset();
   merchantLockHeldSeconds.reset();
@@ -84,4 +121,8 @@ export function resetMerchantLifecycleMetrics() {
   merchantDlqOperationsTotal.reset();
   merchantPayloadRejectionsTotal.reset();
   merchantPayloadKeysDroppedTotal.reset();
+  merchantCacheOperationsTotal.reset();
+  merchantRouteRequestsTotal.reset();
+  merchantRouteRequestDurationSeconds.reset();
+  merchantRouteInFlight.reset();
 }

@@ -38,6 +38,16 @@ import {
   compareAndSwapMerchant,
 } from "../lib/merchant-key-lifecycle.js";
 import { persistVerificationWithRecovery } from "../lib/merchant-recovery.js";
+import {
+  readThroughMerchantCache,
+  invalidateMerchantCache,
+} from "../lib/merchant-cache.js";
+import { createRouteThroughputTelemetry } from "../lib/route-throughput-telemetry.js";
+import {
+  merchantRouteRequestsTotal,
+  merchantRouteRequestDurationSeconds,
+  merchantRouteInFlight,
+} from "../lib/merchant-lifecycle-metrics.js";
 
 const defaultMerchantRegistrationRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -50,6 +60,14 @@ const defaultMerchantRegistrationRateLimit = rateLimit({
 const defaultMerchantSecurityActionRateLimit =
   createMerchantSecurityActionRateLimit();
 
+/**
+ * Cached reads are per merchant and may never be stored by shared caches
+ * (CDNs, proxies). X-Cache is for debugging only; values are HIT | MISS | BYPASS.
+ */
+function setMerchantCacheHeaders(res, cache) {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Cache", String(cache).toUpperCase());
+}
 
 
 function createMerchantsRouter({
@@ -57,6 +75,17 @@ function createMerchantsRouter({
   merchantSecurityActionRateLimit = defaultMerchantSecurityActionRateLimit,
 } = {}) {
   const router = express.Router();
+
+  // Throughput telemetry for every route below (#1770). Registered first so
+  // it also times validation and rate-limit rejections.
+  router.use(
+    createRouteThroughputTelemetry({
+      router,
+      requests: merchantRouteRequestsTotal,
+      duration: merchantRouteRequestDurationSeconds,
+      inFlight: merchantRouteInFlight,
+    }),
+  );
 
   const DEFAULT_WEBHOOK_SECRET_ROTATION_GRACE_HOURS = 24;
 
@@ -336,6 +365,8 @@ function createMerchantsRouter({
               "rotate_webhook_secret",
             ),
         );
+        // The masked secret in GET /webhook-settings changed.
+        await invalidateMerchantCache(req.merchant.id);
 
         res.json({
           webhook_secret: newWebhookSecret,
@@ -350,22 +381,31 @@ function createMerchantsRouter({
 
   router.get("/merchant-branding", async (req, res, next) => {
     try {
-      const { data, error } = await supabase
-        .from("merchants")
-        .select("branding_config")
-        .eq("id", req.merchant.id)
-        .maybeSingle();
+      const { value, cache } = await readThroughMerchantCache(
+        "branding",
+        req.merchant.id,
+        async () => {
+          const { data, error } = await supabase
+            .from("merchants")
+            .select("branding_config")
+            .eq("id", req.merchant.id)
+            .maybeSingle();
 
-      if (error) {
-        error.status = 500;
-        throw error;
-      }
+          if (error) {
+            error.status = 500;
+            throw error;
+          }
 
-      res.json({
-        branding_config: resolveBrandingConfig({
-          merchantBranding: data?.branding_config || null,
-        }),
-      });
+          return {
+            branding_config: resolveBrandingConfig({
+              merchantBranding: data?.branding_config || null,
+            }),
+          };
+        },
+      );
+
+      setMerchantCacheHeaders(res, cache);
+      res.json(value);
     } catch (err) {
       next(err);
     }
@@ -393,6 +433,7 @@ function createMerchantsRouter({
           error.status = 500;
           throw error;
         }
+        await invalidateMerchantCache(req.merchant.id);
 
         res.json({ branding_config: data.branding_config });
       } catch (err) {
@@ -461,29 +502,40 @@ function createMerchantsRouter({
 
   router.get("/merchant-profile", requireApiKeyAuth(), async (req, res, next) => {
     try {
-      const { data, error } = await supabase
-        .from("merchants")
-        .select(
-          "id, email, business_name, notification_email, merchant_settings, created_at",
-        )
-        .eq("id", req.merchant.id)
-        .maybeSingle();
+      const { value, cache } = await readThroughMerchantCache(
+        "profile",
+        req.merchant.id,
+        async () => {
+          const { data, error } = await supabase
+            .from("merchants")
+            .select(
+              "id, email, business_name, notification_email, merchant_settings, created_at",
+            )
+            .eq("id", req.merchant.id)
+            .maybeSingle();
 
-      if (error) {
-        error.status = 500;
-        throw error;
-      }
+          if (error) {
+            error.status = 500;
+            throw error;
+          }
 
-      if (!data) {
+          // null is never cached, so a merchant created later is seen at once.
+          if (!data) return null;
+
+          return {
+            merchant: {
+              ...data,
+              merchant_settings: resolveMerchantSettings(data.merchant_settings),
+            },
+          };
+        },
+      );
+
+      setMerchantCacheHeaders(res, cache);
+      if (!value) {
         return res.status(404).json({ error: "Merchant profile not found" });
       }
-
-      res.json({
-        merchant: {
-          ...data,
-          merchant_settings: resolveMerchantSettings(data.merchant_settings),
-        },
-      });
+      res.json(value);
     } catch (err) {
       next(err);
     }
@@ -550,34 +602,45 @@ function createMerchantsRouter({
    */
   router.get("/webhook-settings", requireApiKeyAuth(), async (req, res, next) => {
     try {
-      const { data, error } = await supabase
-        .from("merchants")
-        .select("webhook_url, webhook_secret, subscribed_events, metadata")
-        .eq("id", req.merchant.id)
-        .single();
+      // Only the masked response is cached; the raw secret never leaves
+      // this loader.
+      const { value, cache } = await readThroughMerchantCache(
+        "webhook_settings",
+        req.merchant.id,
+        async () => {
+          const { data, error } = await supabase
+            .from("merchants")
+            .select("webhook_url, webhook_secret, subscribed_events, metadata")
+            .eq("id", req.merchant.id)
+            .single();
 
-      if (error) {
-        error.status = 500;
-        throw error;
-      }
+          if (error) {
+            error.status = 500;
+            throw error;
+          }
 
-      // Mask the secret: show first 10 chars, hide the rest
-      const secret = data.webhook_secret || "";
-      const maskedSecret =
-        secret.length > 10
-          ? secret.slice(0, 10) + "•".repeat(secret.length - 10)
-          : "•".repeat(secret.length);
+          // Mask the secret: show first 10 chars, hide the rest
+          const secret = data.webhook_secret || "";
+          const maskedSecret =
+            secret.length > 10
+              ? secret.slice(0, 10) + "•".repeat(secret.length - 10)
+              : "•".repeat(secret.length);
 
-      res.json({
-        webhook_url: data.webhook_url || "",
-        webhook_secret_masked: maskedSecret,
-        subscribed_events: data.subscribed_events ?? null,
-        available_events: VALID_WEBHOOK_EVENTS,
-        webhook_domain_verification: readWebhookDomainVerification(
-          data.metadata,
-          data.webhook_url || "",
-        ),
-      });
+          return {
+            webhook_url: data.webhook_url || "",
+            webhook_secret_masked: maskedSecret,
+            subscribed_events: data.subscribed_events ?? null,
+            available_events: VALID_WEBHOOK_EVENTS,
+            webhook_domain_verification: readWebhookDomainVerification(
+              data.metadata,
+              data.webhook_url || "",
+            ),
+          };
+        },
+      );
+
+      setMerchantCacheHeaders(res, cache);
+      res.json(value);
     } catch (err) {
       next(err);
     }
@@ -651,6 +714,7 @@ function createMerchantsRouter({
           error.status = 500;
           throw error;
         }
+        await invalidateMerchantCache(req.merchant.id);
 
         res.json({
           webhook_url: data.webhook_url || "",
@@ -699,6 +763,9 @@ function createMerchantsRouter({
         metadata: result.metadata,
         verification: result.verification,
       });
+      if (persistence.persisted) {
+        await invalidateMerchantCache(req.merchant.id);
+      }
 
       if (!persistence.persisted) {
         return res.status(202).json({
@@ -751,6 +818,7 @@ function createMerchantsRouter({
             "regenerate_webhook_secret",
           ),
       );
+      await invalidateMerchantCache(req.merchant.id);
 
       res.json({ webhook_secret: newSecret });
     } catch (err) {

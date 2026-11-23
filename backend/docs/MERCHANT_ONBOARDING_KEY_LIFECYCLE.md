@@ -55,3 +55,76 @@ Every route that takes a body runs two layers, in this order:
 
 `route` comes from `req.route.path`, never from the raw URL, so request input
 cannot create new label values.
+
+## Distributed Redis caching and throughput telemetry (#1770)
+
+### What is cached
+
+| Endpoint | Resource | Cached value |
+| --- | --- | --- |
+| `GET /merchant-profile` | `profile` | id, email, names, settings, created_at |
+| `GET /merchant-branding` | `branding` | resolved branding config |
+| `GET /webhook-settings` | `webhook_settings` | the masked response; the raw `webhook_secret` never reaches Redis |
+
+These are never cached: API keys, raw webhook secrets, password hashes, and
+`GET /merchants/api-key-status`, which depends on the clock and is
+security-relevant. `null` results (404) and errors are not cached either.
+
+Responses carry `Cache-Control: private, no-store` so shared proxies never store
+them, and `X-Cache: HIT | MISS | BYPASS` for debugging.
+
+### Keys and invalidation
+
+```
+merchant:cache:v1:gen:<merchantId>                       generation counter (INCR)
+merchant:cache:v1:<resource>:<merchantId>:g<generation>  JSON value, TTL
+```
+
+A writer commits to the database first and then runs `INCR` on the merchant's
+generation. `INCR` is atomic, so concurrent writers on different nodes cannot
+lose an invalidation. A reader reads the generation **before** the database. If
+a write lands in between, the reader stores the old row under the old
+generation, which nobody reads again. Deleting keys directly would allow that
+stale row to be written back.
+
+These writes invalidate the cache: `PUT /merchant-branding`,
+`PUT /webhook-settings`, `POST /webhook-settings/verify` (when persisted, and
+again when a dead-lettered verification is recovered),
+`POST /merchants/rotate-webhook-secret` and `POST /regenerate-webhook-secret`.
+Code outside this route that writes these columns should call
+`invalidateMerchantCache(merchantId)`. Otherwise readers may see the old value
+for up to one TTL.
+
+### Fault tolerance
+
+- Every Redis call has a time limit (`REDIS_CACHE_OP_TIMEOUT_MS`, default 150 ms).
+  A timeout or error falls back to the database, so a cache problem never
+  produces an error response.
+- If the generation cannot be read, the cache is bypassed rather than read
+  under an unconfirmed generation.
+- When Redis is down (the no-op client), reads bypass the cache and
+  invalidations are counted as `invalidate_skipped`.
+- A corrupt entry is deleted and treated as a miss.
+- Merchant ids must match `^[A-Za-z0-9_-]{1,64}$` before they are used in a
+  key, so request input cannot shape the key namespace.
+
+### Configuration
+
+| Variable | Default | Range |
+| --- | --- | --- |
+| `MERCHANT_CACHE_ENABLED` | `true` | `false` disables the cache |
+| `MERCHANT_CACHE_TTL_SECONDS` | `60` | 1–900 |
+| `REDIS_CACHE_OP_TIMEOUT_MS` | `150` | 10–5000 |
+
+### Metrics
+
+| Metric | Labels |
+| --- | --- |
+| `merchant_cache_operations_total` | `resource`, `result` = hit \| miss \| bypass \| error \| store \| store_error \| invalidate \| invalidate_error \| invalidate_skipped |
+| `merchant_route_requests_total` | `route`, `method`, `status_class` (2xx…5xx, `aborted`) |
+| `merchant_route_request_duration_seconds` | `route`, `method` |
+| `merchant_route_in_flight_requests` | `route` |
+
+The telemetry middleware runs before validation and rate limiting, so it also
+counts rejected requests. It records only requests that one of this router's
+routes serves, and labels them with the route pattern.

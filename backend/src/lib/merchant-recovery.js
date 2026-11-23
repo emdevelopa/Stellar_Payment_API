@@ -33,6 +33,7 @@ import { logger as defaultLogger } from "./logger.js";
 import { retrySupabaseRead, resolveBackoffOptions } from "./backoff-retry.js";
 import { isRetryableSessionError } from "./payment-session-retry.js";
 import { RecoveryQueue } from "./recovery-queue.js";
+import { invalidateMerchantCache } from "./merchant-cache.js";
 import {
   merchantDlqDepth,
   merchantDlqOperationsTotal,
@@ -147,6 +148,8 @@ async function applyVerification(supabase, entry) {
     if (!isRetryableSessionError(writeError)) writeError.retryable = false;
     throw writeError;
   }
+  // The recovered verification changes GET /webhook-settings (#1770).
+  await invalidateMerchantCache(merchantId);
 }
 
 /**

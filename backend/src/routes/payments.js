@@ -1479,6 +1479,15 @@ function createPaymentsRouter({
         throw updateError;
       }
 
+      // A deleted payment must stop being served from the status and
+      // details caches (#1775). Best effort: a cache error never fails the delete.
+      try {
+        const redis = await connectRedisClient();
+        await invalidatePaymentCache(redis, req.params.id, existing.merchant_id);
+      } catch (cacheErr) {
+        console.error("Payment cache invalidation after soft delete failed:", cacheErr.message);
+      }
+
       res.json({
         message: "Payment soft deleted successfully",
         payment_id: req.params.id,

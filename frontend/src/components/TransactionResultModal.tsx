@@ -24,7 +24,8 @@
  * change the host or the scheme.
  */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { CheckIcon, ClipboardIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { useSwipeToDismiss } from "@/hooks/useSwipeToDismiss";
@@ -58,7 +59,33 @@ export function stellarExpertTxUrl(txHash: string): string {
   return `https://stellar.expert/explorer/testnet/tx/${encodeURIComponent(txHash)}`;
 }
 
-export function TransactionResultModal({
+/**
+ * Dynamically loads and triggers the confetti celebration only when the modal
+ * opens and the user has not requested reduced motion, keeping `canvas-confetti`
+ * out of the initial JS bundle.
+ */
+async function triggerCelebrationConfetti(): Promise<void> {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    return;
+  }
+
+  try {
+    const { default: confetti } = await import("canvas-confetti");
+    confetti({
+      particleCount: 60,
+      spread: 65,
+      origin: { y: 0.6 },
+    });
+  } catch {
+    // Non-critical visual enhancement; ignore load failures in restricted environments.
+  }
+}
+
+export const TransactionResultModal = memo(function TransactionResultModal({
   isOpen,
   onClose,
   txHash,
@@ -101,6 +128,11 @@ export function TransactionResultModal({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void triggerCelebrationConfetti();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -312,4 +344,21 @@ export function TransactionResultModal({
       </div>
     </div>
   );
+});
+
+/**
+ * Code-split dynamic wrapper for consumers that want automatic bundle splitting
+ * without manually wiring `React.lazy` and `Suspense`.
+ */
+export const DynamicTransactionResultModal = dynamic<TransactionResultModalProps>(
+  () => import("./TransactionResultModal").then((mod) => mod.TransactionResultModal),
+  { ssr: false },
+);
+
+/**
+ * Prefetches the `canvas-confetti` chunk on user intent (e.g. submit hover) so
+ * the celebration plays immediately upon confirmation.
+ */
+export function preloadTransactionResultAssets(): Promise<unknown> {
+  return import("canvas-confetti").catch(() => undefined);
 }

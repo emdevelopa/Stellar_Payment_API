@@ -118,3 +118,27 @@ describe("renderReceiptEmail", () => {
     ).not.toThrow();
   });
 });
+
+describe("renderReceiptEmail escaping (#1769)", () => {
+  it("escapes merchant-controlled text and drops unsafe logo URLs", () => {
+    const html = renderReceiptEmail({
+      payment: { amount: "1<i>", asset: "XLM" },
+      merchant: {
+        business_name: '"><script>alert(1)</script>',
+        branding_config: { logo_url: "javascript:alert(1)" },
+      },
+    });
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain("javascript:");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("1&lt;i&gt;");
+  });
+
+  it("keeps a valid https logo", () => {
+    const html = renderReceiptEmail({
+      payment: {},
+      merchant: { business_name: "Shop", branding_config: { logo_url: "https://cdn.example.com/l.png" } },
+    });
+    expect(html).toContain('src="https://cdn.example.com/l.png"');
+  });
+});

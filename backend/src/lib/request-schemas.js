@@ -10,6 +10,7 @@ import { resolveAssetIssuer } from "../constants/assetConstants.js";
 import {
   merchantSettingsSchema,
   customHeadersSchema,
+  merchantWebhookUrlSchema,
 } from "./merchant-payload-validation.js";
  
 
@@ -269,11 +270,9 @@ export const webhookSettingsSchema = z.object({
       }
       return value;
     },
-    z
-      .string()
-      .url("webhook_url must be a valid URL")
-      .refine((val) => val.startsWith("https://"), "webhook_url must use HTTPS")
-      .optional(),
+    // #1769: shared with /test-webhook — HTTPS only, bounded length, and no
+    // embedded user:password credentials.
+    merchantWebhookUrlSchema.optional(),
   ),
   // Issue #1482: bounded count/length, no CR/LF, no reserved header names.
   custom_headers: customHeadersSchema.optional().nullable(),

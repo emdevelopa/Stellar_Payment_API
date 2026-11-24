@@ -18,8 +18,46 @@ import { exchangeRateOracleRegister } from "../lib/exchange-rate-oracle-telemetr
 // Database Row-Level Security Service alert metrics live in their own registry (issue #1468)
 // and are merged into the scrape output below.
 import { dbRlsRegister } from "../lib/db-rls-telemetry.js";
+// Stellar Account & Ledger Key Validator metrics live in their own registry (issue #1764)
+// and are merged into the scrape output below.
+import { validatorRegister } from "../lib/stellar/validators-metrics.js";
+import { paymentDetailsRegister } from "../lib/payment-details-metrics.js";
+import { merchantLifecycleRegister } from "../lib/merchant-lifecycle-metrics.js";
+import { logger } from "../lib/logger.js";
 
-const router = express.Router();
+const metricRegisters = [
+  register,
+  paymentProcessorRegister,
+  trustlineManagerRegister,
+  pathPaymentRegister,
+  paymentSessionValidatorRegister,
+  exchangeRateOracleRegister,
+  dbRlsRegister,
+  validatorRegister,
+  paymentDetailsRegister,
+  merchantLifecycleRegister,
+];
+
+export function createPrometheusRouter(registries = metricRegisters, contentType = register.contentType) {
+  const router = express.Router();
+  let inFlightScrape = null;
+
+  function scrapeMetrics() {
+    if (!inFlightScrape) {
+      inFlightScrape = Promise.allSettled(
+        registries.map((registry) => Promise.resolve().then(() => registry.metrics())),
+      )
+        .then((results) => {
+          const failure = results.find((result) => result.status === "rejected");
+          if (failure) throw failure.reason;
+          return results.map((result) => result.value).join("\n");
+        })
+        .finally(() => {
+          inFlightScrape = null;
+        });
+    }
+    return inFlightScrape;
+  }
 
 /**
  * @swagger
@@ -36,22 +74,20 @@ const router = express.Router();
  *             schema:
  *               type: string
  */
-router.get("/metrics", async (req, res) => {
-  try {
-    const scrapes = await Promise.all([
-      register.metrics(),
-      paymentProcessorRegister.metrics(),
-      trustlineManagerRegister.metrics(),
-      pathPaymentRegister.metrics(),
-      paymentSessionValidatorRegister.metrics(),
-      exchangeRateOracleRegister.metrics(),
-      dbRlsRegister.metrics(),
-    ]);
-    res.set("Content-Type", register.contentType);
-    res.end(scrapes.join("\n"));
-  } catch (err) {
-    res.status(500).end(err);
-  }
-});
+  router.get("/metrics", async (_req, res) => {
+    try {
+      const snapshot = await scrapeMetrics();
+      res.set("Content-Type", contentType);
+      res.end(snapshot);
+    } catch (err) {
+      logger.error({ err }, "Prometheus metrics collection failed");
+      res.status(500).type("text/plain").end("Metrics temporarily unavailable");
+    }
+  });
+
+  return router;
+}
+
+const router = createPrometheusRouter();
 
 export default router;

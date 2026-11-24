@@ -296,7 +296,19 @@
     "extensionNotFound": "We couldn't find that wallet on this device. Install the extension and try again.",
     "noAccountFound": "Your wallet connected, but no Stellar account was returned. Open a Stellar account in the wallet and retry.",
     "walletConnectFailed": "We couldn't finish the WalletConnect handshake. Please try again.",
-    "connectionFailed": "We couldn't connect to that wallet right now. Please try again."
+    "connectionFailed": "We couldn't connect to that wallet right now. Please try again.",
+    "networkFailure": "Couldn't reach the network. Your wallet choice was reverted. Check your connection and try again.",
+    "networkFailureHint": "No wallet was connected.",
+    "reverted": "Choice reverted",
+    "subtitleFreighter": "Browser extension wallet",
+    "subtitleXbull": "xBull browser extension",
+    "subtitleAlbedo": "Web wallet, no extension",
+    "subtitleWalletConnect": "Mobile & desktop wallets",
+    "walletListLabel": "Available wallets",
+    "installFreighter": "Don't have Freighter? Install it",
+    "opensNewTab": "(opens in a new tab)",
+    "checkingAvailability": "Checking availability…",
+    "qrLabel": "WalletConnect pairing QR code"
   },
   "support": {
     "panelAriaLabel": "Help and support panel",
@@ -816,6 +828,19 @@
       "fromSyncLabel": "Updating start date…",
       "toSyncLabel": "Updating end date…"
     }
+  },
+  "userNav": {
+    "openMenu": "Open account menu",
+    "closeMenu": "Close account menu",
+    "menuTitle": "Account",
+    "menuDescription": "Signed-in account, organization, and session actions.",
+    "organization": "Organization",
+    "sessionNavigation": "Session navigation",
+    "dashboard": "Dashboard",
+    "accountSettings": "Account Settings",
+    "supportCenter": "Support Center",
+    "signOut": "Sign Out",
+    "swipeHint": "Swipe down to close"
   },
   "dashboardShell": {
     "openNavigationMenu": "Open navigation menu"

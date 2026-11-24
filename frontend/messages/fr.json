@@ -200,7 +200,13 @@
       "7D": "7 jours",
       "30D": "30 jours",
       "1Y": "1 an"
-    }
+    },
+    "heatmapKeyboardHint": "Utilisez les flèches pour naviguer, Entrée pour inspecter, Échap pour fermer",
+    "heatmapDrawerTitle": "Détails du jour",
+    "heatmapDrawerDate": "Date",
+    "heatmapDrawerCount": "Activité",
+    "heatmapDrawerClose": "Fermer les détails",
+    "heatmapDrawerHint": "Balayez vers le bas ou appuyez sur Échap pour fermer"
   },
   "paymentsPage": {
     "title": "Historique des paiements",
@@ -290,7 +296,19 @@
     "extensionNotFound": "Ce portefeuille est introuvable sur cet appareil. Installez l'extension et réessayez.",
     "noAccountFound": "Votre portefeuille est connecté, mais aucun compte Stellar n'a été renvoyé. Ouvrez un compte Stellar dans le portefeuille et réessayez.",
     "walletConnectFailed": "Impossible de finaliser la connexion WalletConnect. Veuillez réessayer.",
-    "connectionFailed": "Impossible de se connecter à ce portefeuille pour le moment. Veuillez réessayer."
+    "connectionFailed": "Impossible de se connecter à ce portefeuille pour le moment. Veuillez réessayer.",
+    "networkFailure": "Impossible de joindre le réseau. Le choix du portefeuille a été annulé. Vérifiez votre connexion et réessayez.",
+    "networkFailureHint": "Aucun portefeuille n'a été connecté.",
+    "reverted": "Choix annulé",
+    "subtitleFreighter": "Portefeuille d'extension de navigateur",
+    "subtitleXbull": "Extension de navigateur xBull",
+    "subtitleAlbedo": "Portefeuille web, sans extension",
+    "subtitleWalletConnect": "Portefeuilles mobiles et de bureau",
+    "walletListLabel": "Portefeuilles disponibles",
+    "installFreighter": "Vous n'avez pas Freighter ? Installez-le",
+    "opensNewTab": "(s'ouvre dans un nouvel onglet)",
+    "checkingAvailability": "Vérification de la disponibilité…",
+    "qrLabel": "QR code d'appairage WalletConnect"
   },
   "support": {
     "panelAriaLabel": "Panneau d'aide et d'assistance",
@@ -810,6 +828,19 @@
       "fromSyncLabel": "Mise à jour de la date de début…",
       "toSyncLabel": "Mise à jour de la date de fin…"
     }
+  },
+  "userNav": {
+    "openMenu": "Ouvrir le menu du compte",
+    "closeMenu": "Fermer le menu du compte",
+    "menuTitle": "Compte",
+    "menuDescription": "Compte connecté, organisation et actions de session.",
+    "organization": "Organisation",
+    "sessionNavigation": "Navigation de session",
+    "dashboard": "Tableau de bord",
+    "accountSettings": "Paramètres du compte",
+    "supportCenter": "Centre d'assistance",
+    "signOut": "Se déconnecter",
+    "swipeHint": "Balayez vers le bas pour fermer"
   },
   "dashboardShell": {
     "openNavigationMenu": "Ouvrir le menu de navigation"

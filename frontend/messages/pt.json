@@ -296,7 +296,19 @@
     "extensionNotFound": "Não encontramos essa carteira neste dispositivo. Instale a extensão e tente novamente.",
     "noAccountFound": "A carteira conectou, mas não retornou nenhuma conta Stellar. Abra uma conta Stellar na carteira e tente novamente.",
     "walletConnectFailed": "Não conseguimos concluir a conexão com o WalletConnect. Tente novamente.",
-    "connectionFailed": "Não conseguimos conectar essa carteira agora. Tente novamente."
+    "connectionFailed": "Não conseguimos conectar essa carteira agora. Tente novamente.",
+    "networkFailure": "Não foi possível contactar a rede. A carteira escolhida foi revertida. Verifique a conexão e tente novamente.",
+    "networkFailureHint": "Nenhuma carteira foi conectada.",
+    "reverted": "Escolha revertida",
+    "subtitleFreighter": "Carteira de extensão do navegador",
+    "subtitleXbull": "Extensão de navegador xBull",
+    "subtitleAlbedo": "Carteira web, sem extensão",
+    "subtitleWalletConnect": "Carteiras para celular e desktop",
+    "walletListLabel": "Carteiras disponíveis",
+    "installFreighter": "Não tem o Freighter? Instale",
+    "opensNewTab": "(abre em uma nova aba)",
+    "checkingAvailability": "Verificando disponibilidade…",
+    "qrLabel": "Código QR de pareamento do WalletConnect"
   },
   "support": {
     "panelAriaLabel": "Painel de ajuda e suporte",
@@ -816,6 +828,19 @@
       "fromSyncLabel": "Atualizando data inicial…",
       "toSyncLabel": "Atualizando data final…"
     }
+  },
+  "userNav": {
+    "openMenu": "Abrir menu da conta",
+    "closeMenu": "Fechar menu da conta",
+    "menuTitle": "Conta",
+    "menuDescription": "Conta autenticada, organização e ações da sessão.",
+    "organization": "Organização",
+    "sessionNavigation": "Navegação da sessão",
+    "dashboard": "Painel",
+    "accountSettings": "Configurações da conta",
+    "supportCenter": "Central de suporte",
+    "signOut": "Sair",
+    "swipeHint": "Deslize para baixo para fechar"
   },
   "dashboardShell": {
     "openNavigationMenu": "Abrir menu de navegação"

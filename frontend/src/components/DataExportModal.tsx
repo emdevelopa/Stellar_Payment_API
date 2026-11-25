@@ -1,20 +1,6 @@
 "use client";
 
-/**
- * DataExportModal — Interactive Data Export Modal
- *
- * Provides format selection (CSV / JSON), column toggling, date-range
- * filtering, and rich per-phase loading states so users always know
- * exactly what is happening during a potentially slow export.
- *
- * Loading phases
- * ──────────────
- *  "idle"       → initial state, action buttons are active
- *  "preparing"  → validating selection & building payload (instant UX feedback)
- *  "exporting"  → serialising rows and triggering download
- *  "done"       → success confirmation before auto-close
- *  "error"      → inline error with retry affordance
- */
+
 
 import React, { useCallback, useEffect, useId, useReducer, useRef } from "react";
 import { type CsvColumn, CSV_COLUMNS, type Transaction, transactionsToCsv, downloadCsv } from "@/lib/exportCsv";

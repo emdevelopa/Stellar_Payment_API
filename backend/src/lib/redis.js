@@ -151,11 +151,23 @@ export async function setCachedPayment(client, id, data, merchantId = null) {
 }
 
 /**
+ * Generation counter for the payment-details cache (#1775). Bumping it makes
+ * every cached GET /api/payments/:id response for this payment unreachable,
+ * whichever merchant scope it was stored under. See lib/payment-details-cache.js.
+ */
+export function paymentDetailsGenerationKey(id) {
+  return `payment:details:v1:gen:${id}`;
+}
+
+/** Generation keys outlive every details entry by a wide margin. */
+export const PAYMENT_DETAILS_GENERATION_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
  * Invalidate the cache entries for a payment (call after any write).
  *
  * Invalidates both the public (unscoped) entry and, when a merchantId is
  * supplied, that merchant's scoped entry — a write may be followed by reads
- * from either lookup path.
+ * from either lookup path. Also bumps the payment-details generation.
  * @param {import("redis").RedisClientType} client
  * @param {string} id  payment UUID
  * @param {string|null} merchantId  merchant scope to also invalidate, if known
@@ -169,5 +181,19 @@ export async function invalidatePaymentCache(client, id, merchantId = null) {
     await Promise.all(keys.map((key) => client.del(key)));
   } catch (err) {
     console.error("Redis DEL error:", err.message);
+  }
+  // Also retire the cached payment-details response (#1775). Every payment
+  // writer already calls this function, so it is the single invalidation
+  // point. Clients without INCR (no-op fallback, test doubles) are skipped.
+  if (typeof client?.incr === "function") {
+    try {
+      const genKey = paymentDetailsGenerationKey(id);
+      await client.incr(genKey);
+      if (typeof client.expire === "function") {
+        await client.expire(genKey, PAYMENT_DETAILS_GENERATION_TTL_SECONDS);
+      }
+    } catch (err) {
+      console.error("Redis INCR error (payment details):", err.message);
+    }
   }
 }

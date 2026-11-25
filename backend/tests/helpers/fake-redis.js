@@ -2,7 +2,7 @@
  * In-memory Redis stand-in shared by the exchange-rate coordinator and the
  * payment-session lock / idempotency tests.
  *
- * Supports GET, SET (EX/PX/NX), DEL and the compare-and-delete and
+ * Supports GET, SET (EX/PX/NX), DEL, INCR, EXPIRE and the compare-and-delete and
  * compare-and-pexpire EVAL scripts, both as methods and through sendCommand.
  * Commands run in FIFO order.
  * Expiry follows Date.now(), so it works with vi.useFakeTimers().
@@ -87,6 +87,22 @@ export function createFakeRedis({ latencyMs = 0 } = {}) {
     },
     del(key) {
       return run(['DEL', key], () => (live(key) && store.delete(key) ? 1 : 0));
+    },
+    incr(key) {
+      return run(['INCR', key], () => {
+        const entry = live(key);
+        const next = (entry ? Number.parseInt(entry.value, 10) : 0) + 1;
+        store.set(key, { value: String(next), expiresAt: entry?.expiresAt ?? null });
+        return next;
+      });
+    },
+    expire(key, seconds) {
+      return run(['EXPIRE', key, seconds], () => {
+        const entry = live(key);
+        if (!entry) return 0;
+        entry.expiresAt = Date.now() + Number(seconds) * 1000;
+        return 1;
+      });
     },
     sendCommand(args) {
       const [cmd, ...rest] = args;

@@ -310,3 +310,116 @@ describe("paymentLimitsSchema", () => {
     expect(paymentLimitsSchema.safeParse(many).success).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #1769 — Merchant Onboarding and Key Lifecycle Route schemas
+// ---------------------------------------------------------------------------
+
+import {
+  MAX_PASSWORD_BYTES,
+  clipEchoedBody,
+  emptyBodySchema,
+  logoUrlSchema,
+  merchantRouteLabel,
+  merchantWebhookUrlSchema,
+  registerMerchantSchema,
+  validateMerchantRequest,
+} from "./merchant-payload-validation.js";
+
+describe("registerMerchantSchema (#1769)", () => {
+  const base = { email: "a@b.io", password: "long enough pw" };
+
+  it("lower-cases and trims emails", () => {
+    const out = registerMerchantSchema.parse({ ...base, email: "  Mixed@Case.IO " });
+    expect(out.email).toBe("mixed@case.io");
+  });
+
+  it("measures the password limit in UTF-8 bytes, not characters", () => {
+    expect(registerMerchantSchema.safeParse({ ...base, password: "a".repeat(MAX_PASSWORD_BYTES) }).success).toBe(true);
+    // 37 two-byte characters = 74 bytes, under 72 characters.
+    expect(registerMerchantSchema.safeParse({ ...base, password: "é".repeat(37) }).success).toBe(false);
+  });
+
+  it("rejects unknown keys (mass assignment)", () => {
+    const result = registerMerchantSchema.safeParse({ ...base, id: "00000000-0000-0000-0000-000000000000" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("emptyBodySchema (#1769)", () => {
+  it("accepts {} and rejects any key", () => {
+    expect(emptyBodySchema.safeParse({}).success).toBe(true);
+    expect(emptyBodySchema.safeParse({ x: 1 }).success).toBe(false);
+  });
+});
+
+describe("merchantWebhookUrlSchema (#1769)", () => {
+  it.each([
+    ["https://hooks.example.com/a?b=c", true],
+    ["http://hooks.example.com", false],
+    ["https://user:pw@hooks.example.com", false],
+    ["https://user@hooks.example.com", false],
+    ["ftp://hooks.example.com", false],
+    [`https://h.io/${"a".repeat(2050)}`, false],
+  ])("%s → %s", (url, ok) => {
+    expect(merchantWebhookUrlSchema.safeParse(url).success).toBe(ok);
+  });
+});
+
+describe("logoUrlSchema (#1769)", () => {
+  it.each([
+    ["https://cdn.example.com/l.png", true],
+    ["data:image/webp;base64,AAAA", true],
+    ["data:image/svg+xml;base64,AAAA", false],
+    ["javascript:alert(1)", false],
+    ["https://x.io/'onerror='x", false],
+    ["//cdn.example.com/l.png", false],
+  ])("%s → %s", (url, ok) => {
+    expect(logoUrlSchema.safeParse(url).success).toBe(ok);
+  });
+
+  it("maps an empty string to null (clear the logo)", () => {
+    expect(logoUrlSchema.parse("")).toBeNull();
+  });
+});
+
+describe("validateMerchantRequest (#1769)", () => {
+  it("passes parsed values through and calls next()", async () => {
+    const req = { body: { email: "X@Y.io", password: "long enough pw" }, route: { path: "/register-merchant" } };
+    const next = vi.fn();
+    await validateMerchantRequest({ body: registerMerchantSchema })(req, {}, next);
+    expect(next).toHaveBeenCalledWith();
+    expect(req.body.email).toBe("x@y.io");
+  });
+
+  it("answers 400 with the legacy error shape and logs field names only", async () => {
+    const req = { body: { email: "bad", password: "hunter2-secret-value" }, route: { path: "/register-merchant" } };
+    const res = { status: vi.fn(() => res), json: vi.fn(() => res) };
+    await validateMerchantRequest({ body: registerMerchantSchema })(req, res, vi.fn());
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].error).toBe("Validation failed");
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("hunter2");
+  });
+
+  it("forwards non-Zod errors to the error handler", async () => {
+    const boom = new Error("boom");
+    const schema = { parseAsync: async () => { throw boom; } };
+    const next = vi.fn();
+    await validateMerchantRequest({ body: schema })({ body: {} }, {}, next);
+    expect(next).toHaveBeenCalledWith(boom);
+  });
+});
+
+describe("helpers (#1769)", () => {
+  it("merchantRouteLabel uses the route pattern, never the raw URL", () => {
+    expect(merchantRouteLabel({ route: { path: "/rotate-key" }, originalUrl: "/api/rotate-key?x=1" })).toBe("/rotate-key");
+    expect(merchantRouteLabel({ originalUrl: "/whatever" })).toBe("unknown");
+  });
+
+  it("clipEchoedBody bounds and cleans third-party bodies", () => {
+    expect(clipEchoedBody(null)).toBeNull();
+    expect(clipEchoedBody({ ok: true })).toBe('{"ok":true}');
+    expect(clipEchoedBody("a\u0000b")).toBe("ab");
+    expect(clipEchoedBody("x".repeat(10), 4)).toBe("xxxx…[truncated]");
+  });
+});

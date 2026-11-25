@@ -242,6 +242,10 @@ function ConfirmationTick({
         <span className="text-xs font-bold">{stepNumber}</span>
       </div>
     );
+  };
+
+  if (variant === "inline") {
+    return <div className={className}>{renderTimelineBody()}</div>;
   }
 
   return (

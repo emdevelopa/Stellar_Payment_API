@@ -3,6 +3,7 @@ import express from "express";
 import request from "supertest";
 
 const eq = vi.fn();
+const select = vi.fn();
 const update = vi.fn(() => ({ eq }));
 const from = vi.fn(() => ({ update }));
 
@@ -38,7 +39,9 @@ describe("POST /api/merchants/rotate-webhook-secret", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.WEBHOOK_SECRET_ROTATION_GRACE_HOURS;
-    eq.mockResolvedValue({ error: null });
+    // The rotation is a compare-and-swap: update().eq(id).eq(col, old).select("id").
+    select.mockResolvedValue({ data: [{ id: "merchant-123" }], error: null });
+    eq.mockImplementation(() => ({ eq, is: eq, select }));
   });
 
   it("rotates secret with default 24h grace period", async () => {
@@ -75,6 +78,8 @@ describe("POST /api/merchants/rotate-webhook-secret", () => {
     expect(expiry).toBeLessThanOrEqual(upperBound);
 
     expect(eq).toHaveBeenCalledWith("id", "merchant-123");
+    // Guarded by the credential that was read, so a stale rotation cannot clobber a newer one.
+    expect(eq).toHaveBeenCalledWith("webhook_secret", "whsec_old_secret");
     expect(res.json).toHaveBeenCalledTimes(1);
 
     const responsePayload = res.json.mock.calls[0][0];
@@ -147,5 +152,83 @@ describe("merchant route authentication", () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: "Missing x-api-key header" });
+  });
+});
+
+describe("concurrent credential rotation (#1772)", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { resetLocalSessionLocksForTests } = await import("../lib/payment-session-lock.js");
+    resetLocalSessionLocksForTests();
+    select.mockResolvedValue({ data: [{ id: "merchant-123" }], error: null });
+    eq.mockImplementation(() => ({ eq, is: eq, select }));
+  });
+
+  async function rotateHandler() {
+    const { default: createMerchantsRouter } = await import("./merchants.js");
+    return getRotateWebhookSecretHandler(createMerchantsRouter());
+  }
+
+  function makeReq() {
+    return { body: {}, merchant: { id: "merchant-123", webhook_secret: "whsec_old_secret" } };
+  }
+
+  it("returns 409 to the caller whose credential changed underneath it, without leaking secrets", async () => {
+    select.mockResolvedValue({ data: [], error: null });
+    const handler = await rotateHandler();
+    const res = createResponse();
+    const next = vi.fn();
+
+    await handler(makeReq(), res, next);
+
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+    const err = next.mock.calls[0][0];
+    expect(err.status).toBe(409);
+    expect(err.code).toBe("MERCHANT_CREDENTIAL_CONFLICT");
+    expect(JSON.stringify({ message: err.message })).not.toMatch(/whsec_/);
+  });
+
+  it("rejects a second rotation that arrives while the first is in flight", async () => {
+    let release;
+    select.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ data: [{ id: "merchant-123" }], error: null });
+        }),
+    );
+    const handler = await rotateHandler();
+
+    const firstRes = createResponse();
+    const firstNext = vi.fn();
+    const first = handler(makeReq(), firstRes, firstNext);
+    await new Promise((r) => setTimeout(r, 20)); // let the first acquire the lock
+
+    const secondRes = createResponse();
+    const secondNext = vi.fn();
+    await handler(makeReq(), secondRes, secondNext);
+
+    expect(secondRes.json).not.toHaveBeenCalled();
+    expect(secondNext.mock.calls[0][0]).toMatchObject({ status: 409, code: "MERCHANT_LIFECYCLE_BUSY" });
+
+    release();
+    await first;
+    expect(firstRes.json).toHaveBeenCalledTimes(1);
+    expect(firstNext).not.toHaveBeenCalled();
+    // Only the winner reached the database.
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a database failure as a 500 and releases the lock", async () => {
+    select.mockResolvedValueOnce({ data: null, error: new Error("db down") });
+    const handler = await rotateHandler();
+    const next = vi.fn();
+
+    await handler(makeReq(), createResponse(), next);
+    expect(next.mock.calls[0][0].status).toBe(500);
+
+    const res = createResponse();
+    await handler(makeReq(), res, vi.fn());
+    expect(res.json).toHaveBeenCalledTimes(1); // lock was released, retry succeeds
   });
 });

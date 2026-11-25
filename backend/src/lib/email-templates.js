@@ -1,19 +1,46 @@
+const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "`": "&#96;" };
+
+/** Escape a value for safe interpolation into HTML text or a quoted attribute. */
+export function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"'`]/g, (ch) => HTML_ESCAPES[ch]);
+}
+
+/**
+ * Only https: URLs and raster data URIs may become an <img src>. Rows stored
+ * before #1769 validation existed are filtered here too (defence in depth).
+ */
+export function safeImageSrc(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) return trimmed;
+  try {
+    return new URL(trimmed).protocol === "https:" ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Renders a plain HTML payment receipt email.
+ * Every interpolated value is HTML-escaped (#1769): merchant branding and
+ * business names are merchant-controlled input.
  *
  * @param {{ payment: object, merchant: object }} options
  * @returns {string} HTML string
  */
 export function renderReceiptEmail({ payment, merchant }) {
-  const merchantName = merchant?.name || merchant?.business_name || "Merchant";
-  const logoUrl = merchant?.branding_config?.logo_url;
-  const amount = payment?.amount ?? "—";
-  const asset = payment?.asset ?? "—";
-  const recipient = payment?.recipient ?? "—";
-  const txId = payment?.tx_id ?? "—";
-  const timestamp = payment?.created_at
-    ? new Date(payment.created_at).toUTCString()
-    : new Date().toUTCString();
+  const merchantName = escapeHtml(merchant?.name || merchant?.business_name || "Merchant");
+  const rawLogo = safeImageSrc(merchant?.branding_config?.logo_url);
+  const logoUrl = rawLogo ? escapeHtml(rawLogo) : null;
+  const amount = escapeHtml(payment?.amount ?? "—");
+  const asset = escapeHtml(payment?.asset ?? "—");
+  const recipient = escapeHtml(payment?.recipient ?? "—");
+  const txId = escapeHtml(payment?.tx_id ?? "—");
+  const timestamp = escapeHtml(
+    payment?.created_at
+      ? new Date(payment.created_at).toUTCString()
+      : new Date().toUTCString(),
+  );
 
   return `<!DOCTYPE html>
 <html lang="en">

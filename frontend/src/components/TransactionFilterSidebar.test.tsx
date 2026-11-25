@@ -22,10 +22,20 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { NextIntlClientProvider } from "next-intl";
+
+const { mockToastError } = vi.hoisted(() => ({
+  mockToastError: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mockToastError,
+  },
+}));
 
 import TransactionFilterSidebar from "./TransactionFilterSidebar";
 import enMessages from "../../messages/en.json";
@@ -46,17 +56,17 @@ function renderSidebar(props: React.ComponentProps<typeof TransactionFilterSideb
 
 vi.mock("framer-motion", () => {
   const strip = (props: Record<string, unknown>) => {
-    const { initial: _i, animate: _a, exit: _e, transition: _t, whileTap: _w, ...rest } = props;
+    const { initial: _i, animate: _a, exit: _e, transition: _t, whileTap: _w, whileHover: _wh, ...rest } = props;
     return rest;
   };
 
   return {
     motion: {
-      div:    ({ children, ...p }: any) => <div    {...strip(p)}>{children}</div>,
-      aside:  ({ children, ...p }: any) => <aside  {...strip(p)}>{children}</aside>,
-      span:   ({ children, ...p }: any) => <span   {...strip(p)}>{children}</span>,
+      div:    React.forwardRef(({ children, ...p }: any, ref: any) => <div ref={ref} {...strip(p)}>{children}</div>),
+      aside:  React.forwardRef(({ children, ...p }: any, ref: any) => <aside ref={ref} {...strip(p)}>{children}</aside>),
+      span:   React.forwardRef(({ children, ...p }: any, ref: any) => <span ref={ref} {...strip(p)}>{children}</span>),
       // button MUST forward every prop including aria-* and disabled
-      button: ({ children, ...p }: any) => <button {...strip(p)}>{children}</button>,
+      button: React.forwardRef(({ children, ...p }: any, ref: any) => <button ref={ref} {...strip(p)}>{children}</button>),
     },
     AnimatePresence: ({ children }: any) => <>{children}</>,
   };
@@ -727,6 +737,184 @@ describe("TransactionFilterSidebar", () => {
       const dialog = screen.getByRole("dialog");
       expect(dialog).toHaveAttribute("aria-modal", "true");
       expect(dialog).toHaveAttribute("aria-label", "Transaction filters");
+    });
+  });
+
+  // ── 8. Comprehensive Snapshot Tests (#1838) ──────────────────────────────
+
+  describe("8 · Comprehensive Snapshot Tests (#1838)", () => {
+    it("matches snapshot for default desktop panel state", () => {
+      const { container } = renderSidebar(buildProps());
+      expect(getDesktopPanel(container)).toMatchSnapshot();
+    });
+
+    it("matches snapshot for desktop panel with multiple active filters", () => {
+      const { container } = renderSidebar(
+        buildProps({
+          filters: {
+            search: "inv_tx_12345",
+            status: "confirmed",
+            asset: "USDC",
+            dateFrom: "2026-01-01",
+            dateTo: "2026-11-21",
+          },
+          hasActiveFilters: true,
+        })
+      );
+      expect(getDesktopPanel(container)).toMatchSnapshot();
+    });
+
+    it("matches snapshot for pending sync and transition states", () => {
+      const { container } = renderSidebar(
+        buildProps({
+          filters: {
+            search: "stellar",
+            status: "pending",
+            asset: "XLM",
+            dateFrom: "2026-06-01",
+            dateTo: "2026-11-21",
+          },
+          hasActiveFilters: true,
+          searchSyncPending: true,
+          isFilterPending: true,
+        })
+      );
+      expect(getDesktopPanel(container)).toMatchSnapshot();
+    });
+
+    it("matches snapshot for open mobile drawer", () => {
+      renderSidebar(buildProps({ isOpen: true, hasActiveFilters: true }));
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toMatchSnapshot();
+    });
+  });
+
+  // ── 9. WCAG 2.1 AA Keyboard Focus Management & Interaction Suite (#1834, #1838) ─
+
+  describe("9 · WCAG 2.1 AA Keyboard Focus Management & Interaction Suite (#1834, #1838)", () => {
+    describe("mobile drawer focus management & trap", () => {
+      it("closes mobile drawer when Escape key is pressed", () => {
+        const handleClose = vi.fn();
+        renderSidebar(buildProps({ isOpen: true, onClose: handleClose }));
+
+        fireEvent.keyDown(window, { key: "Escape", code: "Escape" });
+        expect(handleClose).toHaveBeenCalledTimes(1);
+      });
+
+      it("restores keyboard focus to trigger button when mobile drawer is closed", () => {
+        const trigger = document.createElement("button");
+        trigger.setAttribute("id", "drawer-trigger-btn");
+        document.body.appendChild(trigger);
+        trigger.focus();
+
+        const { rerender } = renderSidebar(buildProps({ isOpen: true }));
+
+        // Close drawer
+        rerender(
+          <NextIntlClientProvider locale="en" messages={enMessages}>
+            <TransactionFilterSidebar {...buildProps({ isOpen: false })} />
+          </NextIntlClientProvider>
+        );
+
+        expect(document.activeElement).toBe(trigger);
+        document.body.removeChild(trigger);
+      });
+
+      it("traps keyboard Tab navigation inside the mobile drawer", () => {
+        renderSidebar(buildProps({ isOpen: true, hasActiveFilters: true }));
+        const dialog = screen.getByRole("dialog");
+
+        const focusables = Array.from(
+          dialog.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+
+        expect(focusables.length).toBeGreaterThan(1);
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        // Focus first element, press Shift+Tab -> should wrap to last element
+        first.focus();
+        expect(document.activeElement).toBe(first);
+
+        fireEvent.keyDown(window, {
+          key: "Tab",
+          code: "Tab",
+          shiftKey: true,
+        });
+        expect(document.activeElement).toBe(last);
+
+        // Focus last element, press Tab -> should wrap to first element
+        last.focus();
+        expect(document.activeElement).toBe(last);
+
+        fireEvent.keyDown(window, {
+          key: "Tab",
+          code: "Tab",
+          shiftKey: false,
+        });
+        expect(document.activeElement).toBe(first);
+      });
+    });
+
+    describe("keyboard interactions on form controls", () => {
+      it("clears search query when Escape is pressed inside search input", () => {
+        const onClearFilter = vi.fn();
+        const { container } = renderSidebar(
+          buildProps({
+            filters: { ...DEFAULT_FILTERS, search: "active-query" },
+            onClearFilter,
+          })
+        );
+
+        const searchInput = getInput(getDesktopPanel(container), /Search/i);
+        fireEvent.keyDown(searchInput, { key: "Escape", code: "Escape" });
+
+        expect(onClearFilter).toHaveBeenCalledWith("search");
+      });
+
+      it("navigates asset filter buttons using ArrowRight and ArrowLeft", () => {
+        const onFilterChange = vi.fn();
+        const { container } = renderSidebar(
+          buildProps({
+            filters: { ...DEFAULT_FILTERS, asset: "all" },
+            onFilterChange,
+          })
+        );
+
+        const group = within(getDesktopPanel(container)).getByRole("group", { name: /Asset filter/i });
+        const allBtn = within(group).getByRole("button", { name: /^All$/i });
+        const xlmBtn = within(group).getByRole("button", { name: /^XLM$/i });
+
+        allBtn.focus();
+        fireEvent.keyDown(allBtn, { key: "ArrowRight", code: "ArrowRight" });
+
+        expect(onFilterChange).toHaveBeenCalledWith("asset", "XLM");
+        expect(document.activeElement).toBe(xlmBtn);
+
+        // Navigate backwards with ArrowLeft
+        fireEvent.keyDown(xlmBtn, { key: "ArrowLeft", code: "ArrowLeft" });
+        expect(onFilterChange).toHaveBeenCalledWith("asset", "all");
+        expect(document.activeElement).toBe(allBtn);
+      });
+
+      it("all interactive controls have accessible focus ring indicators", () => {
+        const { container } = renderSidebar(buildProps({ hasActiveFilters: true }));
+        const panel = getDesktopPanel(container);
+
+        const searchInput = getInput(panel, /Search/i);
+        const statusSelect = getSelect(panel, /Status/i);
+        const dateFrom = getInput(panel, /From/i);
+        const dateTo = getInput(panel, /To/i);
+        const clearBtn = within(panel).getByRole("button", { name: /Clear All Filters/i });
+
+        expect(searchInput.className).toContain("focus-visible:ring-2");
+        expect(statusSelect.className).toContain("focus-visible:ring-2");
+        expect(dateFrom.className).toContain("focus-visible:ring-2");
+        expect(dateTo.className).toContain("focus-visible:ring-2");
+        expect(clearBtn.className).toContain("focus-visible:ring-2");
+      });
     });
   });
 });

@@ -31,7 +31,11 @@ function builder(table) {
       data: { id: "merchant-1", metadata: {}, ...(lastPayload ?? {}) },
       error: null,
     }),
-    then: (resolve) => resolve({ data: null, error: null }),
+    // Credential writes are a compare-and-swap ending in `.select("id")`
+    // (#1772): an awaited update chain must report the matched row, or the
+    // route correctly answers 409.
+    then: (resolve) =>
+      resolve({ data: lastPayload ? [{ id: "merchant-1" }] : null, error: null }),
   };
   return b;
 }

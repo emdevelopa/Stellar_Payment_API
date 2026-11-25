@@ -34,7 +34,7 @@ const STELLAR_SECRET_PATTERN = /\bS[A-Z2-7]{55}\b/g;
 // Bearer / basic credentials that sometimes leak into error text.
 const AUTH_HEADER_PATTERN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi;
 // eslint-disable-next-line no-control-regex
-const CONTROL_CHARS_PATTERN = /[\u0000-\u001f\u007f-\u009f  ]+/g;
+const CONTROL_CHARS_PATTERN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g;
 
 /**
  * Build a typed validation error.

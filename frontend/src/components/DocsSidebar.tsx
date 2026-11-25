@@ -14,6 +14,28 @@ import { docsManifest, type DocEntry, type DocSection } from "@/lib/docs-manifes
 const EDGE_SWIPE_ZONE_PX = 32;
 const SWIPE_THRESHOLD_PX = 60;
 
+export interface DocsSidebarPreferenceAction {
+  type: "bookmark" | "collapse";
+  slug: string;
+  value: boolean;
+}
+
+export interface DocsSidebarToast {
+  id: string;
+  message: string;
+  variant: "error" | "info";
+  retryAction?: DocsSidebarPreferenceAction;
+}
+
+export interface DocsSidebarProps {
+  /** Initial set of bookmarked documentation slugs. */
+  initialBookmarks?: string[];
+  /** Optional async persistence handler; rejections trigger optimistic rollback + toast feedback. */
+  onSyncPreference?: (action: DocsSidebarPreferenceAction) => Promise<void>;
+  /** Optional callback invoked whenever a toast notification is emitted. */
+  onToast?: (notification: DocsSidebarToast) => void;
+}
+
 const DOC_ICONS: Record<string, React.ReactNode> = {
   "api-guide": (
     <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -32,7 +54,11 @@ const DOC_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-export default function DocsSidebar() {
+export default function DocsSidebar({
+  initialBookmarks = [],
+  onSyncPreference,
+  onToast,
+}: DocsSidebarProps = {}) {
   const pathname = usePathname();
   const [search, setSearch] = React.useState('');
   const [activeSlug, setActiveSlug] = React.useState('');

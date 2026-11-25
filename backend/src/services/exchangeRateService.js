@@ -1,35 +1,5 @@
-/**
- * Multi-currency Exchange Rate Service
- *
- * Refactored from the inline path-payment-quote route handler into a dedicated
- * service module with clear responsibilities:
- *   1. Cache-first lookup via ExchangeRateCache
- *   2. Horizon strict-receive-path query on cache miss
- *   3. Slippage application + response shaping
- *   4. Prometheus metrics
- *
- * Concurrency control (issue #1445):
- *   - Concurrent misses for the same quote share ONE load per process
- *     (ExchangeRateCache.getOrLoad single-flight).
- *   - When configureExchangeRateCoordination() has been given a live Redis
- *     client, that load is further coordinated across instances by a
- *     distributed lock + shared quote store (exchange-rate-coordinator.js).
- *     Coordination fails open to a direct Horizon query.
- *   - The Horizon read itself is retried with full-jitter exponential backoff
- *     (issue #1444). Retries stay inside the single-flight loader, so a burst
- *     shares one retry loop. Missing paths and other deterministic failures
- *     are not retried.
- *
- * Payload sanitization (issue #1442):
- *   - Request parameters are strictly validated and canonicalised before they
- *     form a cache key or reach Horizon (400 ExchangeRateValidationError).
- *   - Every quote is rebuilt from an allow-list of fields before it is cached
- *     or returned, and quotes read from the shared Redis store go through the
- *     same check, so a malformed or tampered entry is never served.
- *
- * The route handler calls getExchangeRateQuote() and only handles HTTP concerns;
- * all exchange-rate logic lives here.
- */
+
+ 
 
 import { findStrictReceivePaths } from '../lib/stellar.js';
 import {

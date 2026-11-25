@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useId, useReducer, useRef } from "react";
 import { type CsvColumn, CSV_COLUMNS, type Transaction, transactionsToCsv, downloadCsv } from "@/lib/exportCsv";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+
 
 export type ExportFormat = "csv" | "json";
 

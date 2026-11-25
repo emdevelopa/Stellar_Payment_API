@@ -66,7 +66,7 @@ export function EmailReceiptPreview({
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
+         
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -75,14 +75,14 @@ export function EmailReceiptPreview({
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
           />
 
-          {/* Modal */}
+          
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="fixed inset-4 z-50 flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0A0A0B] shadow-2xl md:inset-auto md:left-1/2 md:top-1/2 md:h-[85vh] md:w-full md:max-w-2xl md:-translate-x-1/2 md:-translate-y-1/2"
           >
-            {/* Header */}
+           
             <div className="flex items-center justify-between border-b border-white/10 p-6 px-8">
               <div>
                 <h3 className="text-xl font-bold text-white">Email Receipt Preview</h3>
@@ -110,7 +110,7 @@ export function EmailReceiptPreview({
               </button>
             </div>
 
-            {/* Content */}
+            
             <div className="relative flex-1 bg-white p-4 overflow-hidden">
               {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
@@ -149,7 +149,7 @@ export function EmailReceiptPreview({
                   <p className="max-w-xs text-sm text-slate-600 font-medium">{error}</p>
                   <button
                     onClick={() => {
-                        // Re-trigger useEffect by toggling something if needed, but here simple retry logic
+                        
                         setHtml(""); 
                         setError(null);
                     }}
@@ -169,7 +169,7 @@ export function EmailReceiptPreview({
               )}
             </div>
 
-            {/* Footer */}
+           
             <div className="border-t border-white/10 bg-black/20 p-6 px-8 flex justify-end">
               <button
                 onClick={onClose}

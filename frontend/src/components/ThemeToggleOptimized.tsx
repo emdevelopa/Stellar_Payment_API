@@ -1,13 +1,4 @@
-/**
- * Optimized High-Contrast System Theme Switcher
- * Issues #1148, #1149, #1819, #1820:
- * - WCAG 2.1 AA keyboard focus management (focus trap, Escape restore, arrow navigation)
- * - Screen reader live region announcements & semantic labels
- * - Responsive drawer view (mobile bottom sheet / desktop popover)
- * - Touch gesture support (swipe-down to dismiss drawer, horizontal swipe to cycle theme)
- * - High-contrast mode toggle persisted to localStorage
- * i18n: All user-visible strings sourced from the "darkModeTheme" namespace.
- */
+
 
 "use client";
 
